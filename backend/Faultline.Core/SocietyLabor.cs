@@ -143,7 +143,7 @@ public static class SocietyLabor
             Goal = $"Run a profitable {sector} business owned by {founder.Id}."
         };
         world.Agents.Add(firm.Id, firm);
-        SocietyEconomy.Transfer(founder, firm, cost);
+        SocietyEconomy.Transfer(world, founder, firm, cost, "business_founding");
         Quit(founder);
         founder.FormerOccupation = founder.Occupation;
         founder.Occupation = "entrepreneur";
@@ -348,11 +348,11 @@ public static class SocietyLabor
             var overtime = worker.SalaryMinor * worker.OvertimeDays * OvertimePayEighths / (8 * DaysPerWeek);
             worker.OvertimeDays = 0;
             if (worker.WorkEffort > 0) // strikers forfeit the week's pay
-                paid += SocietyEconomy.PayWage(nation, government, firm, worker, Math.Min(worker.SalaryMinor + overtime, firm.CashMinor));
+                paid += SocietyEconomy.PayWage(world, nation, government, firm, worker, Math.Min(worker.SalaryMinor + overtime, firm.CashMinor));
         }
         var profit = revenue - society.PeriodCostMinor.GetValueOrDefault(firm.Id) - paid;
         var profitTax = Math.Min(firm.CashMinor, Math.Max(0, profit) * nation.ProfitTaxBasisPoints / 10000);
-        SocietyEconomy.Transfer(firm, government, profitTax);
+        SocietyEconomy.Transfer(world, firm, government, profitTax, "profit_tax");
         nation.ProfitTaxCollectedMinor += profitTax;
         nation.TaxesCollectedMinor += profitTax;
         var dividend = 0L;
@@ -366,12 +366,12 @@ public static class SocietyLabor
                 var afterTax = profit - profitTax;
                 var wage = TableWage.GetValueOrDefault(owner.FormerOccupation ?? "", 0);
                 var draw = Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000;
-                SocietyEconomy.Transfer(firm, owner, Math.Min(firm.CashMinor, draw));
+                SocietyEconomy.Transfer(world, firm, owner, Math.Min(firm.CashMinor, draw), "owner_draw");
             }
             // Dividends: cash beyond a buffer of several weeks' payroll goes to the owner instead of idling.
             var buffer = Math.Max(10000, DividendBufferWeeks * Staff(world, firm).Sum(worker => worker.SalaryMinor));
             dividend = Math.Max(0, firm.CashMinor - buffer);
-            SocietyEconomy.Transfer(firm, owner, dividend);
+            SocietyEconomy.Transfer(world, firm, owner, dividend, "dividend");
             nation.DividendsPaidMinor += dividend;
         }
         society.PeriodRevenueMinor[firm.Id] = 0;
@@ -440,7 +440,7 @@ public static class SocietyLabor
             var sold = buyer is null ? 0 : (int)Math.Min(units, buyer.CashMinor / price);
             if (sold > 0)
             {
-                SocietyEconomy.Transfer(buyer!, firm, (long)sold * price);
+                SocietyEconomy.Transfer(world, buyer!, firm, (long)sold * price, "liquidation_sale");
                 buyer!.Inventory[good] += sold;
             }
             if (owner is not null)
@@ -454,7 +454,7 @@ public static class SocietyLabor
         if (owner is not null)
         {
             recovered = firm.CashMinor;
-            SocietyEconomy.Transfer(firm, owner, firm.CashMinor);
+            SocietyEconomy.Transfer(world, firm, owner, firm.CashMinor, "closure_payout");
             owner.Role = "citizen";
             owner.Occupation = owner.FormerOccupation ?? "factory_worker";
             owner.OwnedBusinessId = null;
@@ -463,7 +463,7 @@ public static class SocietyLabor
             owner.Goal = $"Find work as a {owner.Occupation.Replace('_', ' ')}, meet household needs and rebuild savings.";
         }
         else
-            SocietyEconomy.Transfer(firm, world.Agents[nation.Id + "_government"], firm.CashMinor);
+            SocietyEconomy.Transfer(world, firm, world.Agents[nation.Id + "_government"], firm.CashMinor, "closure_payout");
         firm.Role = "defunct";
         firm.TargetHeadcount = 0;
         nation.Population--;

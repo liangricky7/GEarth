@@ -16,7 +16,7 @@ public sealed class FinanceTests
         Assert.Equal("active", loan.Status);
 
         // Ensure the borrower can pay regardless of how the economy treats it.
-        SocietyEconomy.Transfer(world.Agents["aster_government"], borrower, loan.DueMinor);
+        SocietyEconomy.Transfer(world, world.Agents["aster_government"], borrower, loan.DueMinor);
         AdvanceUntilSettled(world, loan);
 
         Assert.Equal("repaid", loan.Status);
@@ -71,7 +71,7 @@ public sealed class FinanceTests
         var (job, result) = Propose(world, bank.Id, "approve_loan");
         var borrowerBefore = borrower.CashMinor;
 
-        SocietyEconomy.Transfer(bank, world.Agents["aster_government"], bank.CashMinor - 1);
+        SocietyEconomy.Transfer(world, bank, world.Agents["aster_government"], bank.CashMinor - 1);
         var record = SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow);
 
         Assert.False(record.Accepted);
@@ -170,7 +170,7 @@ public sealed class FinanceTests
         Assert.True(SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow).Accepted);
 
         var (second, secondResult) = Propose(world, payer.Id, "pay", ToResident(world));
-        SocietyEconomy.Transfer(payer, world.Agents["aster_government"], payer.CashMinor - 50);
+        SocietyEconomy.Transfer(world, payer, world.Agents["aster_government"], payer.CashMinor - 50);
         var rejected = SocietyEngine.Apply(world, second, secondResult, DateTimeOffset.UtcNow);
 
         Assert.Equal("CURRENT_PRECONDITION_FAILED", rejected.Code);
@@ -242,7 +242,7 @@ public sealed class FinanceTests
     private static Agent DrainForLoan(World world)
     {
         var borrower = world.Agents["aster_food"];
-        SocietyEconomy.Transfer(borrower, world.Agents["aster_government"], borrower.CashMinor - 1000);
+        SocietyEconomy.Transfer(world, borrower, world.Agents["aster_government"], borrower.CashMinor - 1000);
         return borrower;
     }
 

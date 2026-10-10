@@ -144,6 +144,10 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         await using var pending = new DecisionQueue(capacity, cancellationToken);
         var queue = new Queue<string>();
         long revision = 0;
+        // Verbose runs also write the day-by-day history file the renderer replays.
+        using var history = Environment.GetEnvironmentVariable("FAULTLINE_VERBOSE") == "true"
+            ? new HistoryWriter(HistoryWriter.PathFor(id), world) : null;
+        history?.Day(world);
 
         async Task Commit(CancellationToken? token = null)
         {
@@ -154,6 +158,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
             await store.Save(world, revision, token ?? cancellationToken, serialized);
             revision = world.Revision;
+            history?.Flush();
             world.Events = world.Events.TakeLast(512).ToList();
             var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
             copy.Events = copy.Events.TakeLast(512).ToList();
@@ -221,6 +226,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 if (tick < tickLimit)
                     Dispatch();
                 ApplyCompleted();
+                history?.Day(world);
                 if (tick % 5 == 0)
                     await Commit();
                 var nextTick = started.AddMilliseconds(interval);
@@ -274,6 +280,10 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 canceled_requests_applied = false
             });
             await Commit(CancellationToken.None);
+        }
+        finally
+        {
+            history?.End(world);
         }
     }
 

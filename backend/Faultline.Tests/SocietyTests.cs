@@ -205,7 +205,7 @@ public sealed class SocietyTests
         var borrower = world.Agents["aster_tools"];
         var bank = world.Agents["aster_bank"];
         var government = world.Agents["aster_government"];
-        SocietyEconomy.Transfer(borrower, government, borrower.CashMinor - 100);
+        SocietyEconomy.Transfer(world, borrower, government, borrower.CashMinor - 100);
         var request = SocietyEngine.Observe(world, borrower.Id, now);
         Assert.True(SocietyEngine.Apply(world, request, Choose(request, "request_loan"), now).Accepted);
         var loan = Assert.Single(world.Society!.Credit);
@@ -216,10 +216,10 @@ public sealed class SocietyTests
         SocietyEngine.Apply(world, approval, result, now);
         Assert.Equal(bankCash - loan.PrincipalMinor, bank.CashMinor);
         if (repay)
-            SocietyEconomy.Transfer(government, borrower, loan.DueMinor);
+            SocietyEconomy.Transfer(world, government, borrower, loan.DueMinor);
         else
         {
-            SocietyEconomy.Transfer(borrower, government, borrower.CashMinor);
+            SocietyEconomy.Transfer(world, borrower, government, borrower.CashMinor);
             government.Inventory["tools"] += borrower.Inventory["tools"]; // nothing left to sell before maturity
             borrower.Inventory["tools"] = 0;
         }

@@ -131,6 +131,10 @@ public sealed class World
     public string ScenarioHash { get; set; } = "";
     public SocietyState? Society { get; set; }
 
+    // Verbose runs only (null otherwise): money moved since the last history frame, per giver, recipient and kind.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dictionary<(string From, string To, string Kind), (long Amount, int Count)>? Flows { get; set; }
+
     // Agents grouped by country in insertion order, so per-country scans skip the rest of the world.
     // Not saved; rebuilt when an agent is added (agents are never removed) or after Reindex (migration).
     private Dictionary<string, Agent[]>? byCountry;

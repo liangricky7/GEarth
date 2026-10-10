@@ -64,7 +64,7 @@ public sealed class EconomicLoopTests
         var farmers = world.Agents.Values.Where(agent => agent.CountryId == "aster" && agent.Role == "citizen"
             && agent.Occupation == "farmer").OrderBy(agent => agent.Id).ToArray();
         var (rich, modest) = (farmers[0], farmers[1]);
-        SocietyEconomy.Transfer(world.Agents["aster_bank"], rich, 20000);
+        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], rich, 20000);
 
         for (var day = 0; day < SocietyLabor.DaysPerWeek; day++)
             SocietyEngine.Advance(world);

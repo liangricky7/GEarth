@@ -339,7 +339,7 @@ public static class SocietyEngine
                 break;
             case "approve_loan":
                 var approved = world.Society!.Credit.Single(credit => credit.Id == parameters["loan_id"]!.GetValue<string>());
-                SocietyEconomy.Transfer(agent, world.Agents[approved.BorrowerId], approved.PrincipalMinor);
+                SocietyEconomy.Transfer(world, agent, world.Agents[approved.BorrowerId], approved.PrincipalMinor, "loan");
                 approved.Status = "active";
                 approved.DueTick = world.Tick + 60;
                 world.Emit("loan_funded", "rule", [approved.Id, agent.Id, approved.BorrowerId], new
@@ -359,7 +359,7 @@ public static class SocietyEngine
     private static void Migrate(World world, Agent agent, string destination, string cause)
     {
         var previous = agent.CountryId;
-        SocietyEconomy.Transfer(agent, world.Agents[destination + "_government"], 100);
+        SocietyEconomy.Transfer(world, agent, world.Agents[destination + "_government"], 100, "migration_fee");
         agent.CountryId = destination;
         world.Reindex();
         agent.LocationId = destination + "_city";

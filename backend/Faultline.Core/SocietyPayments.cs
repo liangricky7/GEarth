@@ -42,7 +42,7 @@ public static class SocietyPayments
         if (!CanPay(world, payer, recipientId, amount))
             return false;
         var recipient = world.Agents[recipientId];
-        SocietyEconomy.Transfer(payer, recipient, amount);
+        SocietyEconomy.Transfer(world, payer, recipient, amount, "payment");
         recipient.Remember($"T{world.Tick}: received {amount} minor from {payer.Id} ({payer.Role})");
         world.Emit("payment_sent", "rule", [payer.Id, recipient.Id], new
         {

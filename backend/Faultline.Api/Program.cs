@@ -133,4 +133,17 @@ app.MapGet("/api/runs/{id}/notes.md", async (string id, Coordinator coordinator,
     return Results.File(System.Text.Encoding.UTF8.GetBytes(report.Markdown), "text/markdown; charset=utf-8", id + "-observations.md");
 });
 
+// Verbose runs only: the gzipped day-by-day history (header, one line per day, end line). Complete once the run ends.
+app.MapGet("/api/runs/{id}/history", (string id, HttpContext context) =>
+{
+    string path;
+    try { path = HistoryWriter.PathFor(id); }
+    catch (ArgumentException) { return Results.BadRequest(); }
+    if (!File.Exists(path))
+        return Results.NotFound();
+    context.Response.Headers.ContentEncoding = "gzip";
+    return Results.Stream(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite),
+        "application/x-ndjson", id + "-history.ndjson");
+});
+
 app.Run();

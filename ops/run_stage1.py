@@ -103,6 +103,11 @@ def main():
     parser.add_argument("--ticks", type=int)
     parser.add_argument("--interval", type=float)
     parser.add_argument("--exit-on-complete", action="store_true")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="With --world: also write the day-by-day history file for the renderer.",
+    )
     options = parser.parse_args()
     signal.signal(signal.SIGTERM, handle_stop)
 
@@ -129,6 +134,8 @@ def main():
     if not 0 <= options.government_rotation <= 4 or options.seed < 1:
         parser.error("Use rotation 0-4 and a positive seed.")
 
+    if options.verbose and (not options.world or options.run_id):
+        parser.error("--verbose records a new --world run.")
     if options.run_id:
         if options.live:
             parser.error("Saved-run inspection does not need --live.")
@@ -302,6 +309,7 @@ def main():
                 ),
                 "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
                 "FAULTLINE_SEED": str(options.seed),
+                "FAULTLINE_VERBOSE": str(options.verbose).lower(),
                 "FAULTLINE_TICKS": str(options.ticks),
                 "FAULTLINE_INTERVAL_MS": str(round(options.interval * 1000)),
                 "WORKER_TOKEN": token,

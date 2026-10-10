@@ -40,7 +40,7 @@ public sealed class LaborTests
         var staff = SocietyLabor.Staff(world, workshop);
         var salary = staff[0].SalaryMinor;
         // Leave enough for roughly a quarter of the payroll (short even if a rival poaches a worker) and nothing to sell.
-        SocietyEconomy.Transfer(workshop, world.Agents["aster_government"], workshop.CashMinor - staff.Sum(worker => worker.SalaryMinor) / 4);
+        SocietyEconomy.Transfer(world, workshop, world.Agents["aster_government"], workshop.CashMinor - staff.Sum(worker => worker.SalaryMinor) / 4);
         world.Agents["aster_government"].Inventory["tools"] += workshop.Inventory["tools"];
         workshop.Inventory["tools"] = 0;
         foreach (var worker in staff)
@@ -105,7 +105,7 @@ public sealed class LaborTests
         var world = SocietyFactory.Create("dividend_test", false, 1100);
         var farm = world.Agents["aster_food"];
         var owner = world.Agents[farm.OwnerId!];
-        SocietyEconomy.Transfer(world.Agents["aster_bank"], farm, 100000);
+        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], farm, 100000);
         var ownerCash = owner.CashMinor;
 
         AdvanceDays(world, SocietyLabor.DaysPerWeek);
@@ -163,7 +163,7 @@ public sealed class LaborTests
         foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
             farm.PriceMinor = 60; // incumbents are expensive: an opportunity
         var cost = SocietyLabor.StartupCost(founder, "food");
-        SocietyEconomy.Transfer(world.Agents["aster_bank"], founder, cost);
+        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], founder, cost);
         var cash = founder.CashMinor;
 
         var job = SocietyEngine.Observe(world, founder.Id, DateTimeOffset.UtcNow);

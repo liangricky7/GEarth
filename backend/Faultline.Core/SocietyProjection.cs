@@ -12,6 +12,7 @@ public static class SocietyProjection
         agent.CountryId,
         agent.Occupation,
         agent.CashMinor,
+        agent.Weights,
         agent.ModelDecisions,
         agent.LastAttemptAt,
         agent.LastModelDecisionAt,
@@ -108,7 +109,8 @@ public static class SocietyProjection
             {
                 new
                 {
-                    id = "spark_a",
+                    id = "decision_pool",
+                    providers = society.ComputeProviders,
                     status = world.Mode == "LIVE" ? "configured" : "disabled",
                     society.WorkerCapacity,
                     society.PendingDecisions,

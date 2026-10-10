@@ -72,8 +72,9 @@ def test_amd_configuration_requires_credentials_and_honors_limit():
     assert "private" not in repr(providers[0])
 
 
-def test_two_backends_receive_matching_models_and_keys(monkeypatch):
-    pool = ProviderPool([provider("spark"), provider("amd")])
+def test_three_backends_receive_matching_models_and_keys(monkeypatch):
+    names = ["spark_a", "spark_b", "amd"]
+    pool = ProviderPool([provider(name) for name in names])
     monkeypatch.setattr(worker, "provider_pool", pool)
     monkeypatch.setattr(worker, "TOKEN", "worker-secret")
     calls = []
@@ -105,7 +106,7 @@ def test_two_backends_receive_matching_models_and_keys(monkeypatch):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=worker.app), base_url="http://test"
             ) as client:
-                for name in ["spark", "amd"]:
+                for name in names:
                     job = {
                         "request_id": name,
                         "run_id": "probe",
@@ -128,11 +129,11 @@ def test_two_backends_receive_matching_models_and_keys(monkeypatch):
                     assert result.json()["model"] == f"model-{name}"
                     assert result.json()["source"] == "model"
         assert worker.active_requests == 0
-        assert pool.active == {"spark": 0, "amd": 0}
-        assert pool.completed == {"spark": 1, "amd": 1}
+        assert pool.active == {name: 0 for name in names}
+        assert pool.completed == {name: 1 for name in names}
 
     asyncio.run(request())
-    for name, (host, authorization, payload) in zip(["spark", "amd"], calls):
+    for name, (host, authorization, payload) in zip(names, calls):
         assert host == f"{name}.example"
         assert authorization == f"Bearer secret-{name}"
         assert payload["model"] == f"model-{name}"

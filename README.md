@@ -110,3 +110,5 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 The current one-Spark test target is 1,100 agents, subject to sustained integrated coverage and cadence measurements. Solana and Databricks integrations remain planned or conditional. AMD cloud inference is connected and passed one validated decision check, with an initial concurrency limit of one. Currency and expanded escrow are currently simulated internally.
 
 Jayden Hong: engine and integration. Kennedy Nguyen: visualization and Spark operations. Ahmad Hijazi: inference and evaluation. Ricky Liang: persistence and finance. Jayden and Kennedy have Spark SSH access.
+
+Shared compute and agent differences: [integration plan and configuration](docs/faultline/14-multi-compute-and-agent-weights.md).

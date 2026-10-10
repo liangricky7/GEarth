@@ -6,6 +6,13 @@ import jsonschema
 import pytest
 
 from agents import worker
+from agents.providers import ProviderPool, load_providers
+
+
+@pytest.fixture(autouse=True)
+def isolated_provider_pool(monkeypatch):
+    monkeypatch.setattr(worker, "provider_pool", ProviderPool(load_providers({})))
+    monkeypatch.setattr(worker, "active_requests", 0)
 
 
 def make_job():
@@ -127,7 +134,9 @@ async def check_failure_then_recovery(
             assert result["latency_ms"] >= 0
             assert worker.active_requests == 0
 
-            # A second request must use the slot released by the failed request.
+            assert sum(worker.provider_pool.active.values()) == 0
+            for name in worker.provider_pool.unavailable_until:
+                worker.provider_pool.unavailable_until[name] = 0
             job.request_id = "request_after_failure"
             job.deadline = datetime.now(timezone.utc) + timedelta(seconds=15)
             recovered = await submit()

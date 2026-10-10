@@ -117,6 +117,15 @@ public static class RunAnalysis
             observations.Add(new("outcome", $"{country.Id} ({country.Government}) met {country.NeedsMet:P0} of needs in its latest economic cycle; cumulative unmet needs were {country.UnmetNeeds}, support {country.Approval:P0}, and cash Gini {country.GiniCash:F3}.", Evidence(events.Where(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(country.Id)).TakeLast(1))));
         var cash = world.Agents.Values.Sum(agent => agent.CashMinor) + (world.Society?.Cargo.Sum(cargo => cargo.EscrowMinor) ?? 0);
         observations.Add(new("accounting", $"Cash plus goods escrow at this checkpoint was {Money(cash)} WLD against {Money(world.InitialCashMinor)} WLD initially; {(cash == world.InitialCashMinor ? "the totals reconcile" : "the totals do not reconcile")}. This is a checkpoint comparison, not a causal economic conclusion.", []));
+        var initialized = events.FirstOrDefault(item => item.EventType == "world_initialized");
+        if (initialized?.Payload["agent_weights"]?.GetValue<string>() == AgentEndowments.Version)
+        {
+            var residents = world.Agents.Values.Where(agent => agent.Role == "citizen").ToArray();
+            observations.Add(new("inequality", $"Seeded {AgentEndowments.Version} profiles varied starting wealth, productivity, bargaining power and personal priorities. Current resident cash ranged from {Money(residents.Min(agent => agent.CashMinor))} to {Money(residents.Max(agent => agent.CashMinor))} WLD. Starting cash was redistributed within a fixed country budget; funded business wages and output used the configured weights. Equal voting and scheduler access were preserved.", [initialized.EventId]));
+            foreach (var group in residents.GroupBy(agent => agent.Weights.Wealth < 0.75 ? "lower initial wealth"
+                : agent.Weights.Wealth > 1.5 ? "higher initial wealth" : "middle initial wealth"))
+                observations.Add(new("inequality", $"The {group.Key} cohort contained {group.Count()} residents: current mean cash {Money((long)group.Average(agent => agent.CashMinor))} WLD, wellbeing {group.Average(agent => agent.Wellbeing):F1}/100, health {group.Average(agent => agent.Health):F1}/100. These descriptive cohorts retain initial profiles after migration and do not establish causal effects.", [initialized.EventId]));
+        }
         var examples = model.Where(item => Action(item) != "hold").GroupBy(item => Role(world, item)).Take(5)
             .Select(group => group.First()).Select(item => new DecisionExample(item.EntityIds[0], Action(item),
                 item.Payload["action"]!["reason"]!.GetValue<string>(), item.EventId, item.Tick)).ToArray();

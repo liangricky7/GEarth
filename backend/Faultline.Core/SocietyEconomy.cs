@@ -185,7 +185,7 @@ public static class SocietyEconomy
     {
         var society = world.Society!;
         var hasHistory = society.PeriodRevenueMinor.TryGetValue(business.Id, out var revenue);
-        var weights = workers.Select(worker => worker.WorkEffort * Capacity(worker)).ToArray();
+        var weights = workers.Select(worker => worker.WorkEffort * Capacity(worker) * worker.Weights.Productivity * worker.Weights.BargainingPower).ToArray();
         var total = weights.Sum();
         var pool = hasHistory ? revenue * LaborShareBasisPoints / 10000 : workers.Sum(worker => BaseWageMinor * worker.WorkEffort);
         pool = total == 0 ? 0 : Math.Min(pool, business.CashMinor);
@@ -235,7 +235,7 @@ public static class SocietyEconomy
         };
         if (nation.CrisisUntilTick > world.Tick && nation.CrisisGood == good)
             multiplier *= 0.35;
-        var potential = (int)(workers.Sum(worker => worker.WorkEffort * worker.Wellbeing / 100.0 * Capacity(worker))
+        var potential = (int)(workers.Sum(worker => worker.WorkEffort * worker.Wellbeing / 100.0 * Capacity(worker) * worker.Weights.Productivity)
             * (good is "food" or "energy" ? 12 : 4) * multiplier * nation.Productivity * nation.EducationFactor);
         var stockLimit = Math.Max(200, nation.Population * (good is "food" or "energy" ? 20 : 6));
         var quantity = Math.Min(potential, Math.Max(0, stockLimit - producer.Inventory[good]));

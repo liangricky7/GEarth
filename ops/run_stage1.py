@@ -93,7 +93,7 @@ def main():
     parser.add_argument("--world", action="store_true")
     parser.add_argument("--run-id")
     parser.add_argument("--population", type=int, default=1100)
-    parser.add_argument("--capacity", type=int, default=64)
+    parser.add_argument("--capacity", type=int)
     parser.add_argument("--institution-seconds", type=int, default=120)
     parser.add_argument("--resident-seconds", type=int, default=600)
     parser.add_argument("--government-rotation", type=int, default=0)
@@ -116,8 +116,10 @@ def main():
         or not 0 <= options.interval <= 30
     ):
         parser.error("Invalid tick count or interval; interval must be 0-30 seconds.")
-    if not 100 <= options.population <= 100000 or not 1 <= options.capacity <= 128:
-        parser.error("Use 100-100000 population and 1-128 concurrent requests.")
+    if not 100 <= options.population <= 100000 or (
+        options.capacity is not None and not 1 <= options.capacity <= 384
+    ):
+        parser.error("Use 100-100000 population and 1-384 concurrent requests.")
     if (
         not 10 <= options.institution_seconds <= 3600
         or not 10 <= options.resident_seconds <= 7200
@@ -145,36 +147,26 @@ def main():
         raise RuntimeError("Save DATABASE_URL in .env.local, or use --storage local.")
 
     compute = options.compute
-    if compute == "auto":
-        compute = (
-            "hybrid"
-            if config.get("AMD_ENABLED", "false").lower() == "true"
-            else "spark"
-        )
-    use_spark = compute in {"spark", "hybrid"}
-    use_amd = compute in {"amd", "hybrid"}
-    live_capacity = options.capacity if options.world else 4
+    live_capacity = options.capacity or (64 if options.world else 4)
+    provider_environment = {}
+    providers = []
+    managed_spark_tunnel = False
     if options.live:
-        from agents.providers import load_providers
+        from ops.compute_config import compute_environment
 
-        providers = load_providers(
-            {
-                **config,
-                "SPARK_A_ENABLED": str(use_spark).lower(),
-                "SPARK_A_BASE_URL": "http://127.0.0.1:18001/v1",
-                "SPARK_B_ENABLED": "false",
-                "AMD_ENABLED": str(use_amd).lower(),
-            },
-            live_capacity,
+        compute, provider_environment, providers, live_capacity = compute_environment(
+            config, compute, options.capacity, options.world
         )
-        live_capacity = min(
-            live_capacity, sum(provider.capacity for provider in providers)
+        managed_spark_tunnel = any(
+            provider.name == "spark_a"
+            and provider.base_url == "http://127.0.0.1:18001/v1"
+            for provider in providers
         )
 
     ensure_port_available(5080)
     if options.live:
         ensure_port_available(8100)
-        if use_spark:
+        if managed_spark_tunnel:
             ensure_port_available(18001)
 
     subprocess.run(
@@ -206,7 +198,7 @@ def main():
     try:
         if options.live:
             api_key = ""
-            if use_spark:
+            if managed_spark_tunnel:
                 api_key = config.get("SPARK_A_API_KEY")
                 if not api_key:
                     result = subprocess.run(
@@ -248,25 +240,14 @@ def main():
             worker_environment = os.environ.copy()
             worker_environment.pop("DATABASE_URL", None)
             worker_environment.pop("DATABASE_DIRECT_URL", None)
+            worker_environment.update(provider_environment)
+            if managed_spark_tunnel:
+                worker_environment["SPARK_A_API_KEY"] = api_key
             worker_environment.update(
                 {
                     "WORKER_TOKEN": token,
                     "WORKER_CAPACITY": str(live_capacity),
                     "WORKER_TIMEOUT_SECONDS": str(60 if options.world else 13),
-                    "SPARK_A_ENABLED": str(use_spark).lower(),
-                    "SPARK_A_CAPACITY": config.get(
-                        "SPARK_A_CAPACITY",
-                        str(options.capacity if options.world else 4),
-                    ),
-                    "SPARK_A_API_KEY": api_key,
-                    "SPARK_B_ENABLED": "false",
-                    "AMD_ENABLED": str(use_amd).lower(),
-                    "AMD_BASE_URL": config.get("AMD_BASE_URL", ""),
-                    "AMD_MODEL": config.get("AMD_MODEL", "Qwen/Qwen3-4B"),
-                    "AMD_API_KEY": config.get("AMD_API_KEY", ""),
-                    "AMD_CAPACITY": config.get("AMD_CAPACITY", "1"),
-                    "SPARK_A_MODEL": config.get("SPARK_A_MODEL", "openai/gpt-oss-120b"),
-                    "SPARK_A_BASE_URL": "http://127.0.0.1:18001/v1",
                 }
             )
 
@@ -296,8 +277,16 @@ def main():
                 "FAULTLINE_WORLD": str(options.world).lower(),
                 "FAULTLINE_SAVED_RUN_ID": options.run_id or "",
                 "FAULTLINE_POPULATION": str(options.population),
-                "FAULTLINE_CAPACITY": str(
-                    live_capacity if options.live else options.capacity
+                "FAULTLINE_CAPACITY": str(live_capacity),
+                "FAULTLINE_COMPUTE_PROVIDERS": json.dumps(
+                    [
+                        {
+                            "name": provider.name,
+                            "model": provider.model,
+                            "capacity": provider.capacity,
+                        }
+                        for provider in providers
+                    ]
                 ),
                 "FAULTLINE_INSTITUTION_SECONDS": str(options.institution_seconds),
                 "FAULTLINE_RESIDENT_SECONDS": str(options.resident_seconds),

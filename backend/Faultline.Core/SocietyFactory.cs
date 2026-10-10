@@ -67,6 +67,7 @@ public static class SocietyFactory
                 var occupation = Occupations[(citizen - 1) % Occupations.Length];
                 var agent = CreateAgent(world, $"{countryId}_citizen_{citizen:00000}", countryId,
                     "citizen", occupation, 2000);
+                agent.Weights = AgentEndowments.Create(seed, $"citizen_{citizen:00000}");
                 agent.Inventory["food"] = 4;
                 agent.Inventory["energy"] = 4;
                 agent.SupportsLeadership = Sample(seed, agent.Id, "initial_support") > 0.2;
@@ -80,6 +81,8 @@ public static class SocietyFactory
                 };
                 world.Agents.Add(agent.Id, agent);
             }
+            AgentEndowments.AllocateCash(world.Agents.Values
+                .Where(agent => agent.Role == "citizen" && agent.CountryId == countryId).ToArray());
         }
 
         AddRoutes(world);
@@ -103,12 +106,13 @@ public static class SocietyFactory
         }
         world.InitialCashMinor = world.Agents.Values.Sum(agent => agent.CashMinor);
         world.ScenarioHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"earthlike_v2:{world.Agents.Count}:{seed}:{rotation}:economy5:election100:crisis40"))).ToLowerInvariant();
+            $"earthlike_v2:{world.Agents.Count}:{seed}:{rotation}:economy5:election100:crisis40:{AgentEndowments.Version}"))).ToLowerInvariant();
         SocietyEconomy.UpdateMetrics(world);
         world.Emit("world_initialized", "scenario", [world.Id], new
         {
             stage = 2, population = world.Agents.Count, countries = Geography.Length,
             currency = "simulated WLD", settlement = "internal_escrow", individual_minds = true,
+            agent_weights = AgentEndowments.Version,
             routine_life = "rule-driven between individual model turns"
         });
         return world;

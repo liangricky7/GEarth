@@ -194,7 +194,11 @@ public sealed class SocietyTests
         if (repay)
             SocietyEconomy.Transfer(government, borrower, loan.DueMinor);
         else
+        {
             SocietyEconomy.Transfer(borrower, government, borrower.CashMinor);
+            bank.Inventory["tools"] += borrower.Inventory["tools"];
+            borrower.Inventory["tools"] = 0;
+        }
         foreach (var citizen in world.Agents.Values.Where(agent => agent.EmployerId == borrower.Id))
             citizen.WorkEffort = 0;
         world.Tick = loan.DueTick;

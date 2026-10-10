@@ -1,6 +1,8 @@
 # Jayden's Stage 2 scheduling and API review
 
-Branch: `stage2-scheduling-api`, based on `world-simulation-run-observations` at `6da1096`. The expanded-world dependency is not merged into main. The branch also includes the preceding permanent observer sharing changes.
+Current integration branch: `feat/multi-compute-society`. It merges `origin/main` at `0833da5`, including the expanded-world, worker failure checks and economic-loop dependencies, with the existing scheduling/API, observer and AMD work. The original review below describes `stage2-scheduling-api` at `f60d36f`.
+
+The next scheduling review is implemented and tested on the integration branch: live inference slots refill on completion between simulation ticks; provider configuration can retain both Sparks and AMD; cancellation still discards pending results and commits zero pending requests. [The integration update](14-multi-compute-and-agent-weights.md) and [synthetic lifecycle evidence](evidence/multi-compute-scheduler.json) describe the additional checks. Main integration awaits PR review; this does not complete teammate-owned storage reviews.
 
 ## Assigned work
 

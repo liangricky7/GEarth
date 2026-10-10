@@ -124,7 +124,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
     {
         var tickLimit = ReadNumber("FAULTLINE_TICKS", 360, 1, 10000);
         var interval = ReadNumber("FAULTLINE_INTERVAL_MS", 2000, 0, 30000);
-        var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 128);
+        var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 384);
         var population = ReadNumber("FAULTLINE_POPULATION", 1100, 100, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
@@ -136,6 +136,9 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         world.Society.TickIntervalMilliseconds = interval;
         world.Society.InstitutionIntervalSeconds = ReadNumber("FAULTLINE_INSTITUTION_SECONDS", 120, 10, 3600);
         world.Society.ResidentIntervalSeconds = ReadNumber("FAULTLINE_RESIDENT_SECONDS", 600, 10, 7200);
+        var providerConfig = Environment.GetEnvironmentVariable("FAULTLINE_COMPUTE_PROVIDERS");
+        if (!string.IsNullOrEmpty(providerConfig))
+            world.Society.ComputeProviders = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider[]>(providerConfig, Wire.Json) ?? [];
         await using var pending = new DecisionQueue(capacity, cancellationToken);
         long revision = 0;
 
@@ -160,6 +163,20 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             }
         }
 
+        void ScheduleDue(DateTimeOffset now)
+        {
+            foreach (var agent in SocietyScheduler.Select(world, pending.AgentIds, pending.FreeSlots, now))
+            {
+                var job = SocietyEngine.Observe(world, agent.Id, now);
+                if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
+                {
+                    agent.LastAttemptAt = now;
+                    agent.LastAttemptTick = world.Tick;
+                }
+            }
+            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, now);
+        }
+
         try
         {
             await Commit();
@@ -170,25 +187,35 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 ApplyCompleted();
                 SocietyEngine.Advance(world);
                 if (tick < tickLimit)
-                {
-                    var agents = SocietyScheduler.Select(world, pending.AgentIds, pending.FreeSlots, started);
-                    foreach (var agent in agents)
-                    {
-                        var job = SocietyEngine.Observe(world, agent.Id, started);
-                        if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
-                        {
-                            agent.LastAttemptAt = started;
-                            agent.LastAttemptTick = world.Tick;
-                        }
-                    }
-                    SocietyScheduler.UpdateMetrics(world, pending.AgentIds, started);
-                }
+                    ScheduleDue(started);
                 ApplyCompleted();
                 if (tick % 5 == 0)
                     await Commit();
-                var delay = interval - (DateTimeOffset.UtcNow - started).TotalMilliseconds;
-                if (delay > 0)
-                    await Task.Delay(TimeSpan.FromMilliseconds(delay), cancellationToken);
+                var nextTick = started.AddMilliseconds(interval);
+                while (DateTimeOffset.UtcNow < nextTick)
+                {
+                    var delay = nextTick - DateTimeOffset.UtcNow;
+                    if (delay <= TimeSpan.Zero)
+                        break;
+                    if (!live || tick == tickLimit || pending.Count == 0)
+                    {
+                        await Task.Delay(delay, cancellationToken);
+                        break;
+                    }
+                    using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    wait.CancelAfter(delay);
+                    try
+                    {
+                        await pending.WaitForCompletion(wait.Token);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ApplyCompleted();
+                    ScheduleDue(DateTimeOffset.UtcNow);
+                }
             }
             while (pending.Count > 0)
             {

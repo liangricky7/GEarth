@@ -45,7 +45,7 @@ public static class SocietyEngine
             world_stage = 2, tick = world.Tick,
             self = new
             {
-                agent.Id, agent.Role, agent.Occupation, agent.Specialty, agent.Goal, agent.Traits,
+                agent.Id, agent.Role, agent.Occupation, agent.Specialty, agent.Goal, agent.Traits, agent.Weights,
                 agent.CashMinor, agent.Inventory, agent.WorkEffort, agent.TargetStock, agent.Wellbeing, agent.Health, agent.HealthThreshold,
                 agent.SupportsLeadership, agent.PriceMinor, agent.Memories
             },
@@ -65,7 +65,7 @@ public static class SocietyEngine
             requested_loans = world.Society.Credit.Where(credit => credit.Status == "requested"
                 && (credit.BankId == agent.Id || credit.BorrowerId == agent.Id)).Take(4),
             public_events = observedEvents.Select(item => new { item.EventType, item.Payload }),
-            note = "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Businesses pay workers 80% of last cycle's sales, split by effort and health, then pay profit tax. Public employees get a fixed salary the treasury may only partly cover; unpaid teachers lower productivity. Health falls with illness, extra work and unmet needs; below 30 you cannot work and pay scales with health. A doctor visit costs the clinic's medicine price, restores 40 health and happens automatically below your health policy threshold; public healthcare funds visits for the sickest. Household prices include sales tax. Extra work raises pay but costs wellbeing and health; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
+            note = "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Businesses pay workers 80% of last cycle's sales, split by effort, health, productivity and bargaining power, then pay profit tax. Public employees get a fixed salary the treasury may only partly cover; unpaid teachers lower productivity. Productivity weights also scale production; bargaining power only changes the share of funded business wages. Starting wealth is an initial allocation, not a recurring multiplier. Preference weights describe personal priorities, not guaranteed outcomes. Health falls with illness, extra work and unmet needs; below 30 you cannot work and pay scales with health. A doctor visit costs the clinic's medicine price, restores 40 health and happens automatically below your health policy threshold; public healthcare funds visits for the sickest. Household prices include sales tax. Extra work raises pay but costs wellbeing and health; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
         });
         return new DecisionJob(Guid.NewGuid().ToString("N"), world.Id, agent.Id, world.Tick,
             now.AddSeconds(65), new Dictionary<string, int> { [agent.Id] = agent.Version }, evidence, observation, actions);

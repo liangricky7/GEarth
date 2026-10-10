@@ -1,0 +1,22 @@
+{
+  "kind": "synthetic integration, no GPU or capacity qualification",
+  "completion": {
+    "run_id": "world_20261010_193101_104401",
+    "first_tick_fixture_completions": 8,
+    "max_pending": 3,
+    "pending_at_completion": 0,
+    "fixture_results_by_backend": {
+      "amd": 33,
+      "spark_b": 33,
+      "spark_a": 34
+    },
+    "automatic_notes": true
+  },
+  "shutdown": {
+    "run_id": "world_20261010_193103_4b8f9e",
+    "canceled_pending": 3,
+    "pending_at_stop": 0,
+    "discarded_results_not_applied": true,
+    "automatic_notes": true
+  }
+}

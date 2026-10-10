@@ -21,6 +21,7 @@ public sealed class Agent
     public string CountryId { get; set; } = "";
     public string LocationId { get; set; } = "";
     public string Goal { get; set; } = "";
+    public AgentWeights Weights { get; set; } = new();
     public Dictionary<string, double> Traits { get; set; } = new();
     public long CashMinor { get; set; }
     public int Version { get; set; }

@@ -116,6 +116,8 @@ public sealed class Credit
     public string Status { get; set; } = "requested";
 }
 
+public sealed record ComputeProvider(string Name, string Model, int Capacity);
+
 public sealed class SocietyState
 {
     public Dictionary<string, Nation> Nations { get; set; } = new();
@@ -133,6 +135,7 @@ public sealed class SocietyState
     public long RuleDecisionCount { get; set; }
     public long DeliveredShipments { get; set; }
     public long FailedShipments { get; set; }
+    public ComputeProvider[] ComputeProviders { get; set; } = [];
     public int WorkerCapacity { get; set; }
     public int PendingDecisions { get; set; }
     public int DueAgents { get; set; }

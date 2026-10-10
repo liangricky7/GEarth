@@ -43,9 +43,7 @@ public static class SocietyPayments
             return false;
         var recipient = world.Agents[recipientId];
         SocietyEconomy.Transfer(payer, recipient, amount);
-        recipient.Memories.Add($"T{world.Tick}: received {amount} minor from {payer.Id} ({payer.Role})");
-        if (recipient.Memories.Count > 5)
-            recipient.Memories.RemoveAt(0);
+        recipient.Remember($"T{world.Tick}: received {amount} minor from {payer.Id} ({payer.Role})");
         world.Emit("payment_sent", "rule", [payer.Id, recipient.Id], new
         {
             from = payer.Id, to = recipient.Id, from_role = payer.Role, to_role = recipient.Role,
@@ -82,7 +80,7 @@ public static class SocietyPayments
 
     private static IEnumerable<Agent> Recipients(World world, Agent payer)
     {
-        var locals = world.Agents.Values.Where(agent => agent.CountryId == payer.CountryId && agent.Id != payer.Id).ToArray();
+        var locals = world.InCountry(payer.CountryId).Where(agent => agent.Id != payer.Id).ToArray();
         var neediest = locals.Where(SocietyLabor.IsResident)
             .OrderBy(agent => agent.Wellbeing).ThenBy(agent => agent.CashMinor).ThenBy(agent => agent.Id).FirstOrDefault();
         var poorestBusiness = locals.Where(agent => agent.Role == "business")

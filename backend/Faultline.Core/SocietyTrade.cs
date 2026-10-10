@@ -28,8 +28,7 @@ public static class SocietyTrade
         var value = (long)quantity * seller.PriceMinor;
         buyer.CashMinor -= value;
         // A domestic freight firm (dockworkers) carries the goods; without one the port authority collects the fee.
-        var carrier = world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == buyer.CountryId
-            && agent.Specialty == "freight").OrderBy(agent => agent.Id).FirstOrDefault()
+        var carrier = SocietyLabor.Firms(world, buyer.CountryId, "freight").OrderBy(agent => agent.Id).FirstOrDefault()
             ?? world.Agents[buyer.CountryId + "_government"];
         SocietyEconomy.Sell(world, buyer, carrier, path.CostMinor, false, 1);
         var tariff = Tariff(world, buyer, seller, value);

@@ -47,11 +47,9 @@ public static class SocietyEconomy
     {
         var society = world.Society!;
         society.VisitsServedToday.Clear();
-        var byCountry = world.Agents.Values.Where(agent => agent.Role != "defunct").GroupBy(agent => agent.CountryId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
         foreach (var nation in society.Nations.Values)
         {
-            var agents = byCountry[nation.Id];
+            var agents = world.InCountry(nation.Id).Where(agent => agent.Role != "defunct").ToArray();
             var residents = agents.Where(SocietyLabor.IsResident).ToArray();
             var firms = agents.Where(agent => agent.Role == "business").ToArray();
             foreach (var firm in firms.OrderBy(firm => firm.Specialty == "energy" ? 0 : 1).ThenBy(firm => firm.Id))
@@ -107,8 +105,9 @@ public static class SocietyEconomy
     public static void Week(World world)
     {
         var society = world.Society!;
-        var byCountry = world.Agents.Values.Where(agent => agent.Role != "defunct").GroupBy(agent => agent.CountryId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
+        // Each country's agents are listed before any country's weekly changes, as one snapshot.
+        var byCountry = society.Nations.Keys.ToDictionary(id => id,
+            id => world.InCountry(id).Where(agent => agent.Role != "defunct").ToArray());
         foreach (var nation in society.Nations.Values)
         {
             var agents = byCountry[nation.Id];
@@ -295,8 +294,7 @@ public static class SocietyEconomy
 
     // Domestic sellers of a good, cheapest first.
     public static IEnumerable<Agent> Sellers(World world, Nation nation, string good) =>
-        world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id
-                && agent.Specialty == good && agent.Inventory[good] > 0)
+        SocietyLabor.Firms(world, nation.Id, good).Where(agent => agent.Inventory[good] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id);
 
     // Buys up to the wanted quantity from domestic sellers the buyer can afford. Firms buy inputs from the
@@ -345,8 +343,8 @@ public static class SocietyEconomy
 
     // The cheapest clinic with a doctor free today and medicine supplies on hand.
     public static Agent? OpenClinic(World world, Nation nation) =>
-        world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id && agent.Specialty == "clinic"
-                && world.Society!.VisitsServedToday.GetValueOrDefault(agent.Id) < 0 && agent.Inventory["medicine"] > 0)
+        SocietyLabor.Firms(world, nation.Id, "clinic")
+            .Where(agent => world.Society!.VisitsServedToday.GetValueOrDefault(agent.Id) < 0 && agent.Inventory["medicine"] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id).FirstOrDefault();
 
     // A doctor visit: a clinic's doctor sees the patient and uses one unit of medicine as supplies.
@@ -356,8 +354,7 @@ public static class SocietyEconomy
         var clinic = OpenClinic(world, nation);
         if (clinic is null)
         {
-            foreach (var busy in world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id
-                         && agent.Specialty == "clinic"))
+            foreach (var busy in SocietyLabor.Firms(world, nation.Id, "clinic"))
                 society.TurnedAwayThisWeek[busy.Id] = society.TurnedAwayThisWeek.GetValueOrDefault(busy.Id) + 1;
             return false;
         }
@@ -475,11 +472,9 @@ public static class SocietyEconomy
 
     public static void UpdateMetrics(World world)
     {
-        var groups = world.Agents.Values.GroupBy(agent => agent.CountryId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
         foreach (var nation in world.Society!.Nations.Values)
         {
-            var agents = groups[nation.Id];
+            var agents = world.InCountry(nation.Id);
             var citizens = agents.Where(SocietyLabor.IsResident).ToArray();
             var support = citizens.Length == 0 ? 0 : citizens.Count(citizen => citizen.SupportsLeadership) / (double)citizens.Length;
             var wellbeing = citizens.Length == 0 ? 0 : citizens.Average(citizen => citizen.Wellbeing) / 100;

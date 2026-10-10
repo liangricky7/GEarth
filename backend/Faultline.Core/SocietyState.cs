@@ -57,7 +57,6 @@ public sealed class Nation
     public int Unemployed { get; set; }
     public int BusinessesStarted { get; set; }
     public int BusinessesClosed { get; set; }
-    public int TurnedAwayPatients { get; set; }
     public Dictionary<string, long> WeekStartTotals { get; set; } = new();
     public int CrisisUntilTick { get; set; }
     public string? CrisisGood { get; set; }
@@ -145,10 +144,7 @@ public sealed class SocietyState
     public int PendingDecisions { get; set; }
     public int DueAgents { get; set; }
     public int OldestWaitTicks { get; set; }
-    public int InstitutionCadenceTicks { get; set; } = 30;
-    public int CitizenCadenceTicks { get; set; } = 300;
     public int TickIntervalMilliseconds { get; set; } = 2000;
-    public double MeasuredDecisionsPerSecond { get; set; }
     public double RecentModelDecisionsPerSecond { get; set; }
     public List<double> LatenciesMs { get; set; } = [];
     public DateTimeOffset StartedAt { get; set; }

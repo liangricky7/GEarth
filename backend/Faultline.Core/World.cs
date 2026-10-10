@@ -69,6 +69,14 @@ public sealed class Agent
     public DateTimeOffset? LastAttemptAt { get; set; }
     public DateTimeOffset? LastModelDecisionAt { get; set; }
     public DecisionRecord? LastDecision { get; set; }
+
+    // Agents keep their five most recent memories.
+    public void Remember(string memory)
+    {
+        Memories.Add(memory);
+        if (Memories.Count > 5)
+            Memories.RemoveAt(0);
+    }
 }
 
 public sealed class Route
@@ -121,6 +129,23 @@ public sealed class World
     public PathPlan? MedicineRoutePlan { get; set; }
     public string ScenarioHash { get; set; } = "";
     public SocietyState? Society { get; set; }
+
+    // Agents grouped by country in insertion order, so per-country scans skip the rest of the world.
+    // Not saved; rebuilt when an agent is added (agents are never removed) or after Reindex (migration).
+    private Dictionary<string, Agent[]>? byCountry;
+    private int indexedAgents;
+
+    public Agent[] InCountry(string country)
+    {
+        if (byCountry is null || indexedAgents != Agents.Count)
+        {
+            byCountry = Agents.Values.GroupBy(agent => agent.CountryId).ToDictionary(group => group.Key, group => group.ToArray());
+            indexedAgents = Agents.Count;
+        }
+        return byCountry.GetValueOrDefault(country, []);
+    }
+
+    public void Reindex() => byCountry = null;
 
     public WorldEvent Emit(string type, string source, string[] entities, object payload, params string[] causes)
     {

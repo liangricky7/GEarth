@@ -26,8 +26,7 @@ public static class SocietyDiplomacy
         if (profile.Id == "dictatorship")
             return world.Agents[nation.Id + "_bank"].CashMinor >= nation.Population * 100;
         if (profile.Id == "monarchy")
-            return world.Agents.Values.Count(agent => agent.CountryId == nation.Id
-                && agent.Role == "business" && agent.CashMinor > 1000) >= 2;
+            return world.InCountry(nation.Id).Count(agent => agent.Role == "business" && agent.CashMinor > 1000) >= 2;
         return true;
     }
 

@@ -11,7 +11,8 @@ public interface IWorldStore
     Task Initialize(CancellationToken cancellationToken);
     Task SaveNotes(RunNotes notes, CancellationToken cancellationToken);
     Task<RunNotes?> LoadNotes(string id, CancellationToken cancellationToken);
-    Task Save(World world, long expectedRevision, CancellationToken cancellationToken);
+    // serialized: the world's JSON when the caller already has it, so a checkpoint is serialized once.
+    Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null);
     Task<World?> Load(string id, CancellationToken cancellationToken);
     Task<string[]> List(CancellationToken cancellationToken);
     Task<WorldEvent[]> ReadEvents(string id, long afterSequence, int limit, CancellationToken cancellationToken);
@@ -27,14 +28,19 @@ public sealed class LocalStore(string directory) : IWorldStore
         return Task.CompletedTask;
     }
 
-    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken)
+    private sealed record CheckpointHead(long Revision, long Seq);
+
+    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null)
     {
         var path = PathFor(world.Id);
         using var writeLock = new FileStream(path + ".lock", FileMode.OpenOrCreate,
             FileAccess.ReadWrite, FileShare.None);
 
-        var existing = await Load(world.Id, cancellationToken);
-        if (SameCheckpoint(existing, world))
+        // Only the saved revision and sequence are needed; the full checkpoint is read only for a same-revision retry.
+        var existing = File.Exists(path)
+            ? JsonSerializer.Deserialize<CheckpointHead>(await File.ReadAllTextAsync(path, cancellationToken), Wire.Json)
+            : null;
+        if (existing?.Revision == world.Revision && SameCheckpoint(await Load(world.Id, cancellationToken), world))
             return;
         if ((existing?.Revision ?? 0) != expectedRevision)
             throw new InvalidOperationException("Revision conflict");
@@ -50,7 +56,7 @@ public sealed class LocalStore(string directory) : IWorldStore
         }
 
         var temporaryPath = path + ".tmp";
-        await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(world, Wire.Json), cancellationToken);
+        await File.WriteAllTextAsync(temporaryPath, serialized ?? JsonSerializer.Serialize(world, Wire.Json), cancellationToken);
         File.Move(temporaryPath, path, true);
     }
 
@@ -210,13 +216,13 @@ public sealed class NeonStore : IWorldStore, IDisposable
         return rows.Count == 0 ? null : JsonSerializer.Deserialize<RunNotes>(rows[0]![0]!.GetValue<string>(), Wire.Json);
     }
 
-    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken)
+    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null)
     {
         string?[] parameters =
         [
             world.Id,
             world.Revision.ToString(),
-            JsonSerializer.Serialize(world, Wire.Json),
+            serialized ?? JsonSerializer.Serialize(world, Wire.Json),
             expectedRevision.ToString()
         ];
 

@@ -271,7 +271,9 @@ async function showProfile() {
     for (const memory of data.agent.memories)
       memories.append(textNode("li", memory));
     profile.append(memories);
-    const decision = data.last_decision ?? data.decisions.at(-1);
+    // The recent-decisions window keeps full observations; the agent's own copy is slim.
+    const decision = data.decisions.at(-1) ?? data.last_decision;
+    const observed = decision && Object.keys(decision.job.observation ?? {}).length > 0;
     if (decision) {
       profile.append(
         textNode("h3", "Last decision"),
@@ -291,7 +293,9 @@ async function showProfile() {
           "pre",
           JSON.stringify(
             {
-              observation: decision.job.observation,
+              observation: observed
+                ? decision.job.observation
+                : "Not kept: observations are stored for the 256 most recent decisions.",
               action: decision.result.action,
             },
             null,

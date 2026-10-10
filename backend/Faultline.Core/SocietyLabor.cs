@@ -62,10 +62,11 @@ public static class SocietyLabor
         agent.Role != "defunct" && !(agent.Role == "business" && agent.OwnerId is not null);
 
     public static IEnumerable<Agent> Firms(World world, string country, string sector) =>
-        world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == country && agent.Specialty == sector);
+        world.InCountry(country).Where(agent => agent.Role == "business" && agent.Specialty == sector);
 
+    // Staff live in the firm's country: migrating clears a resident's employer.
     public static Agent[] Staff(World world, Agent firm) =>
-        world.Agents.Values.Where(agent => agent.EmployerId == firm.Id && IsResident(agent)).ToArray();
+        world.InCountry(firm.CountryId).Where(agent => agent.EmployerId == firm.Id && IsResident(agent)).ToArray();
 
     // Everyone who works at a firm: its staff plus a working owner.
     public static Agent[] Workers(World world, Agent firm) => Staff(world, firm)
@@ -166,7 +167,7 @@ public static class SocietyLabor
     {
         var society = world.Society!;
         var planned = IsPlanned(nation);
-        var firms = world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id).ToArray();
+        var firms = world.InCountry(nation.Id).Where(agent => agent.Role == "business").ToArray();
         int hires = 0, layoffs = 0, quits = 0, payCuts = 0;
         var dividends = 0L;
         foreach (var firm in firms.Where(_ => !planned))
@@ -197,7 +198,7 @@ public static class SocietyLabor
             hires, layoffs, job_switches = quits, pay_cuts = payCuts, unemployed = nation.Unemployed,
             dividends_minor = dividends,
             overtime_offers = firms.Count(firm => firm.Role == "business" && firm.OvertimeOffered),
-            active_businesses = world.Agents.Values.Count(agent => agent.Role == "business" && agent.CountryId == nation.Id),
+            active_businesses = world.InCountry(nation.Id).Count(agent => agent.Role == "business"),
             wage_offers = firms.Where(firm => firm.Role == "business").GroupBy(firm => SectorOf(firm.Specialty!).Occupation)
                 .ToDictionary(group => group.Key, group => group.Max(firm => firm.WageOfferMinor))
         });
@@ -433,8 +434,7 @@ public static class SocietyLabor
             var units = firm.Inventory[good];
             if (units == 0)
                 continue;
-            var buyer = world.Agents.Values.Where(agent => agent.Role == "business" && agent != firm
-                    && agent.CountryId == firm.CountryId && agent.Specialty == firm.Specialty)
+            var buyer = Firms(world, firm.CountryId, firm.Specialty!).Where(agent => agent != firm)
                 .OrderByDescending(agent => agent.CashMinor).FirstOrDefault();
             var price = Math.Max(1, SocietyFactory.BasePrice(good) / 2);
             var sold = buyer is null ? 0 : (int)Math.Min(units, buyer.CashMinor / price);

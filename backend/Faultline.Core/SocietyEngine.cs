@@ -7,7 +7,8 @@ public static class SocietyEngine
     // A decision made on a view older than a week no longer fits the world and expires.
     public const int DecisionMaxAgeDays = 7;
 
-    public const string RulesNote = "One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 per day, more with illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met, health, household goods and entertainment bought last week, security (a job or business plus savings) and free time. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after 14 days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay. Several firms compete in most sectors. A citizen with savings can start a business related to their occupation, or an entertainment venue, where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above 8 weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for 4 weeks closes and returns its cash to the owner. Prices adjust weekly in proportion to shortages or gluts, up to 20%. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within 7 days of the observation they were made on.";
+    // Numbers come from the engine constants so the model is never told a stale rule.
+    public static readonly string RulesNote = $"One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 per day, more with illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met, health, household goods and entertainment bought last week, security (a job or business plus savings) and free time. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after {SocietyLabor.RelatedJobAfterDays} days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay. Several firms compete in most sectors. A citizen with savings can start a business related to their occupation, or an entertainment venue, where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above {SocietyLabor.DividendBufferWeeks} weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for {SocietyLabor.DistressWeeksToClose} weeks closes and returns its cash to the owner. Prices adjust weekly in proportion to shortages or gluts, up to {SocietyLabor.MaxPriceStepPct}%. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within {DecisionMaxAgeDays} days of the observation they were made on.";
 
     private static void DropNulls(JsonNode? node)
     {
@@ -169,8 +170,9 @@ public static class SocietyEngine
             if (society.LatenciesMs.Count > 200)
                 society.LatenciesMs.RemoveAt(0);
         }
+        // The full observation stays only in the recent-decisions window; each agent keeps a slim copy.
         if (world.Agents.TryGetValue(job.AgentId, out var decidingAgent))
-            decidingAgent.LastDecision = record;
+            decidingAgent.LastDecision = record with { Job = compactJob with { Observation = new JsonObject() } };
         var decisionEvent = world.Emit(accepted ? "action_accepted" : "action_rejected",
             result.Source is "model" or "rule" or "rule_fallback" ? result.Source : "rule",
             [job.AgentId], new
@@ -190,9 +192,7 @@ public static class SocietyEngine
             agent.LastModelDecisionAt = now;
         }
         agent.Version++;
-        agent.Memories.Add($"T{world.Tick}: {result.Action.ActionType}: {result.Action.Reason}");
-        if (agent.Memories.Count > 5)
-            agent.Memories.RemoveAt(0);
+        agent.Remember($"T{world.Tick}: {result.Action.ActionType}: {result.Action.Reason}");
         SocietyEconomy.AssertConservation(world);
         return record;
     }
@@ -361,6 +361,7 @@ public static class SocietyEngine
         var previous = agent.CountryId;
         SocietyEconomy.Transfer(agent, world.Agents[destination + "_government"], 100);
         agent.CountryId = destination;
+        world.Reindex();
         agent.LocationId = destination + "_city";
         agent.EmployerId = null;
         agent.SalaryMinor = 0;

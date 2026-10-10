@@ -144,10 +144,14 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             world.UpdatedAt = DateTimeOffset.UtcNow;
             SocietyScheduler.UpdateMetrics(world, pending.Keys.ToHashSet(), queue, world.UpdatedAt);
             world.Revision = revision + 1;
-            await store.Save(world, revision, token ?? cancellationToken);
+            // One serialization feeds both the store and the API's read-only copy.
+            var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
+            await store.Save(world, revision, token ?? cancellationToken, serialized);
             revision = world.Revision;
             world.Events = world.Events.TakeLast(512).ToList();
-            current = Wire.Copy(world);
+            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+            copy.Events = copy.Events.TakeLast(512).ToList();
+            current = copy;
             logger.LogInformation("World tick {Tick}: {Coverage}/{Population} model coverage, {Pending} pending",
                 world.Tick, world.Agents.Values.Count(agent => agent.ModelDecisions > 0), world.Agents.Count, pending.Count);
         }

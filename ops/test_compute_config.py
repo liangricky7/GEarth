@@ -56,3 +56,15 @@ def test_spark_mode_honors_disabled_first_spark_and_excludes_amd():
     )
     assert [provider.name for provider in providers] == ["spark_b"]
     assert capacity == 64
+
+
+def test_launcher_preserves_explicit_tailscale_relay_pin():
+    config = {
+        **configuration(),
+        "SPARK_B_BASE_URL": "http://100.119.198.81:18002/v1",
+        "SPARK_B_TAILSCALE_HTTP_HOST": "100.119.198.81",
+    }
+    _, environment, providers, capacity = compute_environment(config)
+    assert environment["SPARK_B_TAILSCALE_HTTP_HOST"] == "100.119.198.81"
+    assert providers[1].base_url == config["SPARK_B_BASE_URL"]
+    assert capacity == 129

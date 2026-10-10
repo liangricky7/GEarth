@@ -22,7 +22,7 @@ SPARK_B_API_KEY=REPLACE_WITH_PRIVATELY_SUPPLIED_KEY
 SPARK_B_CAPACITY=64
 ```
 
-Loopback HTTP assumes an operator has already opened a private SSH forward from this laptop to the second Spark's model port. Alternatively, configure an authenticated HTTPS model endpoint reachable from Jayden's laptop. The launcher manages only its existing Spark A forward; it does not open a Spark B tunnel automatically. Do not expose a raw unauthenticated model port or guess another machine's connection details.
+Loopback HTTP assumes an operator has already opened a private SSH forward from this laptop to the second Spark's model port. Alternatively, configure an authenticated HTTPS model endpoint reachable from Jayden's laptop. Ken's shared-laptop Tailscale HTTP relay is supported with an exact host pin; see [his server and relay setup](15-ken-spark-b-relay.md). The launcher manages only its existing Spark A forward; it does not open a Spark B tunnel automatically. Do not expose a raw unauthenticated model port or guess another machine's connection details.
 
 ```bash
 .venv/bin/python ops/run_stage1.py --world --live --compute hybrid --storage local --population 1100

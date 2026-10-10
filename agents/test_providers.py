@@ -179,3 +179,35 @@ def test_cancelled_model_request_releases_both_limits(monkeypatch):
         assert pool.completed["amd"] == 0
 
     asyncio.run(request())
+
+
+@pytest.mark.parametrize(
+    "url,pinned_host,allowed",
+    [
+        ("http://100.119.198.81:18002/v1", "100.119.198.81", True),
+        ("http://100.119.198.81:18002/v1", "", False),
+        ("http://100.119.198.82:18002/v1", "100.119.198.81", False),
+        ("http://192.168.1.10:18002/v1", "192.168.1.10", False),
+        ("http://public.example/v1", "public.example", False),
+        ("http://100.119.198.81:18002/v1?key=private", "100.119.198.81", False),
+        ("http://user:private@100.119.198.81:18002/v1", "100.119.198.81", False),
+    ],
+)
+def test_tailscale_http_requires_exact_numeric_host_pin(url, pinned_host, allowed):
+    environment = {
+        "SPARK_A_ENABLED": "false",
+        "SPARK_B_ENABLED": "true",
+        "SPARK_B_BASE_URL": url,
+        "SPARK_B_TAILSCALE_HTTP_HOST": pinned_host,
+        "SPARK_B_API_KEY": "private",
+    }
+    if allowed:
+        assert load_providers(environment)[0].base_url == url
+    else:
+        with pytest.raises(ValueError):
+            load_providers(environment)
+
+
+def test_remote_first_spark_requires_its_own_api_key():
+    with pytest.raises(ValueError, match="SPARK_A_API_KEY"):
+        load_providers({"SPARK_A_BASE_URL": "https://spark.example/v1"})

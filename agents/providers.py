@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from ipaddress import ip_address, ip_network
 from urllib.parse import urlsplit
 
 
@@ -10,6 +11,16 @@ class ModelProvider:
     base_url: str
     capacity: int
     api_key: str = field(repr=False)
+
+
+def tailscale_http_allowed(address, environment, prefix):
+    configured_host = environment.get(f"{prefix}_TAILSCALE_HTTP_HOST", "")
+    if not configured_host or configured_host != address.hostname:
+        return False
+    try:
+        return ip_address(configured_host) in ip_network("100.64.0.0/10")
+    except ValueError:
+        return False
 
 
 def load_providers(environment=None, capacity=4):
@@ -45,13 +56,17 @@ def load_providers(environment=None, capacity=4):
             or (
                 address.scheme == "http"
                 and address.hostname not in {"127.0.0.1", "localhost", "::1"}
+                and not tailscale_http_allowed(address, environment, prefix)
             )
         ):
             raise ValueError(
-                f"{prefix}_BASE_URL must use HTTPS or loopback HTTP without embedded credentials"
+                f"{prefix}_BASE_URL must use HTTPS, loopback HTTP, or explicitly pinned Tailscale HTTP without embedded credentials"
             )
         api_key = environment.get(f"{prefix}_API_KEY", "")
-        if name != "spark_a" and not api_key:
+        if not api_key and (
+            name != "spark_a"
+            or address.hostname not in {"127.0.0.1", "localhost", "::1"}
+        ):
             raise ValueError(f"{prefix}_API_KEY is required")
         limit = int(environment.get(f"{prefix}_CAPACITY", default_capacity))
         if not 1 <= limit <= 128:

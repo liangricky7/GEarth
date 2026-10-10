@@ -29,6 +29,7 @@ MODEL = provider_pool.providers[0].model
 async def lifespan(application):
     async with httpx.AsyncClient(
         timeout=TIMEOUT_SECONDS,
+        trust_env=False,
         limits=httpx.Limits(
             max_connections=CAPACITY, max_keepalive_connections=CAPACITY
         ),

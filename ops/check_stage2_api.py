@@ -69,6 +69,26 @@ def check_api(url):
         assert client.get("/api/runs/missing/snapshot").status_code == 404
         assert client.post(path + "/snapshot").status_code == 405
         assert client.get("/.env.local").status_code == 404
+        events = (
+            client.get(path + "/events", params={"limit": 2}).raise_for_status().json()
+        )
+        assert len(events) == 2
+        boundary = events[0]["seq"]
+        bounded_events = (
+            client.get(path + "/events", params={"through_seq": boundary, "limit": 500})
+            .raise_for_status()
+            .json()
+        )
+        assert [event["seq"] for event in bounded_events] == [boundary]
+        assert (
+            client.get(
+                path + "/events",
+                params={"after_seq": boundary, "through_seq": boundary},
+            )
+            .raise_for_status()
+            .json()
+            == []
+        )
         notes = client.get(path + "/notes").raise_for_status().json()
         assert (
             notes["status"] == health["run_status"]
@@ -102,6 +122,7 @@ def check_api(url):
             "missing_entities",
             "secret_file_blocked",
             "checkpoint_notes_agree",
+            "event_sequence_boundary",
         ],
     }
     return report, sample

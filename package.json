@@ -1,0 +1,10 @@
+{
+  "name": "faultline-observer-checks",
+  "private": true,
+  "scripts": {
+    "test:observer": "node --test tests/observer.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

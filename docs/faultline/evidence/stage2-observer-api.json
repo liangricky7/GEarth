@@ -1,0 +1,37 @@
+{
+  "run_id": "world_20261010_125750_6d3812",
+  "mode": "LIVE",
+  "ticks": 420,
+  "population": 1100,
+  "new_model_calls": 0,
+  "max_pending": 64,
+  "notes_saved": true,
+  "checks": [
+    "role_metrics",
+    "decision_ages",
+    "country_role_filter",
+    "search",
+    "pagination",
+    "revision_metadata",
+    "request_bounds",
+    "read_only",
+    "missing_entities",
+    "secret_file_blocked",
+    "checkpoint_notes_agree",
+    "event_sequence_boundary"
+  ],
+  "observer_checks": {
+    "offline_dom_passed": 5,
+    "saved_api_dom_passed": 1,
+    "saved_run_ids": [
+      "world_20261010_125750_6d3812",
+      "world_20261010_133526_7c181f"
+    ],
+    "public_asset_sha256": "f2901423b159b1ee2f70179029872a89740eaf7532eaa4e3ae059427704605c5",
+    "browser_layout_verified": false
+  },
+  "build": {
+    "warnings": 0,
+    "errors": 0
+  }
+}

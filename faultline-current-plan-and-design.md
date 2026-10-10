@@ -5,7 +5,7 @@
 **Primary target:** Best AI
 **Delivery deadline:** Sunday, October 11, 2026, 10:00 a.m. EDT
 
-This is the current, self-contained project specification. It supersedes earlier population and two-Spark deployment targets for the next implementation stage. The earlier full design remains available separately as planning history.
+This document records the one-Spark implementation and its saved evidence. The updated [full design](faultline-full-design.md), copied from main at `0833da5`, supersedes this document's economy design with Ricky's labor-market revision. That newer engine code is not yet integrated into this branch. Population and two-Spark targets from earlier plans remain superseded by the measurements here.
 
 The project is an **observable world simulation**. Individual agents live in fictional countries, work, buy necessities, run businesses, finance trade, govern, negotiate, and experience the consequences of their decisions. The audience observes and investigates; it does not need game controls.
 

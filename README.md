@@ -8,7 +8,9 @@ The expanded world is implemented: ten fictional countries, five government prof
 
 A 1,100-agent rule-mode smoke test completed 120 ticks, delivered 11 shipments and verified cash, goods, ordered events, persistence and pagination. The first live run reached 977/1,100 model coverage and 82 delivered shipments, but a laptop sleep interrupted inference and invalidated its sustained-capacity measurement. The launcher now prevents idle sleep on macOS, the scheduler retries failed turns sooner. The repeat coverage test was stopped at the user’s request; it is not required for the next implementation stage. This population is a test target, not an absolute hardware maximum.
 
-The implementation passes 36 C# tests and 14 Python tests. Jayden's Stage 2 scheduling/API review adds explicit request admission, cancellable final draining, role-level coverage and decision ages. Browser layout inspection remains unverified.
+The implementation passes 36 C# tests and 14 Python tests. Jayden's Stage 2 scheduling/API review adds explicit request admission, cancellable final draining, role-level coverage and decision ages. The observer now handles policy events and prevents stale responses from mixing selected runs; five offline DOM checks and one saved-run integration check pass. Browser layout inspection remains unverified.
+
+The updated [full design](faultline-full-design.md), pulled from main at `0833da5`, describes Ricky's labor-market redesign. Its newer engine implementation has not been integrated into this branch; the state and recorded runs below describe the preceding economy.
 
 ## Start locally
 
@@ -45,6 +47,13 @@ dotnet test Faultline.sln
 .venv/bin/python docs/faultline/validate_design.py
 ```
 
+For the observer's DOM regression checks, install Node.js dependencies and run:
+
+```bash
+npm ci
+npm run test:observer
+```
+
 After a completed live world run is being served:
 
 ```bash
@@ -78,8 +87,9 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 - [Current plan and design](faultline-current-plan-and-design.md): the current one-Spark architecture, world design, benchmark results, and implementation plan.
 - [World runbook](docs/faultline/08-world-runbook.md): launch, inspect and verify the expanded world.
 - [Jayden's Stage 2 review](docs/faultline/10-stage2-jayden.md): scheduling guarantees, website data, API examples and saved evidence.
+- [Stage 2 observer consistency](docs/faultline/11-stage2-observer-consistency.md): event rendering, run selection, cancellation and verification.
 - [Stage 1 runbook](docs/faultline/07-stage1-runbook.md): operation and verification of the working demo.
-- [Earlier full design](faultline-full-design.md): detailed historical contracts, scenarios, and prior targets; the current plan takes precedence.
+- [Updated full design](faultline-full-design.md): revised economy and labor-market design from main, with historical contracts and scenarios.
 - [Recorded evidence](docs/faultline/evidence): Stage 1, expanded world results and one-Spark load sweeps.
 
 | Directory                 | Contents                                                        |

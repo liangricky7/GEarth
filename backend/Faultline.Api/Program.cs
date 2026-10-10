@@ -55,7 +55,7 @@ app.MapGet("/api/runs/{id}/snapshot", async (string id, Coordinator coordinator,
     return world is null ? Results.NotFound() : Results.Ok(world.Snapshot());
 });
 
-app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, int? limit,
+app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, long? through_seq, int? limit,
     Coordinator coordinator, CancellationToken cancellationToken) =>
 {
     var world = await ReadWorld(id, coordinator, cancellationToken);
@@ -63,12 +63,13 @@ app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, int? limi
         return Results.NotFound();
 
     var after = Math.Max(0, after_seq ?? 0);
+    var through = Math.Clamp(through_seq ?? world.Seq, 0, world.Seq);
     var count = Math.Clamp(limit ?? 100, 1, 500);
     var events = world.Events.Count > 0 && after >= world.Events[0].Seq - 1
         ? world.Events.Where(item => item.Seq > after).Take(count).ToArray()
         : await store.ReadEvents(id, after, count, cancellationToken);
 
-    return Results.Ok(events);
+    return Results.Ok(events.Where(item => item.Seq <= through));
 });
 
 app.MapGet("/api/runs/{id}/agents", async (string id, string? country, string? role, string? q, int? offset, int? limit,

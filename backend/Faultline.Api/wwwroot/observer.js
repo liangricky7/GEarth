@@ -7,10 +7,13 @@ let busy = false;
 let agentOffset = 0;
 let agentTotal = 0;
 let followCurrent = true;
-let notesKey = "";
+let notesCache = null;
+let refreshController = null;
+let profileController = null;
+let viewGeneration = 0;
 
-async function getJson(path) {
-  const response = await fetch(path);
+async function getJson(path, signal) {
+  const response = await fetch(path, { signal });
   if (!response.ok) throw new Error(`Request failed (${response.status}).`);
   return response.json();
 }
@@ -107,7 +110,7 @@ function drawMap(snapshot) {
     if (!location) continue;
     let [x, y] = point(location);
     const edge = snapshot.routes.find(
-      (route) => route.id === cargo.plan?.edge_ids[cargo.edge_index],
+      (route) => route.id === cargo.plan?.edge_ids?.[cargo.edge_index],
     );
     if (edge && cargo.edge_remaining_ticks > 0) {
       const [toX, toY] = point(locations.get(edge.to));
@@ -159,7 +162,7 @@ function showEvents(snapshot) {
       event.event_type !== "economy_cycle" &&
       !(
         event.event_type === "action_accepted" &&
-        event.entity_ids[0]?.includes("_citizen_")
+        event.entity_ids?.[0]?.includes("_citizen_")
       ),
   );
   for (const event of important.slice(-35).reverse()) {
@@ -171,9 +174,12 @@ function showEvents(snapshot) {
         "event-meta",
       ),
     );
-    const action = event.payload.action;
-    const title = action
-      ? `${event.entity_ids[0]} → ${action.action_type}`
+    const payload = event.payload ?? {};
+    const action = payload.action;
+    const actionType =
+      typeof action === "string" ? action : action?.action_type;
+    const title = actionType
+      ? `${event.entity_ids?.[0] ?? "World"} → ${actionType}`
       : event.event_type.replaceAll("_", " ");
     item.append(
       textNode(
@@ -185,15 +191,15 @@ function showEvents(snapshot) {
       ),
     );
     const detail =
-      action?.params.text ??
+      action?.params?.text ??
       action?.reason ??
       (event.event_type === "border_changed"
-        ? `${event.payload.edge_id}: ${event.payload.open ? "open" : "closed"}`
-        : (event.payload.reason ?? ""));
+        ? `${payload.edge_id}: ${payload.open ? "open" : "closed"}`
+        : (payload.reason ?? ""));
     item.append(
       textNode(
         "p",
-        `${event.payload.code && event.payload.code !== "OK" ? event.payload.code + ": " : ""}${detail}`,
+        `${payload.code && payload.code !== "OK" ? payload.code + ": " : ""}${detail}`,
         "event-body",
       ),
     );
@@ -217,18 +223,45 @@ function showAgents(agents) {
     button.addEventListener("click", async () => {
       selectedAgent = agent.id;
       showAgents(agents);
+      clearProfile();
       await showProfile();
     });
     list.append(button);
   }
 }
 
+function clearProfile() {
+  profileController?.abort();
+  element("profile").replaceChildren(
+    textNode(
+      "p",
+      selectedAgent
+        ? "Loading agent profile…"
+        : "Select an agent to inspect its profile.",
+      "muted",
+    ),
+  );
+}
+
 async function showProfile() {
-  if (!selectedAgent) return;
+  if (!selectedAgent || !selectedRun) return;
+  if (profileController && !profileController.signal.aborted) return;
+  const controller = new AbortController();
+  profileController = controller;
+  const runId = selectedRun;
+  const agentId = selectedAgent;
+  const generation = viewGeneration;
+  const isCurrent = () =>
+    !controller.signal.aborted &&
+    generation === viewGeneration &&
+    selectedRun === runId &&
+    selectedAgent === agentId;
   try {
     const data = await getJson(
-      `/api/runs/${encodeURIComponent(selectedRun)}/agents/${encodeURIComponent(selectedAgent)}`,
+      `/api/runs/${encodeURIComponent(runId)}/agents/${encodeURIComponent(agentId)}`,
+      controller.signal,
     );
+    if (!isCurrent()) return;
     const profile = element("profile");
     profile.replaceChildren(
       textNode("h3", data.agent.id),
@@ -237,24 +270,28 @@ async function showProfile() {
     profile.append(
       textNode(
         "p",
-        `Food: ${data.agent.inventory.food} · Energy: ${data.agent.inventory.energy} · ${(data.agent.cash_minor / 100).toFixed(2)} WLD`,
+        `Food: ${data.agent.inventory?.food ?? 0} · Energy: ${data.agent.inventory?.energy ?? 0} · ${(data.agent.cash_minor / 100).toFixed(2)} WLD`,
       ),
     );
     if (data.agent.last_model_decision_at) {
-      const age = Math.max(
-        0,
-        (Date.now() - new Date(data.agent.last_model_decision_at)) / 1000,
-      );
+      const age =
+        data.model_decision_age_seconds ??
+        Math.max(
+          0,
+          (new Date(data.updated_at) -
+            new Date(data.agent.last_model_decision_at)) /
+            1000,
+        );
       profile.append(
         textNode(
           "p",
-          `Accepted model turns: ${data.agent.model_decisions} · last turn ${Math.round(age)}s ago`,
+          `Accepted model turns: ${data.agent.model_decisions} · decision age ${Math.round(age)}s at checkpoint`,
         ),
       );
     }
     const traits = document.createElement("div");
     traits.className = "traits";
-    for (const [name, value] of Object.entries(data.agent.traits)) {
+    for (const [name, value] of Object.entries(data.agent.traits ?? {})) {
       const trait = textNode("div", `${name.replaceAll("_", " ")} · ${value}`);
       const progress = document.createElement("progress");
       progress.max = 1;
@@ -268,10 +305,10 @@ async function showProfile() {
       textNode("p", "Recent memories · observer access", "muted"),
     );
     const memories = document.createElement("ul");
-    for (const memory of data.agent.memories)
+    for (const memory of data.agent.memories ?? [])
       memories.append(textNode("li", memory));
     profile.append(memories);
-    const decision = data.last_decision ?? data.decisions.at(-1);
+    const decision = data.last_decision ?? data.decisions?.at(-1);
     if (decision) {
       profile.append(
         textNode("h3", "Last decision"),
@@ -302,28 +339,93 @@ async function showProfile() {
       profile.append(details);
     }
   } catch (error) {
-    element("message").textContent = error.message;
+    if (isCurrent()) {
+      element("profile").replaceChildren(
+        textNode("p", error.message, "event-rejected"),
+      );
+    }
+  } finally {
+    if (profileController === controller) profileController = null;
   }
+}
+
+function clearRunView() {
+  for (const id of [
+    "map",
+    "events",
+    "nations",
+    "shipments",
+    "relations",
+    "agents",
+    "run-notes",
+  ])
+    element(id).replaceChildren();
+  for (const id of ["tick", "population", "coverage", "decisions", "failures"])
+    element(id).textContent = "—";
+  element("world-details").hidden = true;
+  element("compute").textContent = "Loading compute telemetry…";
+  element("route-plan").textContent = "Loading trade corridors…";
+  element("mode").textContent = "Waiting";
+  element("event-count").textContent = "Loading events…";
+  element("shipping-count").textContent = "";
+  element("agent-page").textContent = "Loading agents…";
+  element("updated").textContent = "Waiting for committed state";
+  element("message").textContent = "";
+  element("notes-status").textContent = "Loading run observations…";
+  element("notes-download").hidden = true;
+  element("notes-download").removeAttribute("href");
+  element("previous-page").disabled = true;
+  element("next-page").disabled = true;
+  clearProfile();
+}
+
+function selectRun(runId, cancelRefresh = true) {
+  if (cancelRefresh) refreshController?.abort();
+  viewGeneration += 1;
+  selectedRun = runId;
+  selectedAgent = null;
+  agentOffset = 0;
+  agentTotal = 0;
+  lastSequence = 0;
+  displayedEvents = [];
+  notesCache = null;
+  element("country-filter").value = "";
+  element("role-filter").value = "";
+  element("agent-search").value = "";
+  element("connection").textContent = "Loading selected run";
+  clearRunView();
+}
+
+function requestRefresh() {
+  refreshController?.abort();
+  profileController?.abort();
+  viewGeneration += 1;
+  busy = false;
+  return refresh();
 }
 
 async function refresh() {
   if (busy) return;
   busy = true;
+  const controller = new AbortController();
+  refreshController = controller;
+  let generation = viewGeneration;
+  const isCurrent = () =>
+    !controller.signal.aborted && generation === viewGeneration;
   try {
-    const health = await getJson("/api/health");
-    const runs = await getJson("/api/runs");
-    if (
-      followCurrent &&
-      runs.current_run_id &&
-      selectedRun !== runs.current_run_id
-    ) {
-      selectedRun = runs.current_run_id;
-      lastSequence = 0;
-      displayedEvents = [];
-      selectedAgent = null;
-      agentOffset = 0;
+    const [health, runs] = await Promise.all([
+      getJson("/api/health", controller.signal),
+      getJson("/api/runs", controller.signal),
+    ]);
+    if (!isCurrent()) return;
+    const target =
+      followCurrent && runs.current_run_id
+        ? runs.current_run_id
+        : (selectedRun ?? runs.current_run_id ?? runs.run_ids[0] ?? null);
+    if (target !== selectedRun) {
+      selectRun(target, false);
+      generation = viewGeneration;
     }
-    selectedRun ??= runs.current_run_id ?? runs.run_ids[0];
     element("runs").replaceChildren();
     for (const id of runs.run_ids) {
       const option = textNode("option", id);
@@ -335,22 +437,26 @@ async function refresh() {
       element("connection").textContent = "Initializing world";
       return;
     }
-
-    const snapshot = await getJson(
-      `/api/runs/${encodeURIComponent(selectedRun)}/snapshot`,
-    );
-    if (lastSequence === 0 && snapshot.run.stage === 2)
-      lastSequence = Math.max(0, snapshot.seq - 200);
-    let events;
-    do {
-      events = await getJson(
-        `/api/runs/${encodeURIComponent(selectedRun)}/events?after_seq=${lastSequence}&limit=500`,
-      );
-      displayedEvents.push(...events);
-      if (events.length) lastSequence = events.at(-1).seq;
-    } while (events.length === 500);
-
-    displayedEvents = displayedEvents.slice(-500);
+    const runId = selectedRun;
+    const path = `/api/runs/${encodeURIComponent(runId)}`;
+    const snapshot = await getJson(`${path}/snapshot`, controller.signal);
+    if (!isCurrent()) return;
+    const query = new URLSearchParams({
+      country: element("country-filter").value,
+      role: element("role-filter").value,
+      q: element("agent-search").value,
+      offset: agentOffset,
+      limit: 50,
+    });
+    const [history, notes, page] = await Promise.all([
+      loadEvents(path, snapshot, controller.signal),
+      loadRunNotes(path, snapshot, health, controller.signal),
+      getJson(`${path}/agents?${query}`, controller.signal),
+    ]);
+    if (!isCurrent()) return;
+    displayedEvents = history.events;
+    lastSequence = history.sequence;
+    notesCache = notes;
     element("tick").textContent = snapshot.tick;
     element("population").textContent = snapshot.agents_summary.spawned;
     element("coverage").textContent =
@@ -372,28 +478,50 @@ async function refresh() {
     drawMap(snapshot);
     showEvents(snapshot);
     showWorld(snapshot);
-    await showRunNotes(snapshot, health);
-    await refreshAgents(snapshot);
-    await showProfile();
+    showRunNotes(runId, notes);
+    showAgentPage(snapshot, page);
+    showProfile();
   } catch (error) {
-    element("connection").textContent = "Connection interrupted";
-    element("message").textContent = error.message;
+    if (isCurrent()) {
+      clearRunView();
+      lastSequence = 0;
+      displayedEvents = [];
+      notesCache = null;
+      element("connection").textContent = "Connection interrupted";
+      element("message").textContent = error.message;
+    }
   } finally {
-    busy = false;
+    if (refreshController === controller) {
+      refreshController = null;
+      busy = false;
+    }
   }
 }
 
+async function loadEvents(path, snapshot, signal) {
+  let sequence = lastSequence;
+  if (sequence === 0 && snapshot.run.stage === 2)
+    sequence = Math.max(0, snapshot.seq - 200);
+  let history = displayedEvents.slice();
+  let page;
+  do {
+    page = await getJson(
+      `${path}/events?after_seq=${sequence}&through_seq=${snapshot.seq}&limit=500`,
+      signal,
+    );
+    page = page.filter(
+      (event) => event.seq > sequence && event.seq <= snapshot.seq,
+    );
+    history.push(...page);
+    if (page.length) sequence = page.at(-1).seq;
+  } while (page.length === 500 && sequence < snapshot.seq);
+  return { events: history.slice(-500), sequence };
+}
+
 element("runs").addEventListener("change", () => {
-  selectedRun = element("runs").value;
   followCurrent = false;
-  agentOffset = 0;
-  selectedAgent = null;
-  lastSequence = 0;
-  displayedEvents = [];
-  element("profile").replaceChildren(
-    textNode("p", "Select an agent to inspect its profile.", "muted"),
-  );
-  refresh();
+  selectRun(element("runs").value);
+  requestRefresh();
 });
 
 for (const id of ["country-filter", "role-filter", "agent-search"]) {
@@ -401,46 +529,38 @@ for (const id of ["country-filter", "role-filter", "agent-search"]) {
     id === "agent-search" ? "input" : "change",
     () => {
       agentOffset = 0;
-      refresh();
+      selectedAgent = null;
+      clearProfile();
+      requestRefresh();
     },
   );
 }
 element("previous-page").addEventListener("click", () => {
   agentOffset = Math.max(0, agentOffset - 50);
-  refresh();
+  requestRefresh();
 });
 element("next-page").addEventListener("click", () => {
   if (agentOffset + 50 < agentTotal) agentOffset += 50;
-  refresh();
+  requestRefresh();
 });
 
 refresh();
 setInterval(refresh, 1500);
 
-async function refreshAgents(snapshot) {
+function showAgentPage(snapshot, page) {
   const countrySelect = element("country-filter");
-  if (countrySelect.options.length !== snapshot.countries.length + 1) {
-    countrySelect.replaceChildren(textNode("option", "All countries"));
-    countrySelect.firstChild.value = "";
-    for (const country of snapshot.countries) {
-      const option = textNode("option", country.name);
-      option.value = country.id;
-      countrySelect.append(option);
-    }
+  const country = countrySelect.value;
+  countrySelect.replaceChildren(textNode("option", "All countries"));
+  countrySelect.firstChild.value = "";
+  for (const nation of snapshot.countries) {
+    const option = textNode("option", nation.name);
+    option.value = nation.id;
+    countrySelect.append(option);
   }
-  const query = new URLSearchParams({
-    country: countrySelect.value,
-    role: element("role-filter").value,
-    q: element("agent-search").value,
-    offset: agentOffset,
-    limit: 50,
-  });
-  const page = await getJson(
-    `/api/runs/${encodeURIComponent(selectedRun)}/agents?${query}`,
-  );
+  countrySelect.value = country;
   agentTotal = page.total;
   element("agent-page").textContent =
-    `${page.total ? page.offset + 1 : 0}–${Math.min(page.offset + page.agents.length, page.total)} of ${page.total}`;
+    `${page.total ? Math.min(page.offset + 1, page.total) : 0}–${Math.min(page.offset + page.agents.length, page.total)} of ${page.total}`;
   element("previous-page").disabled = agentOffset === 0;
   element("next-page").disabled = agentOffset + 50 >= agentTotal;
   showAgents(page.agents);
@@ -457,8 +577,10 @@ function showWorld(snapshot) {
   const compute = snapshot.compute[0];
   const residents = compute.by_role?.find((group) => group.role === "citizen");
   const age = residents?.model_decision_age_p95_seconds;
-  const scheduling = compute.oldest_eligible_wait_seconds === undefined ? "" :
-    ` · oldest eligible wait ${Math.round(compute.oldest_eligible_wait_seconds)}s · resident AI age p95 ${age == null ? "unavailable" : `${Math.round(age)}s`}`;
+  const scheduling =
+    compute.oldest_eligible_wait_seconds === undefined
+      ? ""
+      : ` · oldest eligible wait ${Math.round(compute.oldest_eligible_wait_seconds)}s · resident AI age p95 ${age == null ? "unavailable" : `${Math.round(age)}s`}`;
   element("compute").textContent =
     `${snapshot.run.mode === "LIVE" ? "One Spark" : "Rule simulation"} · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions every ${compute.institution_interval_seconds}s, residents every ${compute.resident_interval_seconds}s${scheduling}`;
   element("route-plan").textContent =
@@ -474,7 +596,11 @@ function showWorld(snapshot) {
     const metric = nation.history.at(-1);
     card.append(
       textNode("h3", nation.name),
-      textNode("p", government.name, "government-name"),
+      textNode(
+        "p",
+        government?.name ?? nation.government_id,
+        "government-name",
+      ),
       textNode(
         "p",
         `${nation.population} agents · leadership term ${nation.leadership_term}`,
@@ -584,32 +710,35 @@ function showWorld(snapshot) {
     );
 }
 
-async function showRunNotes(snapshot, health) {
-  element("notes-download").href =
-    `/api/runs/${encodeURIComponent(selectedRun)}/notes.md`;
+async function loadRunNotes(path, snapshot, health, signal) {
   const status =
-    health.run_id === selectedRun && health.status === "paused"
+    health.run_id === snapshot.run.id && health.status === "paused"
       ? "paused"
       : snapshot.run.status;
-  const key = `${selectedRun}:${snapshot.seq}:${status}`;
-  if (status === "running") {
-    element("notes-status").textContent =
-      "Simulation in progress. Notes are saved at completion or stop; download a checkpoint report at any time.";
-    element("run-notes").replaceChildren();
-    notesKey = "";
-    return;
-  }
-  if (notesKey === key) return;
-  const report = await getJson(
-    `/api/runs/${encodeURIComponent(selectedRun)}/notes`,
-  );
-  element("notes-status").textContent =
-    `${report.status.toUpperCase()} · notes through T${report.tick} / event ${report.through_sequence} · ${report.history_complete ? "complete recorded history" : "partial history"}`;
+  const key = `${snapshot.run.id}:${snapshot.seq}:${status}`;
+  if (status === "running") return { key, report: null };
+  if (notesCache?.key === key) return notesCache;
+  const report = await getJson(`${path}/notes`, signal);
+  return { key, report };
+}
+
+function showRunNotes(runId, notes) {
+  element("notes-download").href =
+    `/api/runs/${encodeURIComponent(runId)}/notes.md`;
+  element("notes-download").hidden = false;
   const list = element("run-notes");
   list.replaceChildren();
-  for (const observation of report.observations) {
+  const report = notes.report;
+  if (!report) {
+    element("notes-status").textContent =
+      "Simulation in progress. Notes are saved at completion or stop; download a checkpoint report at any time.";
+    return;
+  }
+  element("notes-status").textContent =
+    `${report.status.toUpperCase()} · notes through T${report.tick} / event ${report.through_sequence} · ${report.history_complete ? "complete recorded history" : "partial history"}`;
+  for (const observation of report.observations ?? []) {
     const item = textNode("li", observation.text);
-    if (observation.evidence_ids.length)
+    if (observation.evidence_ids?.length)
       item.append(
         textNode(
           "span",
@@ -619,5 +748,4 @@ async function showRunNotes(snapshot, health) {
       );
     list.append(item);
   }
-  notesKey = key;
 }

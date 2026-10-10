@@ -16,6 +16,8 @@ public static class SocietyActions
                 foreach (var effort in new[] { 0, 1, 2 }.Where(effort => effort != agent.WorkEffort))
                     options.Add(Make("work", new { effort }));
                 options.Add(Make("express_support", new { support = !agent.SupportsLeadership }));
+                foreach (var threshold in new[] { 0, 30, 50, 70 }.Where(threshold => threshold != agent.HealthThreshold))
+                    options.Add(Make("health_policy", new { visit_doctor_below_health = threshold }));
                 if (agent.CashMinor >= 100)
                     foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.Id != agent.CountryId)
                         .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
@@ -40,6 +42,8 @@ public static class SocietyActions
                 options.Add(Make("publish", new { text, observed_tick = world.Tick }));
                 break;
         }
+        if (agent.Role != "government")
+            SocietyPayments.AddOptions(world, agent, options);
         return options.ToArray();
     }
 
@@ -79,6 +83,8 @@ public static class SocietyActions
             options.Add(Make("set_tax", new { tax_basis_points = tax }));
         foreach (var welfare in new[] { 0, 40, 80 }.Where(welfare => welfare != nation.WelfareMinor))
             options.Add(Make("set_welfare", new { amount_minor = welfare }));
+        foreach (var salesTax in new[] { 0, 500, 1000 }.Where(salesTax => salesTax != nation.SalesTaxBasisPoints))
+            options.Add(Make("set_sales_tax", new { sales_tax_basis_points = salesTax }));
         foreach (var services in new[] { 0, 10, 30 }.Where(services => services != nation.ServiceBudgetPerResidentMinor))
             options.Add(Make("fund_services", new { amount_minor = services }));
         if (agent.CashMinor >= 1500 && nation.Productivity < 2)
@@ -107,6 +113,7 @@ public static class SocietyActions
         foreach (var route in world.Routes.Values.Where(route => route.ControllerCountryId == nation.Id)
             .OrderBy(route => route.Open).ThenBy(route => route.Id).Take(2))
             options.Add(Make("set_border", new { edge_id = route.Id, open = !route.Open }));
+        SocietyPayments.AddOptions(world, agent, options);
     }
 
     public static Candidate Make(string action, object parameters) => new(action, Wire.Node(parameters).AsObject());

@@ -92,6 +92,15 @@ public static class RunAnalysis
             var losses = settled.Sum(item => item.Payload["loss_minor"]!.GetValue<long>());
             observations.Add(new("credit", $"{requested} loans were requested, {funded.Length} funded and {settled.Length} settled; {defaults} settled in default with {Money(losses)} WLD unpaid. Unmatured loans are not counted as defaults.", Evidence(funded.Concat(settled))));
         }
+        var payments = events.Where(item => item.EventType == "payment_sent").ToArray();
+        var purchases = events.Where(item => item.EventType == "goods_purchased").ToArray();
+        if (payments.Length > 0 || purchases.Length > 0)
+        {
+            var flows = payments.GroupBy(item => $"{item.Payload["from_role"]} to {item.Payload["to_role"]}")
+                .OrderByDescending(group => group.Count()).Take(4)
+                .Select(group => $"{group.Key}: {group.Count()}");
+            observations.Add(new("payments", $"{payments.Length} chosen payments moved {Money(payments.Sum(item => item.Payload["amount_minor"]!.GetValue<long>()))} WLD ({string.Join(", ", flows)}); {purchases.Length} chosen household purchases spent {Money(purchases.Sum(item => item.Payload["total_minor"]!.GetValue<long>()))} WLD. Routine wages, taxes and restocking are not included.", Evidence(payments.Concat(purchases))));
+        }
         if (world.MedicineRoutePlan is { } plan)
             observations.Add(new("routing", $"The final medicine route plan required {plan.TravelTicks} travel ticks and {Money(plan.CostMinor)} WLD. A route plan is not a completed delivery.", Evidence(accepted.Where(item => Action(item) == "choose_route"))));
         if (fallback.Length > 0 || rejected.Length > 0)

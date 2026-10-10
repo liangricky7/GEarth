@@ -1,0 +1,70 @@
+{
+  "verified_at": "2026-10-10",
+  "task": "Ahmad: bad model responses, timeouts, and fallback behavior",
+  "trello_card": "https://trello.com/c/qn0TEGCa",
+  "base_branch": "world-simulation-run-observations",
+  "base_commit": "fd42879b36f01a457e68e495a13dca5714f23e2c",
+  "work_branch": "codex/ahmad/worker-failure-checks",
+  "runtime_code_changed": false,
+  "new_model_calls": 0,
+  "python": {
+    "version": "3.12.8",
+    "command": ".venv/bin/python -m pytest agents/test_worker.py -q",
+    "passed": 21,
+    "failed": 0,
+    "new_cases": 7,
+    "transport": "httpx.MockTransport and ASGITransport; no network model requests",
+    "cases_added": [
+      "Malformed model JSON returns a JSONDecodeError fallback",
+      "Missing choices returns a KeyError fallback",
+      "Empty choices returns an IndexError fallback",
+      "Null model content returns a TypeError fallback",
+      "HTTP read timeout returns a ReadTimeout fallback",
+      "Worker timeout cancels a hanging model request",
+      "A shorter job deadline cancels a hanging model request before the worker timeout"
+    ],
+    "asserted_for_each_failure": [
+      "HTTP 200 with matching request_id, source rule_fallback, explicit error and hold action",
+      "No invented parameters or evidence in the fallback",
+      "Active request count returns to zero",
+      "With capacity one, a subsequent request succeeds as a model decision"
+    ]
+  },
+  "csharp": {
+    "sdk_version": "10.0.203",
+    "command": "dotnet test Faultline.sln --logger 'trx;LogFileName=worker-failure-tests.trx' --results-directory artifacts/local/worker-failure-checks",
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0,
+    "new_cases": 2,
+    "cases_added": [
+      "Fallback for an agent with no accepted model decision",
+      "Fallback for an agent with an earlier accepted model decision"
+    ],
+    "assertions": [
+      "Fallback is accepted as a fallback action and recorded separately",
+      "Fallback does not increase world or agent model-decision counts, model coverage or rule-decision counts",
+      "Fallback does not refresh the last accepted model-decision time",
+      "Applying the same fallback result twice does not double-count it",
+      "The world advances and a later valid model decision applies with conserved accounting"
+    ]
+  },
+  "test_file_sha256": {
+    "agents/test_worker.py": "20fab6f207099cbae6e4a1c48a015bb68f5347ceebe38822a127dbaa57e21064",
+    "backend/Faultline.Tests/WorkerFallbackTests.cs": "d0166f8c89396bc8237e3cccf4fcc7902bf74e40a66a0a933741e756068d7139"
+  },
+  "connection_review": {
+    "trello_card": "https://trello.com/c/Vkps1ook",
+    "status": "implemented; awaiting review and integration",
+    "findings": "Existing candidate-choice mapping, request identity and final engine validation meet the basic connection requirements. No additional connection implementation was needed.",
+    "reused_live_evidence": "docs/faultline/evidence/world-live-1100.json",
+    "reused_run_id": "world_20261010_125750_6d3812",
+    "accepted_model_decisions": 1881,
+    "covered_agents": 977,
+    "population": 1100
+  },
+  "remaining": [
+    "Team review and integration of this branch and the expanded-world dependency",
+    "Controlled-response tests do not qualify live throughput or sustained population capacity; existing live-run limitations remain"
+  ]
+}

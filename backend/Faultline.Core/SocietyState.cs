@@ -44,6 +44,13 @@ public sealed class Nation
     public double FoodMultiplier { get; set; } = 1;
     public double EnergyMultiplier { get; set; } = 1;
     public double Productivity { get; set; } = 1;
+    public double EducationFactor { get; set; } = 1;
+    public int SalesTaxBasisPoints { get; set; } = 500;
+    public int ProfitTaxBasisPoints { get; set; } = 2000;
+    public long SalesTaxCollectedMinor { get; set; }
+    public long ProfitTaxCollectedMinor { get; set; }
+    public long DoctorVisits { get; set; }
+    public long PublicDoctorVisits { get; set; }
     public int CrisisUntilTick { get; set; }
     public string? CrisisGood { get; set; }
     public Dictionary<string, int> Stocks { get; set; } = new();
@@ -139,6 +146,8 @@ public sealed class SocietyState
     public List<double> LatenciesMs { get; set; } = [];
     public DateTimeOffset StartedAt { get; set; }
     public int GovernmentRotation { get; set; }
+    public Dictionary<string, long> PeriodRevenueMinor { get; set; } = new();
+    public Dictionary<string, long> PeriodCostMinor { get; set; } = new();
     public int InstitutionIntervalSeconds { get; set; } = 120;
     public int ResidentIntervalSeconds { get; set; } = 600;
     public int MaxPendingObserved { get; set; }

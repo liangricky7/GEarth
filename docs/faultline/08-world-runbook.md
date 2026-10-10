@@ -65,7 +65,7 @@ Notes summarize role-specific choices, work effort, trade, policy changes, crise
 
 The model worker remains on loopback port 8100 and requires an ephemeral bearer token. Browser clients never receive that token or the Spark model key. The observer is read-only.
 
-Agent pages and details include committed revision, event sequence and update time. Model decision ages and role metrics are documented with sample responses in [Jayden's Stage 2 review](10-stage2-jayden.md). Run `ops/check_stage2_api.py` against a completed or stopped world to check these API contracts without new inference.
+Agent pages and details include committed revision, event sequence and update time. Model decision ages and role metrics are documented with sample responses in [the design](../../faultline-design.md#82-read-api-all-read-only). Run `ops/check_stage2_api.py` against a completed or stopped world to check these API contracts without new inference.
 
 ## Sharing and failure handling
 
@@ -73,4 +73,4 @@ Use [the permanent Faultline address](https://diarockets-faultline.finebear64.ch
 
 If health reports `paused`, the last committed state remains inspectable. Check `.logs/api.log`, `.logs/worker.log` and `.logs/tunnel.log` locally. Inference failures become explicit fallback holds; fallbacks do not count toward accepted model coverage. A storage failure pauses the run after bounded retries. Restarting normally creates a new run; inspect the old checkpoint with `--run-id`.
 
-Cash and goods are simulated. Cargo escrow and credit use internal accounting. AMD inference is implemented and verified; Solana and Databricks remain future integrations. The population is a test target, not a measured maximum. The known full-year calibration failure and old hybrid HTTP-error fallbacks remain recorded in the [maintained design](../../faultline-current-plan-and-design.md).
+Cash and goods are simulated. Cargo escrow and credit use internal accounting. AMD inference is implemented and verified; Solana and Databricks remain future integrations. The population is a test target, not a measured maximum. The known full-year calibration failure and old hybrid HTTP-error fallbacks remain recorded in the [design](../../faultline-design.md#14-known-problems-and-open-questions).

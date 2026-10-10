@@ -8,7 +8,7 @@ Main combines the daily labor-market economy, entrepreneurs, quality of life, cl
 
 Spark A's Qwen3-8B and Qwen3-4B services were verified; AMD's Qwen3-4B endpoint also completed decisions. Jayden's private configuration enables 4 institution slots, 8 citizen slots and 1 shared AMD slot. Spark B and AMD's second model are prepared but unverified. These are inference services; the laptop runs one world. The previous simulation is stopped and is not restarted by this merge.
 
-See the [maintained design](faultline-current-plan-and-design.md) for the combined specification, current limitations and decisions. The [design comparison](faultline-design-vs-current.md) is historical evidence from before integration; the [full design collection](faultline-full-design.md) preserves older plans and fixtures.
+See the [design](faultline-design.md) for the full specification, current limitations, decisions and their reasons.
 
 The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Databricks and Solana settlement remain unimplemented.
 
@@ -33,7 +33,7 @@ For live inference, configure authenticated endpoints and Spark SSH access, then
 
 Use `--compute spark` or `--compute amd` for a single source, and `--storage local` to omit Neon. See [Qwen setup](docs/faultline/18-all-node-qwen-setup.md), [AMD setup](docs/faultline/12-amd-compute.md) and [the world runbook](docs/faultline/08-world-runbook.md). Real credentials, logs, environments and runtime state are ignored by Git.
 
-World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--seed` and `--government-rotation`. Defaults: 1,100 agents, 360 daily ticks and two-second intervals. Live admission derives from enabled provider capacities; an explicit `--capacity` lowers the total cap. Use `--ticks 365` for a simulated year. The software population range is 160–100,000 and is not a validated capacity range. Wall-clock institution/resident cadence flags were removed.
+World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--seed`, `--government-rotation` and `--verbose` (writes the day-by-day history file for the renderer, served at `/api/runs/{id}/history`). Defaults: 1,100 agents, 360 daily ticks and two-second intervals. Live admission derives from enabled provider capacities; an explicit `--capacity` lowers the total cap. Use `--ticks 365` for a simulated year. The software population range is 160–100,000 and is not a validated capacity range. Wall-clock institution/resident cadence flags were removed.
 
 Ctrl+C or SIGTERM stops the launcher and its child services. The observer stays available after completion unless `--exit-on-complete` is supplied. To inspect a saved checkpoint without inference:
 
@@ -73,4 +73,4 @@ Completed, gracefully stopped and paused runs produce behavior observations, cou
 | `ops` | Launcher, synthetic checks, Spark installer, AMD setup and private relays |
 | `docs/faultline` | Operational guides, contracts, fixtures and historical/integration evidence |
 
-[Current handoff](docs/faultline/19-model-handoff.md) summarizes this integration. Ricky implemented the labor economy and persistence refactors; Jayden integrated compute, endowments and observer/scheduler work; Kennedy operates visualization and live runs; Ahmad works on inference and evaluation. Outcomes describe a configured fictional society, not causal conclusions about real governments.
+Ricky implemented the labor economy and persistence refactors; Jayden integrated compute, endowments and observer/scheduler work; Kennedy operates visualization and live runs; Ahmad works on inference and evaluation. Outcomes describe a configured fictional society, not causal conclusions about real governments.

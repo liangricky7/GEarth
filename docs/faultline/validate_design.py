@@ -158,7 +158,7 @@ def main():
     manifest = load("run-manifest.template.json")
     assert manifest["status"] == "template_not_measured"
     assert manifest["population_actual"] is None and not manifest["model_workers"][2]["enabled"]
-    docs = [ROOT / "README.md", ROOT / "faultline-project-brief.md", *HERE.rglob("*.md")]
+    docs = [ROOT / "README.md", ROOT / "faultline-design.md", *HERE.rglob("*.md")]
     for doc in docs:
         for raw in re.findall(r"\]\(([^\n)]+)\)", doc.read_text()):
             target = raw.strip("<>")

@@ -26,7 +26,7 @@ public static class SocietyActions
                 foreach (var sector in SocietyLabor.StartableSectors(agent).Where(sector => SocietyLabor.CanStart(world, agent, sector)))
                     options.Add(Make("start_business", new
                     {
-                        sector, startup_cost_minor = SocietyLabor.StartupCost(agent),
+                        sector, startup_cost_minor = SocietyLabor.StartupCost(agent, sector),
                         launch_price_minor = SocietyLabor.LaunchPrice(world, world.Society!.Nations[agent.CountryId], sector)
                     }));
                 if (agent.CashMinor >= 100)
@@ -84,7 +84,7 @@ public static class SocietyActions
     {
         var nation = world.Society!.Nations[buyer.CountryId];
         var own = buyer.Specialty == "clinic" ? "medicine" : SocietyLabor.SectorOf(buyer.Specialty!).Good;
-        if (own is null && buyer.Specialty == "freight")
+        if (own is null) // freight and entertainment use no imported inputs
             return;
         foreach (var good in new[] { own, "energy" }.OfType<string>().Distinct())
         {

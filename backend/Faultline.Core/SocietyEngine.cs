@@ -4,6 +4,26 @@ namespace Faultline.Core;
 
 public static class SocietyEngine
 {
+    // A decision made on a view older than a week no longer fits the world and expires.
+    public const int DecisionMaxAgeDays = 7;
+
+    public const string RulesNote = "One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 per day, more with illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met, health, household goods and entertainment bought last week, security (a job or business plus savings) and free time. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after 14 days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay. Several firms compete in most sectors. A citizen with savings can start a business related to their occupation, or an entertainment venue, where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above 8 weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for 4 weeks closes and returns its cash to the owner. Prices adjust weekly in proportion to shortages or gluts, up to 20%. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within 7 days of the observation they were made on.";
+
+    private static void DropNulls(JsonNode? node)
+    {
+        if (node is JsonObject fields)
+            foreach (var (key, value) in fields.ToArray())
+            {
+                if (value is null)
+                    fields.Remove(key);
+                else
+                    DropNulls(value);
+            }
+        else if (node is JsonArray items)
+            foreach (var item in items)
+                DropNulls(item);
+    }
+
     public static void Advance(World world)
     {
         world.Tick++;
@@ -35,10 +55,11 @@ public static class SocietyEngine
             var good = action.Params["good"]!.GetValue<string>();
             var path = SocietyTrade.Path(world, seller.LocationId, agent.LocationId, action.Params["objective"]!.GetValue<string>())!;
             return new { seller_id = seller.Id, good, stock = seller.Inventory[good], seller.PriceMinor,
-                path.TravelTicks, path.CostMinor, objective = path.Objective };
-        }).ToArray();
+                path.TravelTicks, shipping_minor = path.CostMinor };
+        }).DistinctBy(offer => (offer.seller_id, offer.good)).ToArray(); // one row per seller; sizes are in the menu
+        // Weekly labor summaries are already in the market block, so they are not repeated as events.
         var observedEvents = world.Events.Where(item => item.EntityIds.Contains(nation.Id)
-            && item.EventType is not ("action_accepted" or "action_rejected" or "economy_cycle")).TakeLast(2).ToArray();
+            && item.EventType is not ("action_accepted" or "action_rejected" or "economy_cycle" or "labor_market")).TakeLast(2).ToArray();
         var evidence = new[] { $"country:{nation.Id}:tick{world.Tick}" }
             .Concat(observedEvents.Select(item => item.EventId)).ToArray();
         var firm = agent.OwnedBusinessId is { } owned ? world.Agents[owned] : agent.Role == "business" ? agent : null;
@@ -53,49 +74,71 @@ public static class SocietyEngine
             competitor_prices = SocietyLabor.Firms(world, nation.Id, firm.Specialty!).Where(other => other != firm)
                 .Select(other => other.PriceMinor).Order().Take(5)
         };
-        var market = new
+        // Each role sees what its choices depend on; prompts stay small so the model keeps up with the weekly economy.
+        var resident = SocietyLabor.IsResident(agent);
+        var governing = agent.Role == "government";
+        var market = agent.Role is "bank" or "media" ? null : new
         {
             cheapest_price_minor = SocietyLabor.Sectors.Where(sector => sector.BasePrice > 0).ToDictionary(sector => sector.Id,
                 sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (int?)other.PriceMinor).Min()),
-            best_wage_offer_minor_per_week = SocietyLabor.Sectors.ToDictionary(sector => sector.Occupation,
-                sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (long?)other.WageOfferMinor).Max()),
+            best_wage_offer_minor_per_week = resident || governing ? SocietyLabor.Sectors.ToDictionary(sector => sector.Occupation,
+                sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (long?)other.WageOfferMinor).Max()) : null,
             unemployed_residents = nation.Unemployed, nation.UnemploymentBenefitMinor,
-            startup_cost_minor = agent.Role == "citizen" ? SocietyLabor.StartupCost(agent) : (long?)null,
+            startup_cost_minor = agent.Role == "citizen"
+                ? SocietyLabor.StartableSectors(agent).ToDictionary(sector => sector, sector => SocietyLabor.StartupCost(agent, sector)) : null,
             business_opportunities = agent.Role == "citizen"
-                ? SocietyLabor.StartableSectors(agent).Where(sector => SocietyLabor.HasOpportunity(world, nation, sector)) : []
+                ? SocietyLabor.StartableSectors(agent).Where(sector => SocietyLabor.HasOpportunity(world, nation, sector)).ToArray() : null
         };
+        var treasury = world.Agents[nation.Id + "_government"].CashMinor;
+        object country = governing
+            ? new
+            {
+                nation.Id, government = profile.Name, profile.PolicyDelay, profile.PublicOwnershipPercent,
+                nation.TaxBasisPoints, nation.WelfareMinor, nation.ServiceBudgetPerResidentMinor,
+                nation.Approval, nation.Population, nation.Stocks, nation.UnmetNeedsLastCycle, treasury_minor = treasury,
+                nation.Productivity, nation.EducationFactor, nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints,
+                nation.CrisisGood, crisis_until_tick = nation.CrisisGood is null ? (int?)null : nation.CrisisUntilTick,
+                pending_policy = world.Society.Policies.FirstOrDefault(policy => policy.CountryId == nation.Id)?.ActionType,
+                government_authority_available = SocietyDiplomacy.HasAuthority(world, nation)
+            }
+            : new
+            {
+                nation.Id, government = profile.Name, nation.Approval, nation.Stocks, nation.UnmetNeedsLastCycle,
+                nation.TaxBasisPoints, nation.WelfareMinor, treasury_minor = treasury, nation.CrisisGood
+            };
+        var loans = world.Society.Credit.Where(credit => credit.Status == "requested"
+            && (credit.BankId == agent.Id || credit.BorrowerId == agent.Id)).Take(4).ToArray();
         var observation = Wire.Node(new
         {
             world_stage = 2, tick = world.Tick,
             self = new
             {
-                agent.Id, agent.Role, agent.Occupation, agent.Specialty, agent.Goal, agent.Traits,
-                agent.CashMinor, agent.Inventory, agent.WorkEffort, agent.TargetStock, agent.Wellbeing, agent.Health, agent.HealthThreshold,
-                agent.SupportsLeadership, agent.Memories,
-                employer_id = agent.EmployerId, salary_minor_per_week = agent.SalaryMinor,
+                agent.Id, agent.Role, agent.Occupation, specialty = agent.Role == "business" ? agent.Specialty : null,
+                agent.Goal, agent.Traits, agent.CashMinor,
+                inventory = resident ? agent.Inventory.Where(item => item.Value > 0).ToDictionary() : null,
+                work_effort = resident ? agent.WorkEffort : (int?)null, target_stock = resident ? agent.TargetStock : (int?)null,
+                quality_of_life = resident ? agent.Wellbeing : (int?)null, health = resident ? agent.Health : (int?)null,
+                health_threshold = resident ? agent.HealthThreshold : (int?)null,
+                supports_leadership = resident ? agent.SupportsLeadership : (bool?)null,
+                memories = agent.Memories.TakeLast(3).Select(memory => memory.Length > 100 ? memory[..100] : memory),
+                employer_id = agent.EmployerId,
+                salary_minor_per_week = agent.EmployerId is null ? (long?)null : agent.SalaryMinor,
+                overtime_offered = agent.EmployerId is { } employer && world.Agents[employer].OvertimeOffered ? true : (bool?)null,
                 unemployed_days = agent.EmployerId is null && agent.UnemployedSinceTick >= 0 ? world.Tick - agent.UnemployedSinceTick : (int?)null
             },
             business, market,
-            budget_last_week = agent.Role == "government"
+            budget_last_week = governing
                 ? new { income_minor = agent.LastWeekInMinor, spending_minor = agent.LastWeekOutMinor,
                     net_minor = agent.LastWeekInMinor - agent.LastWeekOutMinor } : null,
-            country = new
-            {
-                nation.Id, government = profile.Name, profile.PolicyDelay, profile.PublicOwnershipPercent,
-                nation.TaxBasisPoints, nation.WelfareMinor, nation.ServiceBudgetPerResidentMinor,
-                nation.Approval, nation.Population, nation.Stocks, nation.UnmetNeedsLastCycle,
-                treasury_minor = world.Agents[nation.Id + "_government"].CashMinor,
-                nation.Productivity, nation.EducationFactor, nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints,
-                nation.CrisisGood, nation.CrisisUntilTick,
-                pending_policy = world.Society.Policies.FirstOrDefault(policy => policy.CountryId == nation.Id)?.ActionType,
-                government_authority_available = SocietyDiplomacy.HasAuthority(world, nation)
-            },
-            neighbors, import_offers = offers,
-            requested_loans = world.Society.Credit.Where(credit => credit.Status == "requested"
-                && (credit.BankId == agent.Id || credit.BorrowerId == agent.Id)).Take(4),
+            country,
+            neighbors = governing ? neighbors : null,
+            import_offers = offers.Length > 0 ? offers : null,
+            requested_loans = loans.Length > 0 ? loans : null,
             public_events = observedEvents.Select(item => new { item.EventType, item.Payload }),
-            note = "One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically from the cheapest local seller up to your target stock. Health falls 1 per day, more with extra work, illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. Weekly: employees receive their agreed salary whatever their effort; effort 2 raises output for the employer (or your own business if you own one), not your salary, and costs 1 health and 1 wellbeing per day; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after 14 days unskilled workers take any unskilled job and doctors and researchers can swap; employed workers switch for at least 10% more pay. A citizen with savings can start a business related to their occupation where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week) and set price, wage offer and headcount. A business that cannot cover costs for 4 weeks closes and returns its cash to the owner. Prices drift weekly: empty shelves raise them 5%, gluts lower them. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week."
+            // The rules are identical for every agent; the worker sends them as a shared, cacheable system prompt.
+            note = RulesNote
         });
+        DropNulls(observation);
         return new DecisionJob(Guid.NewGuid().ToString("N"), world.Id, agent.Id, world.Tick,
             now.AddSeconds(65), new Dictionary<string, int> { [agent.Id] = agent.Version }, evidence, observation, actions);
     }
@@ -164,7 +207,7 @@ public static class SocietyEngine
             return "STALE_AGENT_INTENT";
         if (result.Source is not ("model" or "rule" or "rule_fallback"))
             return "INVALID_SOURCE";
-        if (job.ObservationTick > world.Tick || now > job.Deadline || world.Tick - job.ObservationTick > 90)
+        if (job.ObservationTick > world.Tick || now > job.Deadline || world.Tick - job.ObservationTick > DecisionMaxAgeDays)
             return "EXPIRED_PROPOSAL";
         var action = result.Action;
         if (action is null || action.Params is null || string.IsNullOrWhiteSpace(action.Reason)

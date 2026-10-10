@@ -78,8 +78,7 @@ public static class SocietyProjection
                     society.OldestWaitTicks,
                     average_model_decisions_per_second = society.RecentModelDecisionsPerSecond,
                     society.MaxPendingObserved,
-                    society.InstitutionIntervalSeconds,
-                    society.ResidentIntervalSeconds,
+                    citizen_rotation_weeks = SocietyScheduler.CitizenRotationWeeks,
                     society.TickIntervalMilliseconds
                 }
             }

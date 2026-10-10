@@ -15,19 +15,22 @@ public static class SocietyFactory
         ("ionia", "Ionia", 8, 80), ("jade", "Jade", 35, 140)
     ];
     public static readonly string[] Goods = ["food", "energy", "tools", "medicine"];
-    public const int InstitutionsPerCountry = 9; // government, bank, media and one firm per sector
+    // Government, bank, media and every firm.
+    public static readonly int InstitutionsPerCountry = 3 + SocietyLabor.Sectors.Sum(sector => sector.Firms);
 
     // Starting job shares per 100 workers, sized so each sector's sales roughly cover its payroll.
-    // One of each essential occupation comes first so small test worlds still have every sector staffed.
+    // One of each essential occupation comes first so small test worlds still have every sector staffed;
+    // doctors come only from that list, so each country starts with one (two with a clinic owner, about
+    // 20 per 1,000 people: the fewest that keep a clinic open at this population size).
     private static readonly (string Occupation, int Weight)[] JobShares =
     [
-        ("farmer", 21), ("energy_worker", 8), ("factory_worker", 46), ("researcher", 2), ("doctor", 2),
-        ("dockworker", 3), ("teacher", 8), ("soldier", 5), ("unemployed", 5)
+        ("farmer", 21), ("energy_worker", 6), ("factory_worker", 25), ("service_worker", 20),
+        ("dockworker", 2), ("teacher", 9), ("soldier", 6), ("unemployed", 9)
     ];
 
     public static World Create(string id, bool live, int population, int seed = 20261010, int rotation = 0)
     {
-        if (population < 100 || population > 100000)
+        if (population < Geography.Length * (InstitutionsPerCountry + 1) || population > 100000)
             throw new ArgumentOutOfRangeException(nameof(population));
 
         var world = new World
@@ -60,14 +63,21 @@ public static class SocietyFactory
             var government = AddInstitution(world, countryId, "government", "government", 0);
             AddInstitution(world, countryId, "bank", "bank", Math.Max(20000, citizensPerCountry * 4000L));
             AddInstitution(world, countryId, "media", "journalist", 10000);
-            var firms = SocietyLabor.Sectors.ToDictionary(sector => sector.Id, sector =>
+            // The first firm in a sector is "<country>_<sector>", later ones "<country>_<sector>_2" and so on.
+            var firms = SocietyLabor.Sectors.ToDictionary(sector => sector.Id, sector => Enumerable.Range(1, sector.Firms).Select(number =>
             {
-                var firm = AddInstitution(world, countryId, "business", sector.Id, 0);
+                var firm = AddInstitution(world, countryId, "business", sector.Id, 0, number == 1 ? null : $"{countryId}_{sector.Id}_{number}");
                 firm.Specialty = sector.Id;
                 firm.PriceMinor = sector.BasePrice;
                 firm.WageOfferMinor = SocietyLabor.TableWage[sector.Occupation];
                 return firm;
-            });
+            }).ToArray());
+            var hiring = SocietyLabor.Sectors.ToDictionary(sector => sector.Occupation, _ => 0);
+            Agent NextFirm(string occupation)
+            {
+                var sector = SocietyLabor.Sectors.Single(sector => sector.Occupation == occupation);
+                return firms[sector.Id][hiring[occupation]++ % sector.Firms];
+            }
             var number = 0;
             Agent NewResident(string occupation, long cash)
             {
@@ -80,14 +90,15 @@ public static class SocietyFactory
                 return resident;
             }
             if (!planned)
-                foreach (var sector in SocietyLabor.Sectors.Take(citizensPerCountry))
+                foreach (var firm in firms.Values.SelectMany(group => group).Take(citizensPerCountry))
                 {
+                    var sector = SocietyLabor.SectorOf(firm.Specialty!);
                     var owner = NewResident("entrepreneur", 2 * SocietyLabor.TableWage[sector.Occupation]);
                     owner.Role = "entrepreneur";
                     owner.FormerOccupation = sector.Occupation;
-                    owner.OwnedBusinessId = firms[sector.Id].Id;
+                    owner.OwnedBusinessId = firm.Id;
                     owner.Goal = $"Keep your {sector.Id} business profitable while meeting your own household needs.";
-                    firms[sector.Id].OwnerId = owner.Id;
+                    firm.OwnerId = owner.Id;
                 }
             foreach (var occupation in AllocateJobs(citizensPerCountry - number, planned))
             {
@@ -100,17 +111,19 @@ public static class SocietyFactory
                     citizen.UnemployedSinceTick = 0;
                     continue;
                 }
-                citizen.EmployerId = occupation is "teacher" or "soldier" ? government.Id
-                    : firms[SocietyLabor.Sectors.Single(sector => sector.Occupation == occupation).Id].Id;
+                citizen.EmployerId = occupation is "teacher" or "soldier" ? government.Id : NextFirm(occupation).Id;
                 citizen.SalaryMinor = wage;
             }
             var residentsHere = world.Agents.Values.Where(agent => agent.CountryId == countryId && SocietyLabor.IsResident(agent)).ToArray();
-            foreach (var (sectorId, firm) in firms)
+            foreach (var resident in residentsHere)
+                resident.Wellbeing = resident.LastWeekWellbeing = SocietyEconomy.QualityOfLife(resident, 2, false);
+            foreach (var (sectorId, group) in firms)
+            foreach (var firm in group)
             {
                 var staff = residentsHere.Where(resident => resident.EmployerId == firm.Id).ToArray();
                 firm.TargetHeadcount = staff.Length;
                 firm.CashMinor = Math.Max(10000, staff.Sum(worker => worker.SalaryMinor) * 4);
-                var n = citizensPerCountry;
+                var n = citizensPerCountry / group.Length; // starting stock is shared among a sector's firms
                 switch (sectorId)
                 {
                     case "food": firm.Inventory["food"] = n * 10; firm.Inventory["energy"] = n * 2; break;
@@ -145,7 +158,7 @@ public static class SocietyFactory
         }
         world.InitialCashMinor = world.Agents.Values.Sum(agent => agent.CashMinor);
         world.ScenarioHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:election100:crisis40"))).ToLowerInvariant();
+            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms12:election100:crisis40"))).ToLowerInvariant();
         SocietyEconomy.UpdateMetrics(world);
         world.Emit("world_initialized", "scenario", [world.Id], new
         {
@@ -156,9 +169,9 @@ public static class SocietyFactory
         return world;
     }
 
-    private static Agent AddInstitution(World world, string country, string role, string occupation, long cash)
+    private static Agent AddInstitution(World world, string country, string role, string occupation, long cash, string? id = null)
     {
-        var agent = CreateAgent(world, $"{country}_{occupation}", country, role, occupation, cash);
+        var agent = CreateAgent(world, id ?? $"{country}_{occupation}", country, role, occupation, cash);
         world.Agents.Add(agent.Id, agent);
         return agent;
     }
@@ -185,7 +198,7 @@ public static class SocietyFactory
 
     private static IEnumerable<string> AllocateJobs(int workers, bool planned)
     {
-        var essentials = new[] { "farmer", "energy_worker", "factory_worker", "researcher", "doctor", "dockworker", "teacher" };
+        var essentials = new[] { "farmer", "energy_worker", "factory_worker", "service_worker", "researcher", "doctor", "dockworker", "teacher" };
         var jobs = essentials.Take(workers).ToList();
         var rest = workers - jobs.Count;
         foreach (var (occupation, weight) in JobShares)

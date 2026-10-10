@@ -8,12 +8,40 @@ public static class SocietyEconomy
     // ponytail: fixed economic constants; move to scenario config if experiments need to vary them
     public const int VisitHealthGain = 40;
     public const int PublicCareHealthBelow = 60;
-    public const long SavingsBufferMinor = 1000;
-    public const int DiscretionaryBasisPoints = 6000;
     public const double DailyIllnessChance = 0.01;
+
+    // Quality of life (stored as Wellbeing, 0-100) is scored from outcomes, each with diminishing returns:
+    // needs met today, health, discretionary goods and services bought last week, security (a job or
+    // business plus savings) and free time (overtime costs some).
+    public const double NeedsWeight = 0.35, HealthWeight = 0.20, ComfortWeight = 0.20, SecurityWeight = 0.15, LeisureWeight = 0.10;
+    public const double ComfortUnitsAtFull = 40; // weekly units of goods (or of services) that count as full comfort
+    public const int SecurityWeeksOfPay = 8; // savings of this many weeks' pay count as fully secure
+    // ponytail: households weigh a coin saved as lasting this many weeks; tune if saving rates look wrong
+    public const double SavingsHorizonWeeks = 12;
 
     // Sick people still do some work; output and pay scale from 25% at zero health to 100% when healthy.
     public static double Capacity(Agent citizen) => 0.25 + 0.75 * citizen.Health / 100.0;
+
+    private static double WeeklyPay(Agent resident) =>
+        SocietyLabor.TableWage.GetValueOrDefault(resident.FormerOccupation ?? resident.Occupation, 1000);
+
+    // Savings in weeks of one's own pay, with log utility: the first weeks of savings matter most.
+    private static double SavingsSecurity(Agent resident, double cash) =>
+        Math.Min(1, Math.Log(1 + Math.Max(0, cash) / WeeklyPay(resident)) / Math.Log(1 + SecurityWeeksOfPay));
+
+    // Log utility: every extra unit adds less, but something, so spending rises with income.
+    private static double ComfortOf(int units) => Math.Min(1, Math.Log(1 + units) / Math.Log(1 + ComfortUnitsAtFull));
+
+    private static double Comfort(int goods, int services) => 0.5 * ComfortOf(goods) + 0.5 * ComfortOf(services);
+
+    private static double Security(Agent resident, long cash) =>
+        0.5 * (resident.EmployerId is not null || resident.OwnedBusinessId is not null ? 1 : 0)
+        + 0.5 * SavingsSecurity(resident, cash);
+
+    public static int QualityOfLife(Agent resident, int needsMet, bool overtime) => (int)Math.Round(100 * (
+        NeedsWeight * needsMet / 2.0 + HealthWeight * resident.Health / 100.0
+        + ComfortWeight * Comfort(resident.GoodsBoughtLastWeek, resident.ServicesBoughtLastWeek)
+        + SecurityWeight * Security(resident, resident.CashMinor) + LeisureWeight * (overtime ? 0.5 : 1)));
 
     public static void Day(World world)
     {
@@ -25,17 +53,12 @@ public static class SocietyEconomy
         {
             var agents = byCountry[nation.Id];
             var residents = agents.Where(SocietyLabor.IsResident).ToArray();
-            var staff = residents.Where(resident => resident.EmployerId is not null).GroupBy(resident => resident.EmployerId!)
-                .ToDictionary(group => group.Key, group => group.ToList());
-            Agent[] Workers(Agent firm) => staff.GetValueOrDefault(firm.Id, [])
-                .Concat(firm.OwnerId is { } owner && world.Agents[owner].Role == "entrepreneur" ? [world.Agents[owner]] : [])
-                .ToArray();
             var firms = agents.Where(agent => agent.Role == "business").ToArray();
             foreach (var firm in firms.OrderBy(firm => firm.Specialty == "energy" ? 0 : 1).ThenBy(firm => firm.Id))
-                Produce(world, nation, firm, Workers(firm), residents.Length);
+                Produce(world, nation, firm, SocietyLabor.Workers(world, firm), residents.Length);
             foreach (var clinic in firms.Where(firm => firm.Specialty == "clinic"))
             {
-                var capacity = (int)(Workers(clinic).Sum(Capacity) * SocietyLabor.SectorOf("clinic").DailyOutput);
+                var capacity = (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek);
                 society.VisitsServedToday[clinic.Id] = -capacity; // counts up to zero as visits are served
                 Acquire(world, clinic, "medicine", Math.Max(0, capacity * 2 - clinic.Inventory["medicine"]), false);
             }
@@ -45,15 +68,19 @@ public static class SocietyEconomy
             {
                 var resident = residents[(index + start) % residents.Length];
                 resident.Health = Math.Max(0, resident.Health - 1);
-                if (resident.WorkEffort == 2 && resident.EmployerId is not null)
+                // Overtime (offered by the employer, accepted by the worker) costs free time and, every other day, health.
+                var overtime = SocietyLabor.WorksOvertime(world, resident);
+                if (overtime)
                 {
-                    resident.Health = Math.Max(0, resident.Health - 1);
-                    resident.Wellbeing = Math.Max(0, resident.Wellbeing - 1);
+                    resident.OvertimeDays++;
+                    if (world.Tick % 2 == 0)
+                        resident.Health = Math.Max(0, resident.Health - 1);
                 }
                 if (SocietyFactory.Sample(world.Seed, $"{resident.Id}:{world.Tick}", "illness") < DailyIllnessChance)
                     resident.Health = Math.Max(0, resident.Health - 30);
                 if (resident.Health < resident.HealthThreshold)
                     Visit(world, nation, resident, resident, true);
+                var met = 0;
                 foreach (var good in new[] { "food", "energy" })
                 {
                     Acquire(world, resident, good, Math.Max(0, resident.TargetStock - resident.Inventory[good]), true);
@@ -62,15 +89,17 @@ public static class SocietyEconomy
                         resident.Inventory[good]--;
                         society.ConsumedGoods[good]++;
                         nation.FulfilledNeedsLastCycle++;
-                        resident.Wellbeing = Math.Min(100, resident.Wellbeing + 1);
+                        met++;
                     }
                     else
                     {
                         nation.UnmetNeedsLastCycle++;
-                        resident.Wellbeing = Math.Max(0, resident.Wellbeing - 3);
                         resident.Health = Math.Max(0, resident.Health - 1);
                     }
                 }
+                // Quality of life follows the day's outcomes, a quarter of the way at a time.
+                var target = QualityOfLife(resident, met, overtime);
+                resident.Wellbeing = Math.Clamp(resident.Wellbeing + (int)Math.Round((target - resident.Wellbeing) / 4.0), 0, 100);
             }
         }
     }
@@ -132,18 +161,17 @@ public static class SocietyEconomy
                 nation.PublicDoctorVisits++;
             }
 
-            // Households spend part of their savings above a buffer on household goods (tools).
+            Discretionary(world, nation, residents);
+            // Retrospective support: a sharp fall in quality of life costs the leadership support, a sharp
+            // rise wins it back, and deep misery withdraws it.
             foreach (var resident in residents)
             {
-                var spend = Math.Max(0, resident.CashMinor - SavingsBufferMinor) * DiscretionaryBasisPoints / 10000;
-                var cheapest = Sellers(world, nation, "tools").FirstOrDefault();
-                if (cheapest is null || spend < cheapest.PriceMinor)
-                    continue;
-                var units = Acquire(world, resident, "tools", (int)(spend / cheapest.PriceMinor), true);
-                resident.Inventory["tools"] -= units;
-                society.ConsumedGoods["tools"] += units;
-                if (units > 0)
-                    resident.Wellbeing = Math.Min(100, resident.Wellbeing + 2);
+                var change = resident.Wellbeing - resident.LastWeekWellbeing;
+                if (change <= -10 || resident.Wellbeing < 30)
+                    resident.SupportsLeadership = false;
+                else if (change >= 10)
+                    resident.SupportsLeadership = true;
+                resident.LastWeekWellbeing = resident.Wellbeing;
             }
 
             var tensions = society.Relations.Values.Where(relation => relation.AtWar
@@ -190,18 +218,97 @@ public static class SocietyEconomy
         }
     }
 
+    // Households buy household goods (tools) and entertainment one unit at a time while the next unit adds
+    // more quality of life than the savings it uses up. Each kind saturates, so spending spreads across both
+    // and grows with income (Engel's law) instead of following a fixed share.
+    private static void Discretionary(World world, Nation nation, Agent[] residents)
+    {
+        var society = world.Society!;
+        var shops = Sellers(world, nation, "tools").ToArray();
+        var venues = SocietyLabor.Firms(world, nation.Id, "entertainment").OrderBy(venue => venue.PriceMinor).ThenBy(venue => venue.Id).ToArray();
+        var seats = venues.ToDictionary(venue => venue.Id, venue => (int)SocietyLabor.ServiceCapacity(world, venue));
+        var basePrice = SocietyLabor.SectorOf("entertainment").BasePrice;
+        // Necessities come first: a week of food and energy at today's cheapest prices is set aside.
+        long Cheapest(string good) => Sellers(world, nation, good).Select(seller => (long)seller.PriceMinor).DefaultIfEmpty(SocietyFactory.BasePrice(good)).First();
+        var essentials = SocietyLabor.DaysPerWeek * (Cheapest("food") + Cheapest("energy"));
+        foreach (var resident in residents)
+        {
+            int goods = 0, services = 0;
+            var turnedAway = false;
+            // Comfort gained from one more unit, less the security lost by spending its price.
+            double Net(int have, long price) =>
+                ComfortWeight * 0.5 * (ComfortOf(have + 1) - ComfortOf(have))
+                - SavingsHorizonWeeks * SecurityWeight * 0.5
+                * (SavingsSecurity(resident, resident.CashMinor) - SavingsSecurity(resident, resident.CashMinor - price));
+            for (var round = 0; round < 2 * ComfortUnitsAtFull; round++)
+            {
+                var spendable = resident.CashMinor - essentials;
+                var shop = PickSeller(shops.Where(seller => seller.Inventory["tools"] > 0 && seller.PriceMinor <= spendable).ToArray(),
+                    world.Seed, $"{resident.Id}:{world.Tick}:tools:{round}");
+                var venue = PickSeller(venues.Where(seller => seats[seller.Id] > 0 && seller.PriceMinor <= spendable).ToArray(),
+                    world.Seed, $"{resident.Id}:{world.Tick}:entertainment:{round}");
+                var goodsGain = shop is null ? 0 : Net(goods, shop.PriceMinor);
+                var serviceGain = venue is null ? 0 : Net(services, venue.PriceMinor);
+                if (venue is null && spendable >= basePrice && Net(services, basePrice) > 0)
+                    turnedAway = true;
+                if (goodsGain <= 0 && serviceGain <= 0)
+                    break;
+                if (goodsGain >= serviceGain)
+                {
+                    Sell(world, resident, shop!, shop!.PriceMinor, true, 1);
+                    shop.Inventory["tools"]--;
+                    society.ConsumedGoods["tools"]++;
+                    goods++;
+                }
+                else
+                {
+                    Sell(world, resident, venue!, venue!.PriceMinor, true, 1);
+                    seats[venue.Id]--;
+                    services++;
+                }
+            }
+            resident.GoodsBoughtLastWeek = goods;
+            resident.ServicesBoughtLastWeek = services;
+            if (turnedAway)
+                foreach (var full in venues)
+                    society.TurnedAwayThisWeek[full.Id] = society.TurnedAwayThisWeek.GetValueOrDefault(full.Id) + 1;
+        }
+    }
+
+    // Shoppers favour cheaper sellers without all going to the cheapest: location, habit and search costs
+    // spread custom. Weight falls with the fourth power of the price ratio (10% dearer: 0.68, 50%: 0.20).
+    public static Agent? PickSeller(Agent[] sellers, int seed, string key)
+    {
+        if (sellers.Length <= 1)
+            return sellers.FirstOrDefault();
+        var cheapest = sellers.Min(seller => seller.PriceMinor);
+        var weights = sellers.Select(seller => Math.Pow(cheapest / (double)Math.Max(1, seller.PriceMinor), 4)).ToArray();
+        var draw = SocietyFactory.Sample(seed, key, "seller") * weights.Sum();
+        for (var index = 0; index < sellers.Length; index++)
+        {
+            draw -= weights[index];
+            if (draw <= 0)
+                return sellers[index];
+        }
+        return sellers[^1];
+    }
+
     // Domestic sellers of a good, cheapest first.
     public static IEnumerable<Agent> Sellers(World world, Nation nation, string good) =>
         world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id
                 && agent.Specialty == good && agent.Inventory[good] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id);
 
-    // Buys up to the wanted quantity from the cheapest domestic sellers the buyer can afford.
+    // Buys up to the wanted quantity from domestic sellers the buyer can afford. Firms buy inputs from the
+    // cheapest seller; households start at a price-weighted pick and fall back to the cheapest.
     public static int Acquire(World world, Agent buyer, string good, int wanted, bool household)
     {
         var nation = world.Society!.Nations[buyer.CountryId];
         var bought = 0;
-        foreach (var seller in Sellers(world, nation, good).Where(seller => seller != buyer).ToArray())
+        var sellers = Sellers(world, nation, good).Where(seller => seller != buyer).ToArray();
+        if (household && wanted > 0 && PickSeller(sellers, world.Seed, $"{buyer.Id}:{world.Tick}:{good}") is { } first)
+            sellers = [first, .. sellers.Where(seller => seller != first)];
+        foreach (var seller in sellers)
         {
             if (bought >= wanted)
                 break;
@@ -287,11 +394,9 @@ public static class SocietyEconomy
         return wage;
     }
 
-    private static void Produce(World world, Nation nation, Agent producer, Agent[] workers, int residents)
+    // Land and resources, crises, productivity investment and schooling scale what each worker makes.
+    public static double OutputMultiplier(World world, Nation nation, string good)
     {
-        var sector = SocietyLabor.SectorOf(producer.Specialty!);
-        if (sector.Good is not { } good)
-            return;
         var multiplier = good switch
         {
             "food" => nation.FoodMultiplier,
@@ -300,10 +405,19 @@ public static class SocietyEconomy
         };
         if (nation.CrisisUntilTick > world.Tick && nation.CrisisGood == good)
             multiplier *= 0.35;
+        return multiplier * nation.Productivity * nation.EducationFactor;
+    }
+
+    private static void Produce(World world, Nation nation, Agent producer, Agent[] workers, int residents)
+    {
+        var sector = SocietyLabor.SectorOf(producer.Specialty!);
+        if (sector.Good is not { } good)
+            return;
         // Health drives output; wellbeing (morale) has a milder effect.
-        var potential = (int)(workers.Sum(worker => worker.WorkEffort * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker))
-            * sector.DailyOutput * multiplier * nation.Productivity * nation.EducationFactor);
-        var stockLimit = residents * good switch { "food" or "energy" => 30, "tools" => 15, _ => 10 };
+        var potential = (int)(workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker))
+            * sector.DailyOutput * OutputMultiplier(world, nation, good));
+        // Firms plan output toward two weeks of their own recent sales, below the three-week glut line.
+        var stockLimit = Math.Max(residents / 4, 2 * producer.LastWeekUnitsSold);
         var quantity = Math.Min(potential, Math.Max(0, stockLimit - producer.Inventory[good]));
         if (quantity <= 0)
             return;

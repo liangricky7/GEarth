@@ -52,6 +52,7 @@ public sealed class Nation
     public long DoctorVisits { get; set; }
     public long PublicDoctorVisits { get; set; }
     public int UnemploymentBenefitMinor { get; set; }
+    public long DividendsPaidMinor { get; set; }
     public long UnemploymentPaidMinor { get; set; }
     public int Unemployed { get; set; }
     public int BusinessesStarted { get; set; }
@@ -157,8 +158,6 @@ public sealed class SocietyState
     public Dictionary<string, long> PeriodUnitsSold { get; set; } = new();
     public Dictionary<string, int> VisitsServedToday { get; set; } = new();
     public Dictionary<string, int> TurnedAwayThisWeek { get; set; } = new();
-    public int InstitutionIntervalSeconds { get; set; } = 120;
-    public int ResidentIntervalSeconds { get; set; } = 600;
     public int MaxPendingObserved { get; set; }
     public DateTimeOffset? CoverageCompletedAt { get; set; }
 }

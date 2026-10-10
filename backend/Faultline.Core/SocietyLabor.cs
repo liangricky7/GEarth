@@ -7,39 +7,50 @@ public static class SocietyLabor
 {
     public const int DaysPerWeek = 7;
     public const int StartupWeeks = 8;
+    public const int ServiceStartupWeeks = 4; // a venue needs less capital than a farm or workshop
     public const int OwnerDrawBasisPoints = 5000;
+    public const int DividendBufferWeeks = 8; // firms keep this many weeks of payroll; the rest goes to the owner
     public const int DistressWeeksToClose = 4;
     public const int RelatedJobAfterDays = 14;
+    public const int MaxPriceStepPct = 20;
+    // Overtime adds a quarter more hours, paid at time and a half.
+    public const double OvertimeOutput = 1.25;
+    public const int OvertimePayEighths = 3; // 0.25 extra hours x 1.5 = 3/8 of the daily wage
 
     // ponytail: calibration constants; move to scenario config if experiments need to vary them
-    public sealed record Sector(string Id, string Occupation, string? Good, int BasePrice, double DailyOutput);
+    public sealed record Sector(string Id, string Occupation, string? Good, int BasePrice, double DailyOutput, int Firms);
 
-    // DailyOutput is per full-strength worker per day (clinic: visits per doctor per day). Freight earns shipping fees.
+    // DailyOutput is per full-strength worker per day (clinic: visits per doctor; entertainment: sessions per
+    // worker). Freight earns shipping fees. Firms is how many compete in each country at the start.
     public static readonly Sector[] Sectors =
     [
-        new("food", "farmer", "food", 40, 7.5),
-        new("energy", "energy_worker", "energy", 25, 22),
-        new("tools", "factory_worker", "tools", 100, 3),
-        new("medicine", "researcher", "medicine", 120, 4.5),
-        new("clinic", "doctor", null, 450, 8),
-        new("freight", "dockworker", null, 0, 0)
+        new("food", "farmer", "food", 40, 7.5, 3),
+        new("energy", "energy_worker", "energy", 25, 22, 2),
+        new("tools", "factory_worker", "tools", 100, 3, 2),
+        new("entertainment", "service_worker", null, 60, 5, 2),
+        new("medicine", "researcher", "medicine", 120, 4.5, 1),
+        new("clinic", "doctor", null, 450, 8, 1),
+        new("freight", "dockworker", null, 0, 0, 1)
     ];
 
     public static Sector SectorOf(string id) => Sectors.Single(sector => sector.Id == id);
 
+    // Services are sold by the visit or session and cannot be stocked.
+    public static bool IsService(Sector sector) => sector.Good is null && sector.BasePrice > 0;
+
     // Weekly pay with education baked in: roughly real-world median ratios, farmer = 1,000 minor.
     public static readonly Dictionary<string, long> TableWage = new()
     {
-        ["farmer"] = 1000, ["factory_worker"] = 1300, ["soldier"] = 1400, ["dockworker"] = 1450,
+        ["farmer"] = 1000, ["service_worker"] = 1100, ["factory_worker"] = 1300, ["soldier"] = 1400, ["dockworker"] = 1450,
         ["teacher"] = 1750, ["energy_worker"] = 2100, ["researcher"] = 2500, ["doctor"] = 6000
     };
 
-    // Unskilled jobs are open to any unskilled worker after a spell of unemployment; doctors and
-    // researchers only move between each other. Teachers and soldiers are public-sector only.
-    public static readonly string[] Unskilled = ["farmer", "energy_worker", "factory_worker", "dockworker"];
+    // Unskilled jobs are open to anyone after a spell of unemployment, so skilled workers can step down;
+    // doctors and researchers also move between each other. Teachers and soldiers are public-sector only.
+    public static readonly string[] Unskilled = ["farmer", "service_worker", "energy_worker", "factory_worker", "dockworker"];
 
     public static bool CanSwitch(string from, string to) => from == to
-        || (Unskilled.Contains(from) && Unskilled.Contains(to))
+        || Unskilled.Contains(to)
         || (from, to) is ("doctor", "researcher") or ("researcher", "doctor");
 
     public static bool IsResident(Agent agent) => agent.Role is "citizen" or "entrepreneur";
@@ -56,24 +67,45 @@ public static class SocietyLabor
     public static Agent[] Staff(World world, Agent firm) =>
         world.Agents.Values.Where(agent => agent.EmployerId == firm.Id && IsResident(agent)).ToArray();
 
-    public static long StartupCost(Agent founder) => StartupWeeks * TableWage.GetValueOrDefault(founder.Occupation, 1000);
+    // Everyone who works at a firm: its staff plus a working owner.
+    public static Agent[] Workers(World world, Agent firm) => Staff(world, firm)
+        .Concat(firm.OwnerId is { } owner && world.Agents[owner].Role == "entrepreneur" ? [world.Agents[owner]] : [])
+        .ToArray();
 
-    // Founders start firms in their own trade, or in the sector they could move into as a worker.
+    // Output factor for one working day: a striker produces nothing; overtime adds a quarter.
+    public static double DayEffort(World world, Agent worker)
+    {
+        if (worker.WorkEffort == 0)
+            return 0;
+        return WorksOvertime(world, worker) ? OvertimeOutput : 1;
+    }
+
+    // Overtime needs the employer's offer and the worker's consent (effort 2); owners decide for themselves.
+    public static bool WorksOvertime(World world, Agent worker) => worker.WorkEffort == 2
+        && (worker.Role == "entrepreneur" && worker.OwnedBusinessId is not null
+            || worker.EmployerId is { } employer && world.Agents[employer] is { Role: "business", OvertimeOffered: true });
+
+    public static long StartupCost(Agent founder, string sector) =>
+        (sector == "entertainment" ? ServiceStartupWeeks : StartupWeeks) * TableWage.GetValueOrDefault(founder.Occupation, 1000);
+
+    // Founders start firms in their own trade or one they could move into as skilled workers;
+    // anyone can open an entertainment venue.
     public static string[] StartableSectors(Agent founder) => Sectors
-        .Where(sector => sector.Occupation == founder.Occupation
-            || (!Unskilled.Contains(founder.Occupation) && CanSwitch(founder.Occupation, sector.Occupation)))
+        .Where(sector => sector.Occupation == founder.Occupation || sector.Id == "entertainment"
+            || (!Unskilled.Contains(founder.Occupation) && !Unskilled.Contains(sector.Occupation)
+                && CanSwitch(founder.Occupation, sector.Occupation)))
         .Select(sector => sector.Id).ToArray();
 
-    // A new firm needs an edge: no incumbent, high prices, empty shelves or patients turned away.
+    // A new firm needs an edge: no incumbent, high prices, empty shelves or customers turned away.
     public static bool HasOpportunity(World world, Nation nation, string sector)
     {
         var incumbents = Firms(world, nation.Id, sector).ToArray();
         if (incumbents.Length == 0)
             return true;
         var spec = SectorOf(sector);
-        if (sector == "clinic")
-            return incumbents.Any(clinic => world.Society!.TurnedAwayThisWeek.GetValueOrDefault(clinic.Id) > 0)
-                || incumbents.Min(clinic => clinic.PriceMinor) >= spec.BasePrice * 6 / 5;
+        if (IsService(spec))
+            return incumbents.Any(firm => world.Society!.TurnedAwayThisWeek.GetValueOrDefault(firm.Id) > 0)
+                || incumbents.Min(firm => firm.PriceMinor) >= spec.BasePrice * 6 / 5;
         if (spec.Good is not { } good)
             return false;
         return incumbents.Min(firm => firm.PriceMinor) >= spec.BasePrice * 6 / 5
@@ -92,17 +124,17 @@ public static class SocietyLabor
     {
         var nation = world.Society!.Nations[founder.CountryId];
         return founder.Role == "citizen" && !IsPlanned(nation) && StartableSectors(founder).Contains(sector)
-            && founder.CashMinor >= StartupCost(founder) && HasOpportunity(world, nation, sector);
+            && founder.CashMinor >= StartupCost(founder, sector) && HasOpportunity(world, nation, sector);
     }
 
     public static Agent Start(World world, Agent founder, string sector, int launchPrice, string cause)
     {
         var nation = world.Society!.Nations[founder.CountryId];
         var spec = SectorOf(sector);
-        var cost = StartupCost(founder);
+        var cost = StartupCost(founder, sector);
         var firm = new Agent
         {
-            Id = $"{founder.CountryId}_{sector}_{world.Seq}", Role = "business", CountryId = founder.CountryId,
+            Id = $"{founder.CountryId}_{sector}_firm{world.Seq}", Role = "business", CountryId = founder.CountryId,
             LocationId = founder.LocationId, Occupation = sector, Specialty = sector, PriceMinor = launchPrice,
             Traits = founder.Traits, WageOfferMinor = TableWage[spec.Occupation], TargetHeadcount = 1,
             OwnerId = founder.Id, InvestedMinor = cost, FoundedTick = world.Tick,
@@ -136,6 +168,7 @@ public static class SocietyLabor
         var planned = IsPlanned(nation);
         var firms = world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id).ToArray();
         int hires = 0, layoffs = 0, quits = 0, payCuts = 0;
+        var dividends = 0L;
         foreach (var firm in firms.Where(_ => !planned))
             Autopilot(world, nation, firm);
         foreach (var firm in firms.Where(_ => !planned))
@@ -153,26 +186,30 @@ public static class SocietyLabor
                 ReviewPrice(world, firm);
         foreach (var firm in firms)
         {
-            var (cut, laidOff) = Payroll(world, nation, government, firm, planned);
+            var (cut, laidOff, dividend) = Payroll(world, nation, government, firm, planned);
             payCuts += cut;
             layoffs += laidOff;
+            dividends += dividend;
         }
         nation.Unemployed = residents.Count(resident => resident.Role == "citizen" && resident.EmployerId is null);
         world.Emit("labor_market", "rule", [nation.Id], new
         {
             hires, layoffs, job_switches = quits, pay_cuts = payCuts, unemployed = nation.Unemployed,
+            dividends_minor = dividends,
+            overtime_offers = firms.Count(firm => firm.Role == "business" && firm.OvertimeOffered),
             active_businesses = world.Agents.Values.Count(agent => agent.Role == "business" && agent.CountryId == nation.Id),
             wage_offers = firms.Where(firm => firm.Role == "business").GroupBy(firm => SectorOf(firm.Specialty!).Occupation)
                 .ToDictionary(group => group.Key, group => group.Max(firm => firm.WageOfferMinor))
         });
         foreach (var firm in firms)
         {
+            firm.LastWeekUnitsSold = (int)society.PeriodUnitsSold.GetValueOrDefault(firm.Id);
             society.PeriodUnitsSold[firm.Id] = 0;
             society.TurnedAwayThisWeek[firm.Id] = 0;
         }
     }
 
-    // A market never stays without a farm, power plant, workshop, pharma or clinic for long: the richest
+    // A market never stays without a farm, power plant, workshop, venue, pharma or clinic for long: the richest
     // resident who could run one and can afford it opens one (agents can also choose to start firms).
     private static void FillEmptySectors(World world, Nation nation, Agent[] residents)
     {
@@ -185,8 +222,22 @@ public static class SocietyLabor
         }
     }
 
-    // Between owner turns, firms follow simple rules: hire when shelves empty, shrink when stock
-    // piles up or a service is idle, raise wage offers when openings stay unfilled.
+    // Days of sales the shelves hold; empty shelves count as zero even when nothing could be sold.
+    private static double StockDays(World world, Agent firm, string good)
+    {
+        if (firm.Inventory[good] == 0)
+            return 0;
+        var dailySales = world.Society!.PeriodUnitsSold.GetValueOrDefault(firm.Id) / (double)DaysPerWeek;
+        return dailySales == 0 ? double.MaxValue : firm.Inventory[good] / dailySales;
+    }
+
+    // Weekly service capacity: sessions or visits the firm's workers can deliver.
+    public static double ServiceCapacity(World world, Agent firm) =>
+        Workers(world, firm).Sum(worker => SocietyEconomy.Capacity(worker) * DayEffort(world, worker))
+        * SectorOf(firm.Specialty!).DailyOutput * DaysPerWeek;
+
+    // Between owner turns, firms follow simple rules: when short they offer overtime and hire, when stock
+    // piles up or a service sits idle they shrink, and unfilled openings raise wage offers.
     private static void Autopilot(World world, Nation nation, Agent firm)
     {
         var society = world.Society!;
@@ -201,22 +252,23 @@ public static class SocietyLabor
             firm.WageOfferMinor = Math.Min(table * 3 / 2, firm.WageOfferMinor * 105 / 100);
         else if (!profitable && firm.WageOfferMinor > table)
             firm.WageOfferMinor = Math.Max(table, firm.WageOfferMinor * 95 / 100);
-        var change = 0;
+        bool shortHanded, idle;
         if (spec.Good is { } good)
         {
-            var dailySales = society.PeriodUnitsSold.GetValueOrDefault(firm.Id) / (double)DaysPerWeek;
-            var stockDays = dailySales == 0 ? double.MaxValue : firm.Inventory[good] / dailySales;
-            change = stockDays > 21 ? -1 : stockDays < 7 && profitable ? 1 : 0;
+            var stockDays = StockDays(world, firm, good);
+            (shortHanded, idle) = (stockDays < 7, stockDays > 21);
         }
-        else if (spec.Id == "clinic")
+        else if (IsService(spec))
         {
             var served = society.PeriodUnitsSold.GetValueOrDefault(firm.Id);
-            var capacity = (staff + (firm.OwnerId is null ? 0 : 1)) * spec.DailyOutput * DaysPerWeek;
-            change = society.TurnedAwayThisWeek.GetValueOrDefault(firm.Id) > 0 && profitable ? 1
-                : capacity > 0 && served < capacity * 0.4 ? -1 : 0;
+            var capacity = ServiceCapacity(world, firm);
+            (shortHanded, idle) = (society.TurnedAwayThisWeek.GetValueOrDefault(firm.Id) > 0, capacity > 0 && served < capacity * 0.4);
         }
-        else if (revenue < payroll)
-            change = -1;
+        else
+            (shortHanded, idle) = (false, revenue < payroll);
+        // A profitable firm that cannot keep up first asks its staff for overtime, then hires.
+        firm.OvertimeOffered = shortHanded && profitable;
+        var change = idle ? -1 : shortHanded && profitable ? 1 : 0;
         firm.TargetHeadcount = Math.Max(0, firm.TargetHeadcount + change);
     }
 
@@ -236,7 +288,8 @@ public static class SocietyLabor
             // Employed workers switch for at least 10% more pay; public employees stay in the public sector.
             var switchers = residents.Where(person => person.Role == "citizen" && person.EmployerId is { } current
                     && current != firm.Id && world.Agents[current].Role == "business"
-                    && person.Occupation == occupation && person.SalaryMinor * 11 / 10 < firm.WageOfferMinor)
+                    && person.Occupation == occupation
+                    && person.SalaryMinor * 11 / 10 < firm.WageOfferMinor)
                 .OrderBy(person => person.SalaryMinor).ThenBy(person => person.Id);
             foreach (var person in unemployed.Concat(switchers).Take(open).ToArray())
             {
@@ -262,7 +315,7 @@ public static class SocietyLabor
         return (hires, switches);
     }
 
-    private static (int PayCuts, int Layoffs) Payroll(World world, Nation nation, Agent government, Agent firm, bool planned)
+    private static (int PayCuts, int Layoffs, long Dividend) Payroll(World world, Nation nation, Agent government, Agent firm, bool planned)
     {
         var society = world.Society!;
         var staff = Staff(world, firm);
@@ -289,31 +342,46 @@ public static class SocietyLabor
                 ? firm.DistressWeeks + 1 : 0;
         var paid = 0L;
         foreach (var worker in staff)
+        {
+            // Overtime worked this week is paid at time and a half on top of the salary.
+            var overtime = worker.SalaryMinor * worker.OvertimeDays * OvertimePayEighths / (8 * DaysPerWeek);
+            worker.OvertimeDays = 0;
             if (worker.WorkEffort > 0) // strikers forfeit the week's pay
-                paid += SocietyEconomy.PayWage(nation, government, firm, worker, Math.Min(worker.SalaryMinor, firm.CashMinor));
+                paid += SocietyEconomy.PayWage(nation, government, firm, worker, Math.Min(worker.SalaryMinor + overtime, firm.CashMinor));
+        }
         var profit = revenue - society.PeriodCostMinor.GetValueOrDefault(firm.Id) - paid;
         var profitTax = Math.Min(firm.CashMinor, Math.Max(0, profit) * nation.ProfitTaxBasisPoints / 10000);
         SocietyEconomy.Transfer(firm, government, profitTax);
         nation.ProfitTaxCollectedMinor += profitTax;
         nation.TaxesCollectedMinor += profitTax;
-        // Owners are paid from profit: up to their former trade's wage first, then half of the rest.
-        // A losing business pays its owner nothing, which keeps it alive longer.
-        if (firm.OwnerId is { } ownerId && world.Agents[ownerId] is { Role: "entrepreneur" } owner && profit > profitTax)
+        var dividend = 0L;
+        if (firm.OwnerId is { } ownerId && world.Agents[ownerId] is { Role: "entrepreneur" } owner)
         {
-            var afterTax = profit - profitTax;
-            var wage = TableWage.GetValueOrDefault(owner.FormerOccupation ?? "", 0);
-            var draw = Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000;
-            SocietyEconomy.Transfer(firm, owner, Math.Min(firm.CashMinor, draw));
+            owner.OvertimeDays = 0;
+            // Owners are paid from profit: up to their former trade's wage first, then half of the rest.
+            // A losing business pays its owner nothing, which keeps it alive longer.
+            if (profit > profitTax)
+            {
+                var afterTax = profit - profitTax;
+                var wage = TableWage.GetValueOrDefault(owner.FormerOccupation ?? "", 0);
+                var draw = Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000;
+                SocietyEconomy.Transfer(firm, owner, Math.Min(firm.CashMinor, draw));
+            }
+            // Dividends: cash beyond a buffer of several weeks' payroll goes to the owner instead of idling.
+            var buffer = Math.Max(10000, DividendBufferWeeks * Staff(world, firm).Sum(worker => worker.SalaryMinor));
+            dividend = Math.Max(0, firm.CashMinor - buffer);
+            SocietyEconomy.Transfer(firm, owner, dividend);
+            nation.DividendsPaidMinor += dividend;
         }
         society.PeriodRevenueMinor[firm.Id] = 0;
         society.PeriodCostMinor[firm.Id] = 0;
         if (!planned && firm.DistressWeeks >= DistressWeeksToClose)
             Close(world, nation, firm, "unable to cover costs for four weeks");
-        return (cuts, layoffs);
+        return (cuts, layoffs, dividend);
     }
 
-    // Prices move 5% a week: up when shelves empty, patients are turned away or costs exceed sales;
-    // down when stock piles up or a clinic sits mostly idle.
+    // Prices move in proportion to the imbalance, up to 20% a week: empty shelves or customers turned
+    // away push them up, gluts and idle capacity push them down, and a loss in balance adds 5% cost push.
     private static void ReviewPrice(World world, Agent firm)
     {
         var society = world.Society!;
@@ -321,22 +389,34 @@ public static class SocietyLabor
         if (spec.BasePrice == 0)
             return;
         var sold = society.PeriodUnitsSold.GetValueOrDefault(firm.Id);
+        // Cost push only lifts a price that is near or below marginal cost (a worker's pay per unit made,
+        // plus energy and tools inputs); a firm losing money on weak sales sheds staff instead.
+        var nation = society.Nations[firm.CountryId];
+        var marginalCost = firm.WageOfferMinor / (spec.DailyOutput * DaysPerWeek * (spec.Good is { } made ? SocietyEconomy.OutputMultiplier(world, nation, made) : 1))
+            + (spec.Good is null ? 0 : 0.1 * SocietyFactory.BasePrice("energy")) + (spec.Id == "medicine" ? 0.1 * SocietyFactory.BasePrice("tools") : 0);
         var losing = society.PeriodCostMinor.GetValueOrDefault(firm.Id) + Staff(world, firm).Sum(worker => worker.SalaryMinor)
-            > society.PeriodRevenueMinor.GetValueOrDefault(firm.Id);
-        int direction;
+            > society.PeriodRevenueMinor.GetValueOrDefault(firm.Id) && firm.PriceMinor < 1.25 * marginalCost;
+        double step;
         if (spec.Good is { } good)
         {
-            var dailySales = sold / (double)DaysPerWeek;
-            var stockDays = dailySales == 0 ? double.MaxValue : firm.Inventory[good] / dailySales;
-            direction = stockDays < 3 ? 1 : stockDays > 21 ? -1 : losing ? 1 : 0;
+            var stockDays = StockDays(world, firm, good);
+            step = stockDays < 7 ? MaxPriceStepPct * (7 - stockDays) / 7
+                : stockDays > 21 ? -Math.Min(MaxPriceStepPct, MaxPriceStepPct * (stockDays - 21) / 42)
+                : losing ? 5 : 0;
         }
         else
         {
             var turnedAway = society.TurnedAwayThisWeek.GetValueOrDefault(firm.Id);
-            var capacity = (Staff(world, firm).Length + (firm.OwnerId is null ? 0 : 1)) * spec.DailyOutput * DaysPerWeek;
-            direction = turnedAway > sold / 10 ? 1 : turnedAway == 0 && sold < capacity * 0.6 ? -1 : losing ? 1 : 0;
+            var utilization = sold / Math.Max(1, ServiceCapacity(world, firm));
+            var unserved = turnedAway / (double)Math.Max(1, sold + turnedAway);
+            // Visits and sessions are needed or not regardless of price, so a losing service sheds staff
+            // instead of cutting its price; only a profitable one discounts idle capacity.
+            step = unserved > 0.1 ? Math.Min(MaxPriceStepPct, 100 * unserved)
+                : losing ? 5
+                : turnedAway == 0 && utilization < 0.6 ? -MaxPriceStepPct * (0.6 - utilization) / 0.6 : 0;
         }
-        firm.PriceMinor = Math.Clamp(firm.PriceMinor * (100 + 5 * direction) / 100, spec.BasePrice / 2, spec.BasePrice * 3);
+        var price = (int)Math.Round(firm.PriceMinor * (100 + step) / 100);
+        firm.PriceMinor = Math.Clamp(price, spec.BasePrice / 2, spec.BasePrice * 3);
     }
 
     // Closing returns the firm's cash to its owner; a competitor buys stock at half price, and
@@ -395,12 +475,16 @@ public static class SocietyLabor
         });
     }
 
+    // Skilled workers who step down into unskilled work keep their qualification, so a matching
+    // opening (at 10% more pay) pulls them back.
     public static void Hire(World world, Agent firm, Agent person, string occupation)
     {
         person.EmployerId = firm.Id;
-        person.Occupation = occupation;
+        if (!(Unskilled.Contains(occupation) && !Unskilled.Contains(person.Occupation)))
+            person.Occupation = occupation;
         person.SalaryMinor = firm.WageOfferMinor;
         person.UnemployedSinceTick = -1;
+        person.OvertimeDays = 0;
     }
 
     public static void Fire(World world, Agent person)
@@ -408,6 +492,7 @@ public static class SocietyLabor
         person.EmployerId = null;
         person.SalaryMinor = 0;
         person.UnemployedSinceTick = world.Tick;
+        person.OvertimeDays = 0;
     }
 
     private static void Quit(Agent person)

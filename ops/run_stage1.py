@@ -89,8 +89,6 @@ def main():
     parser.add_argument("--run-id")
     parser.add_argument("--population", type=int, default=1100)
     parser.add_argument("--capacity", type=int, default=64)
-    parser.add_argument("--institution-seconds", type=int, default=120)
-    parser.add_argument("--resident-seconds", type=int, default=600)
     parser.add_argument("--government-rotation", type=int, default=0)
     parser.add_argument("--seed", type=int, default=20261010)
     parser.add_argument("--ticks", type=int)
@@ -113,11 +111,6 @@ def main():
         parser.error("Invalid tick count or interval; interval must be 0-30 seconds.")
     if not 100 <= options.population <= 100000 or not 1 <= options.capacity <= 128:
         parser.error("Use 100-100000 population and 1-128 concurrent requests.")
-    if (
-        not 10 <= options.institution_seconds <= 3600
-        or not 10 <= options.resident_seconds <= 7200
-    ):
-        parser.error("Invalid decision cadence.")
     if not 0 <= options.government_rotation <= 4 or options.seed < 1:
         parser.error("Use rotation 0-4 and a positive seed.")
 
@@ -251,8 +244,6 @@ def main():
                 "FAULTLINE_SAVED_RUN_ID": options.run_id or "",
                 "FAULTLINE_POPULATION": str(options.population),
                 "FAULTLINE_CAPACITY": str(options.capacity),
-                "FAULTLINE_INSTITUTION_SECONDS": str(options.institution_seconds),
-                "FAULTLINE_RESIDENT_SECONDS": str(options.resident_seconds),
                 "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
                 "FAULTLINE_SEED": str(options.seed),
                 "FAULTLINE_TICKS": str(options.ticks),

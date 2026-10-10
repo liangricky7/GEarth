@@ -4,8 +4,8 @@ namespace Faultline.Tests;
 
 public sealed class FinanceTests
 {
-    // 170 agents = 10 countries x (10 citizens + 7 institutions); small and fast.
-    private static World NewWorld() => SocietyFactory.Create("finance_test", false, 170);
+    // 400 agents = 10 countries x (25 residents + 15 institutions); small and fast.
+    private static World NewWorld() => SocietyFactory.Create("finance_test", false, 400);
 
     [Fact]
     public void ApprovedLoanMovesPrincipalAndIsRepaidWithInterest()

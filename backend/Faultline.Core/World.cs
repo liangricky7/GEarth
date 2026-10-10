@@ -47,6 +47,14 @@ public sealed class Agent
     public long InvestedMinor { get; set; }
     public int FoundedTick { get; set; }
     public int DistressWeeks { get; set; }
+    // Overtime: firms offer it when short-handed; residents count the days they worked it this week.
+    public bool OvertimeOffered { get; set; }
+    public int LastWeekUnitsSold { get; set; }
+    public int OvertimeDays { get; set; }
+    // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
+    public int GoodsBoughtLastWeek { get; set; }
+    public int ServicesBoughtLastWeek { get; set; }
+    public int LastWeekWellbeing { get; set; } = 100;
     // Money in and out this week and last week, for budgets shown to decision makers.
     public long WeekInMinor { get; set; }
     public long WeekOutMinor { get; set; }

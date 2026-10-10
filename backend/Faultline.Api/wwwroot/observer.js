@@ -456,7 +456,7 @@ function showWorld(snapshot) {
   }
   const compute = snapshot.compute[0];
   element("compute").textContent =
-    `One Spark · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions every ${compute.institution_interval_seconds}s, residents every ${compute.resident_interval_seconds}s`;
+    `One Spark · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions decide weekly, citizens every ${compute.citizen_rotation_weeks} weeks`;
   element("route-plan").textContent =
     `${snapshot.shipments.filter((cargo) => cargo.status === "in_transit").length} shipments in transit · ${snapshot.metrics.delivered_shipments} delivered · ${snapshot.metrics.failed_shipments} failed`;
   const nations = element("nations");

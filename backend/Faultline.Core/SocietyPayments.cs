@@ -20,7 +20,7 @@ public static class SocietyPayments
         if (!SocietyLabor.IsResident(agent))
             return;
         foreach (var good in new[] { "food", "energy" })
-            if (world.Agents.TryGetValue(agent.CountryId + "_" + good, out var seller)
+            if (SocietyEconomy.Sellers(world, world.Society!.Nations[agent.CountryId], good).FirstOrDefault() is { } seller
                 && CanBuy(world, agent, seller.Id, good, BuyQuantity, seller.PriceMinor))
                 options.Add(SocietyActions.Make("buy_goods", new
                 {

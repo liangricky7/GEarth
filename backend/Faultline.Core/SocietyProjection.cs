@@ -37,7 +37,8 @@ public static class SocietyProjection
                 spawned = world.Agents.Count,
                 by_role = world.Agents.Values.GroupBy(agent => agent.Role)
                     .ToDictionary(group => group.Key, group => group.Count()),
-                unique_model_deciding = world.Agents.Values.Count(agent => agent.ModelDecisions > 0)
+                unique_model_deciding = world.Agents.Values.Count(agent => agent.ModelDecisions > 0),
+                decision_makers = world.Agents.Values.Count(SocietyLabor.DecidesForItself)
             },
             agents = world.Agents.Values.Where(agent => agent.Role != "citizen").Select(agent => new
             { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions }),

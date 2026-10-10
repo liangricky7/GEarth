@@ -9,8 +9,9 @@ public static class SocietyEngine
         world.Tick++;
         SocietyDiplomacy.Advance(world);
         SocietyTrade.Advance(world);
-        if (world.Tick % 5 == 0)
-            SocietyEconomy.Cycle(world);
+        SocietyEconomy.Day(world);
+        if (world.Tick % SocietyLabor.DaysPerWeek == 0)
+            SocietyEconomy.Week(world);
         SocietyEconomy.AssertConservation(world);
     }
 
@@ -40,6 +41,29 @@ public static class SocietyEngine
             && item.EventType is not ("action_accepted" or "action_rejected" or "economy_cycle")).TakeLast(2).ToArray();
         var evidence = new[] { $"country:{nation.Id}:tick{world.Tick}" }
             .Concat(observedEvents.Select(item => item.EventId)).ToArray();
+        var firm = agent.OwnedBusinessId is { } owned ? world.Agents[owned] : agent.Role == "business" ? agent : null;
+        var firmGood = firm is null ? null : SocietyLabor.SectorOf(firm.Specialty!).Good;
+        var business = firm is null ? null : new
+        {
+            firm.Id, sector = firm.Specialty, status = firm.Role, firm.CashMinor, firm.PriceMinor,
+            wage_offer_minor_per_week = firm.WageOfferMinor, staff = SocietyLabor.Staff(world, firm).Length,
+            firm.TargetHeadcount, stock = firmGood is null ? (int?)null : firm.Inventory[firmGood],
+            last_week_income_minor = firm.LastWeekInMinor, last_week_spending_minor = firm.LastWeekOutMinor,
+            weeks_unable_to_cover_costs = firm.DistressWeeks,
+            competitor_prices = SocietyLabor.Firms(world, nation.Id, firm.Specialty!).Where(other => other != firm)
+                .Select(other => other.PriceMinor).Order().Take(5)
+        };
+        var market = new
+        {
+            cheapest_price_minor = SocietyLabor.Sectors.Where(sector => sector.BasePrice > 0).ToDictionary(sector => sector.Id,
+                sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (int?)other.PriceMinor).Min()),
+            best_wage_offer_minor_per_week = SocietyLabor.Sectors.ToDictionary(sector => sector.Occupation,
+                sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (long?)other.WageOfferMinor).Max()),
+            unemployed_residents = nation.Unemployed, nation.UnemploymentBenefitMinor,
+            startup_cost_minor = agent.Role == "citizen" ? SocietyLabor.StartupCost(agent) : (long?)null,
+            business_opportunities = agent.Role == "citizen"
+                ? SocietyLabor.StartableSectors(agent).Where(sector => SocietyLabor.HasOpportunity(world, nation, sector)) : []
+        };
         var observation = Wire.Node(new
         {
             world_stage = 2, tick = world.Tick,
@@ -47,8 +71,14 @@ public static class SocietyEngine
             {
                 agent.Id, agent.Role, agent.Occupation, agent.Specialty, agent.Goal, agent.Traits,
                 agent.CashMinor, agent.Inventory, agent.WorkEffort, agent.TargetStock, agent.Wellbeing, agent.Health, agent.HealthThreshold,
-                agent.SupportsLeadership, agent.PriceMinor, agent.Memories
+                agent.SupportsLeadership, agent.Memories,
+                employer_id = agent.EmployerId, salary_minor_per_week = agent.SalaryMinor,
+                unemployed_days = agent.EmployerId is null && agent.UnemployedSinceTick >= 0 ? world.Tick - agent.UnemployedSinceTick : (int?)null
             },
+            business, market,
+            budget_last_week = agent.Role == "government"
+                ? new { income_minor = agent.LastWeekInMinor, spending_minor = agent.LastWeekOutMinor,
+                    net_minor = agent.LastWeekInMinor - agent.LastWeekOutMinor } : null,
             country = new
             {
                 nation.Id, government = profile.Name, profile.PolicyDelay, profile.PublicOwnershipPercent,
@@ -56,7 +86,6 @@ public static class SocietyEngine
                 nation.Approval, nation.Population, nation.Stocks, nation.UnmetNeedsLastCycle,
                 treasury_minor = world.Agents[nation.Id + "_government"].CashMinor,
                 nation.Productivity, nation.EducationFactor, nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints,
-                doctor_visit_price_minor = world.Agents[nation.Id + "_medicine"].PriceMinor,
                 nation.CrisisGood, nation.CrisisUntilTick,
                 pending_policy = world.Society.Policies.FirstOrDefault(policy => policy.CountryId == nation.Id)?.ActionType,
                 government_authority_available = SocietyDiplomacy.HasAuthority(world, nation)
@@ -65,7 +94,7 @@ public static class SocietyEngine
             requested_loans = world.Society.Credit.Where(credit => credit.Status == "requested"
                 && (credit.BankId == agent.Id || credit.BorrowerId == agent.Id)).Take(4),
             public_events = observedEvents.Select(item => new { item.EventType, item.Payload }),
-            note = "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Businesses pay workers 80% of last cycle's sales, split by effort and health, then pay profit tax. Public employees get a fixed salary the treasury may only partly cover; unpaid teachers lower productivity. Health falls with illness, extra work and unmet needs; below 30 you cannot work and pay scales with health. A doctor visit costs the clinic's medicine price, restores 40 health and happens automatically below your health policy threshold; public healthcare funds visits for the sickest. Household prices include sales tax. Extra work raises pay but costs wellbeing and health; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
+            note = "One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically from the cheapest local seller up to your target stock. Health falls 1 per day, more with extra work, illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. Weekly: employees receive their agreed salary whatever their effort; effort 2 raises output for the employer (or your own business if you own one), not your salary, and costs 1 health and 1 wellbeing per day; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after 14 days unskilled workers take any unskilled job and doctors and researchers can swap; employed workers switch for at least 10% more pay. A citizen with savings can start a business related to their occupation where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week) and set price, wage offer and headcount. A business that cannot cover costs for 4 weeks closes and returns its cash to the owner. Prices drift weekly: empty shelves raise them 5%, gluts lower them. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week."
         });
         return new DecisionJob(Guid.NewGuid().ToString("N"), world.Id, agent.Id, world.Tick,
             now.AddSeconds(65), new Dictionary<string, int> { [agent.Id] = agent.Version }, evidence, observation, actions);
@@ -149,6 +178,10 @@ public static class SocietyEngine
             return "UNAVAILABLE_ACTION";
         if (action.ActionType == "publish" && agent.Role == "media")
             return "OK";
+        if (agent.Role == "entrepreneur" && action.Params.ContainsKey("business_id"))
+            return OwnerActionValid(world, agent, action) ? "OK" : "CURRENT_PRECONDITION_FAILED";
+        if (action.ActionType == "start_business")
+            return SocietyLabor.CanStart(world, agent, action.Params["sector"]!.GetValue<string>()) ? "OK" : "CURRENT_PRECONDITION_FAILED";
         if (action.ActionType is "pay" or "buy_goods" && agent.Role != "government")
             return SocietyPayments.StillValid(world, agent, action.Params) ? "OK" : "CURRENT_PRECONDITION_FAILED";
         if (action.ActionType == "migrate" && agent.Role == "citizen")
@@ -164,9 +197,48 @@ public static class SocietyEngine
         return "OK";
     }
 
+    // Owner choices act on the owned business; prices and wages move relative to their current level.
+    private static bool OwnerActionValid(World world, Agent owner, ActionProposal action)
+    {
+        var parameters = action.Params;
+        if (parameters["business_id"]!.GetValue<string>() != owner.OwnedBusinessId
+            || !world.Agents.TryGetValue(owner.OwnedBusinessId!, out var firm) || firm.Role != "business")
+            return false;
+        return action.ActionType != "import_goods" || SocietyTrade.CanImport(world, firm,
+            world.Agents[parameters["seller_id"]!.GetValue<string>()], parameters["good"]!.GetValue<string>(),
+            parameters["quantity"]!.GetValue<int>(), parameters["objective"]!.GetValue<string>());
+    }
+
     private static void Execute(World world, Agent agent, ActionProposal action, string cause)
     {
         var parameters = action.Params;
+        if (parameters["business_id"]?.GetValue<string>() is { } businessId)
+        {
+            var firm = world.Agents[businessId];
+            var spec = SocietyLabor.SectorOf(firm.Specialty!);
+            switch (action.ActionType)
+            {
+                case "set_price":
+                    firm.PriceMinor = Math.Clamp(firm.PriceMinor * (100 + parameters["change_pct"]!.GetValue<int>()) / 100,
+                        spec.BasePrice / 2, spec.BasePrice * 3);
+                    return;
+                case "set_wage":
+                    var change = parameters["change_pct"]!.GetValue<int>();
+                    var table = SocietyLabor.TableWage[spec.Occupation];
+                    firm.WageOfferMinor = Math.Clamp(firm.WageOfferMinor * (100 + change) / 100, table / 2, table * 3);
+                    foreach (var worker in SocietyLabor.Staff(world, firm))
+                        worker.SalaryMinor = worker.SalaryMinor * (100 + change) / 100;
+                    return;
+                case "set_headcount":
+                    firm.TargetHeadcount = Math.Max(0, firm.TargetHeadcount + parameters["change"]!.GetValue<int>());
+                    return;
+                case "import_goods":
+                    SocietyTrade.Dispatch(world, firm, world.Agents[parameters["seller_id"]!.GetValue<string>()],
+                        parameters["good"]!.GetValue<string>(), parameters["quantity"]!.GetValue<int>(),
+                        parameters["objective"]!.GetValue<string>(), cause);
+                    return;
+            }
+        }
         if (agent.Role == "government" && action.ActionType != "hold")
         {
             SocietyDiplomacy.Propose(world, agent, action, cause);
@@ -176,6 +248,10 @@ public static class SocietyEngine
         {
             case "household_policy":
                 agent.TargetStock = parameters["target_stock"]!.GetValue<int>();
+                break;
+            case "start_business":
+                SocietyLabor.Start(world, agent, parameters["sector"]!.GetValue<string>(),
+                    parameters["launch_price_minor"]!.GetValue<int>(), cause);
                 break;
             case "health_policy":
                 agent.HealthThreshold = parameters["visit_doctor_below_health"]!.GetValue<int>();
@@ -243,12 +319,9 @@ public static class SocietyEngine
         SocietyEconomy.Transfer(agent, world.Agents[destination + "_government"], 100);
         agent.CountryId = destination;
         agent.LocationId = destination + "_city";
-        var occupation = agent.Occupation switch
-        {
-            "farmer" => "food", "energy_worker" => "energy", "factory_worker" or "dockworker" => "tools",
-            "doctor" or "researcher" => "medicine", _ => "government"
-        };
-        agent.EmployerId = destination + "_" + occupation;
+        agent.EmployerId = null;
+        agent.SalaryMinor = 0;
+        agent.UnemployedSinceTick = world.Tick;
         world.Society!.Nations[previous].Population--;
         world.Society.Nations[destination].Population++;
         world.Emit("agent_migrated", "rule", [agent.Id, previous, destination], new

@@ -9,7 +9,7 @@ public static class SocietyPayments
     public const int BuyQuantity = 4;
 
     // ponytail: one fixed amount per role; add size tiers if models need finer choices
-    public static long PayAmount(Agent payer) => payer.Role == "citizen" ? 100 : 1000;
+    public static long PayAmount(Agent payer) => SocietyLabor.IsResident(payer) ? 100 : 1000;
 
     public static void AddOptions(World world, Agent agent, List<Candidate> options)
     {
@@ -17,7 +17,7 @@ public static class SocietyPayments
         if (agent.CashMinor >= amount)
             foreach (var recipient in Recipients(world, agent))
                 options.Add(SocietyActions.Make("pay", new { recipient_id = recipient.Id, amount_minor = amount }));
-        if (agent.Role != "citizen")
+        if (!SocietyLabor.IsResident(agent))
             return;
         foreach (var good in new[] { "food", "energy" })
             if (world.Agents.TryGetValue(agent.CountryId + "_" + good, out var seller)
@@ -75,7 +75,7 @@ public static class SocietyPayments
 
     // The quoted price is part of the choice: a repriced seller invalidates it rather than charging more.
     private static bool CanBuy(World world, Agent buyer, string sellerId, string good, int quantity, int price) =>
-        buyer.Role == "citizen" && world.Agents.TryGetValue(sellerId, out var seller)
+        SocietyLabor.IsResident(buyer) && world.Agents.TryGetValue(sellerId, out var seller)
         && seller.Role == "business" && seller.Specialty == good && seller.CountryId == buyer.CountryId
         && seller.PriceMinor == price && seller.Inventory[good] >= quantity
         && buyer.CashMinor >= (long)quantity * price;
@@ -83,14 +83,14 @@ public static class SocietyPayments
     private static IEnumerable<Agent> Recipients(World world, Agent payer)
     {
         var locals = world.Agents.Values.Where(agent => agent.CountryId == payer.CountryId && agent.Id != payer.Id).ToArray();
-        var neediest = locals.Where(agent => agent.Role == "citizen")
+        var neediest = locals.Where(SocietyLabor.IsResident)
             .OrderBy(agent => agent.Wellbeing).ThenBy(agent => agent.CashMinor).ThenBy(agent => agent.Id).FirstOrDefault();
         var poorestBusiness = locals.Where(agent => agent.Role == "business")
             .OrderBy(agent => agent.CashMinor).ThenBy(agent => agent.Id).FirstOrDefault();
         var government = locals.FirstOrDefault(agent => agent.Role == "government");
         Agent?[] picks = payer.Role switch
         {
-            "citizen" => [neediest, government, payer.EmployerId is null ? null : world.Agents.GetValueOrDefault(payer.EmployerId)],
+            "citizen" or "entrepreneur" => [neediest, government, payer.EmployerId is null ? null : world.Agents.GetValueOrDefault(payer.EmployerId)],
             "government" => [neediest, poorestBusiness, locals.FirstOrDefault(agent => agent.Role == "bank")],
             "bank" => [poorestBusiness, government],
             _ => [neediest, government]

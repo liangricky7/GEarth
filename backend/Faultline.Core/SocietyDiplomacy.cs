@@ -79,6 +79,9 @@ public static class SocietyDiplomacy
             case "set_welfare":
                 nation.WelfareMinor = parameters["amount_minor"]!.GetValue<int>();
                 return true;
+            case "set_unemployment_benefit":
+                nation.UnemploymentBenefitMinor = parameters["amount_minor"]!.GetValue<int>();
+                return true;
             case "set_sales_tax":
                 nation.SalesTaxBasisPoints = parameters["sales_tax_basis_points"]!.GetValue<int>();
                 return true;
@@ -91,7 +94,10 @@ public static class SocietyDiplomacy
                 var amount = parameters["amount_minor"]!.GetValue<int>();
                 if (government.CashMinor < amount)
                     return false;
-                SocietyEconomy.Sell(world, government, world.Agents[nation.Id + "_tools"], amount);
+                var workshop = SocietyLabor.Firms(world, nation.Id, "tools").OrderBy(firm => firm.Id).FirstOrDefault();
+                if (workshop is null)
+                    return false;
+                SocietyEconomy.Sell(world, government, workshop, amount);
                 nation.Productivity = Math.Min(2, nation.Productivity + 0.05);
                 return true;
             case "set_border":

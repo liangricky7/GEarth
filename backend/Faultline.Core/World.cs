@@ -33,7 +33,25 @@ public sealed class Agent
     public int TargetStock { get; set; } = 8;
     public int Wellbeing { get; set; } = 100;
     public int Health { get; set; } = 100;
-    public int HealthThreshold { get; set; } = 50;
+    public int HealthThreshold { get; set; } = 70;
+    // Labor market: residents hold a salary with an employer (null employer = unemployed).
+    public long SalaryMinor { get; set; }
+    public int UnemployedSinceTick { get; set; } = -1;
+    // Entrepreneurs own exactly one business; FormerOccupation is restored if it closes.
+    public string? OwnedBusinessId { get; set; }
+    public string? FormerOccupation { get; set; }
+    // Businesses: owner (null = state-owned), wage offer, headcount target and distress tracking.
+    public string? OwnerId { get; set; }
+    public long WageOfferMinor { get; set; }
+    public int TargetHeadcount { get; set; }
+    public long InvestedMinor { get; set; }
+    public int FoundedTick { get; set; }
+    public int DistressWeeks { get; set; }
+    // Money in and out this week and last week, for budgets shown to decision makers.
+    public long WeekInMinor { get; set; }
+    public long WeekOutMinor { get; set; }
+    public long LastWeekInMinor { get; set; }
+    public long LastWeekOutMinor { get; set; }
     public bool SupportsLeadership { get; set; } = true;
     public int LastAttemptTick { get; set; } = -1;
     public int LastDecisionTick { get; set; } = -1;

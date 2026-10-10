@@ -16,7 +16,8 @@ public static class SocietyScheduler
     {
         if (slots <= 0)
             return [];
-        var eligible = world.Agents.Values.Where(agent => !pending.Contains(agent.Id) && IsDue(world, agent, now)).ToArray();
+        var eligible = world.Agents.Values.Where(agent => SocietyLabor.DecidesForItself(agent)
+            && !pending.Contains(agent.Id) && IsDue(world, agent, now)).ToArray();
         var institutions = eligible.Where(agent => agent.Role != "citizen")
             .OrderBy(agent => Priority(world, agent)).ThenBy(agent => agent.LastAttemptAt)
             .ThenBy(agent => agent.Role == "government" ? 0 : 1).ThenBy(agent => agent.Id).ToArray();
@@ -43,14 +44,15 @@ public static class SocietyScheduler
     public static void UpdateMetrics(World world, IReadOnlySet<string> pending, DateTimeOffset now)
     {
         var society = world.Society!;
-        var due = world.Agents.Values.Where(agent => !pending.Contains(agent.Id) && IsDue(world, agent, now)).ToArray();
+        var due = world.Agents.Values.Where(agent => SocietyLabor.DecidesForItself(agent)
+            && !pending.Contains(agent.Id) && IsDue(world, agent, now)).ToArray();
         society.PendingDecisions = pending.Count;
         society.MaxPendingObserved = Math.Max(society.MaxPendingObserved, pending.Count);
         society.DueAgents = due.Length;
         society.OldestWaitTicks = due.Length == 0 ? 0 : due.Max(agent => world.Tick - Math.Max(0, agent.LastAttemptTick));
         var elapsed = (now - society.StartedAt).TotalSeconds;
         society.RecentModelDecisionsPerSecond = elapsed > 0 ? society.ModelDecisionCount / elapsed : 0;
-        if (society.CoverageCompletedAt is null && world.Agents.Values.All(agent => agent.ModelDecisions > 0))
+        if (society.CoverageCompletedAt is null && world.Agents.Values.Where(SocietyLabor.DecidesForItself).All(agent => agent.ModelDecisions > 0))
             society.CoverageCompletedAt = now;
     }
 }

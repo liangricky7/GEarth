@@ -87,7 +87,8 @@ app.MapGet("/api/runs/{id}/agents", async (string id, string? country, string? r
         offset = start,
         limit = count,
         agents = matches.Skip(start).Take(count).Select(agent => new
-        { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions, agent.LastAttemptAt, agent.LastModelDecisionAt })
+        { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions, agent.LastAttemptAt, agent.LastModelDecisionAt,
+          decision_maker = SocietyLabor.DecidesForItself(agent) })
     });
 });
 

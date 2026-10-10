@@ -17,7 +17,7 @@ public static class SocietyTrade
         var path = Path(world, seller.LocationId, buyer.LocationId, objective);
         var value = (long)quantity * seller.PriceMinor;
         return path is not null && buyer.CashMinor >= value + path.CostMinor + Tariff(world, buyer, seller, value)
-            && !world.Society!.Cargo.Any(cargo => cargo.BuyerId == buyer.Id && cargo.Good == good && cargo.Status == "in_transit");
+            && world.Society!.Cargo.Count(cargo => cargo.BuyerId == buyer.Id && cargo.Good == good && cargo.Status == "in_transit") < 2;
     }
 
     public static void Dispatch(World world, Agent buyer, Agent seller, string good, int quantity, string objective, string cause)
@@ -27,8 +27,11 @@ public static class SocietyTrade
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
         buyer.CashMinor -= value;
-        // Dockworkers are employed by the tools business, which carries the freight.
-        SocietyEconomy.Sell(world, buyer, world.Agents[buyer.CountryId + "_tools"], path.CostMinor);
+        // A domestic freight firm (dockworkers) carries the goods; without one the port authority collects the fee.
+        var carrier = world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == buyer.CountryId
+            && agent.Specialty == "freight").OrderBy(agent => agent.Id).FirstOrDefault()
+            ?? world.Agents[buyer.CountryId + "_government"];
+        SocietyEconomy.Sell(world, buyer, carrier, path.CostMinor, false, 1);
         var tariff = Tariff(world, buyer, seller, value);
         SocietyEconomy.Transfer(buyer, world.Agents[buyer.CountryId + "_government"], tariff);
         var costs = world.Society!.PeriodCostMinor;
@@ -45,7 +48,7 @@ public static class SocietyTrade
         world.Emit("shipment_dispatched", "rule", [cargo.Id, buyer.Id, seller.Id], new
         {
             good, quantity, escrow_minor = value, shipping_minor = path.CostMinor,
-            tariff_minor = tariff, carrier_id = buyer.CountryId + "_tools", plan = path, settlement = "internal_escrow"
+            tariff_minor = tariff, carrier_id = carrier.Id, plan = path, settlement = "internal_escrow"
         }, cause);
     }
 
@@ -108,6 +111,8 @@ public static class SocietyTrade
         seller.CashMinor += cargo.EscrowMinor;
         var revenue = world.Society!.PeriodRevenueMinor;
         revenue[seller.Id] = revenue.GetValueOrDefault(seller.Id) + cargo.EscrowMinor;
+        var sold = world.Society.PeriodUnitsSold;
+        sold[seller.Id] = sold.GetValueOrDefault(seller.Id) + cargo.Quantity;
         var relation = SocietyDiplomacy.Relation(world, buyer.CountryId, seller.CountryId);
         relation.DeliveredUnits += cargo.Quantity;
         relation.DeliveredValueMinor += cargo.EscrowMinor;

@@ -12,7 +12,9 @@ public sealed class SocietyTests
 
         Assert.Equal(1000, world.Agents.Count);
         Assert.Equal(10, world.Society!.Nations.Count);
-        Assert.Equal(70, world.Agents.Values.Count(agent => agent.Role != "citizen"));
+        Assert.Equal(90, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
+        // Market countries' six firms each have an entrepreneur owner; planned economies' firms are state-owned.
+        Assert.Equal(48, world.Agents.Values.Count(agent => agent.Role == "entrepreneur"));
         Assert.Equal(2, Wire.Node(world.Snapshot())["run"]!["stage"]!.GetValue<int>());
         SocietyEconomy.AssertConservation(world);
     }
@@ -194,15 +196,19 @@ public sealed class SocietyTests
         if (repay)
             SocietyEconomy.Transfer(government, borrower, loan.DueMinor);
         else
+        {
             SocietyEconomy.Transfer(borrower, government, borrower.CashMinor);
+            government.Inventory["tools"] += borrower.Inventory["tools"]; // nothing left to sell before maturity
+            borrower.Inventory["tools"] = 0;
+        }
         foreach (var citizen in world.Agents.Values.Where(agent => agent.EmployerId == borrower.Id))
             citizen.WorkEffort = 0;
         world.Tick = loan.DueTick;
-        SocietyEconomy.Cycle(world);
+        SocietyEconomy.Week(world);
         Assert.Equal(repay ? "repaid" : "defaulted", loan.Status);
         Assert.Single(world.Events, item => item.EventType == "loan_settled");
-        world.Tick += 5;
-        SocietyEconomy.Cycle(world);
+        world.Tick += 7;
+        SocietyEconomy.Week(world);
         Assert.Single(world.Events, item => item.EventType == "loan_settled");
         SocietyEconomy.AssertConservation(world);
     }

@@ -6,13 +6,21 @@ namespace Faultline.Tests;
 public sealed class SocietyTests
 {
     [Fact]
-    public void ThousandAgentWorldHasTenCountriesAndSeventyInstitutions()
+    public void ThousandAgentWorldHasTenCountriesAndCompetingFirms()
     {
         var world = SocietyFactory.Create("society_test", false, 1000);
 
         Assert.Equal(1000, world.Agents.Count);
         Assert.Equal(10, world.Society!.Nations.Count);
-        Assert.Equal(70, world.Agents.Values.Count(agent => agent.Role != "citizen"));
+        // Government, bank, media and twelve firms per country: 3 farms, 2 each of energy, tools and
+        // entertainment, and one pharma, clinic and freight firm.
+        Assert.Equal(150, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
+        Assert.Equal(3, SocietyLabor.Firms(world, "aster", "food").Count());
+        // Market countries' firms each have an entrepreneur owner; planned economies' firms are state-owned.
+        Assert.Equal(96, world.Agents.Values.Count(agent => agent.Role == "entrepreneur"));
+        // Doctors are scarce: one employed doctor per country (plus the clinic's owner in market economies).
+        Assert.All(world.Society.Nations.Keys, country => Assert.Equal(1,
+            world.Agents.Values.Count(agent => agent.CountryId == country && agent.Role == "citizen" && agent.Occupation == "doctor")));
         Assert.Equal(2, Wire.Node(world.Snapshot())["run"]!["stage"]!.GetValue<int>());
         SocietyEconomy.AssertConservation(world);
     }
@@ -40,21 +48,37 @@ public sealed class SocietyTests
     }
 
     [Fact]
-    public void SchedulerBoundsRequestsAndDoesNotStarveResidents()
+    public void EveryInstitutionDecidesWeeklyAndCitizensRotateOncePerCycle()
     {
         var world = SocietyFactory.Create("scheduler", true, 1100);
+        var deciders = world.Agents.Values.Where(SocietyLabor.DecidesForItself).ToArray();
+        var turns = new Dictionary<string, int>();
+        for (var week = 0; week < SocietyScheduler.CitizenRotationWeeks; week++)
+        {
+            world.Tick = week * SocietyLabor.DaysPerWeek;
+            var cohort = SocietyScheduler.WeeklyCohort(world);
+            Assert.Equal("government", cohort[0].Role); // governments are served first
+            Assert.All(deciders.Where(agent => agent.Role != "citizen"), agent => Assert.Contains(agent, cohort));
+            Assert.InRange(cohort.Count(agent => agent.Role == "citizen"), 60, 160);
+            foreach (var agent in cohort)
+                turns[agent.Id] = turns.GetValueOrDefault(agent.Id) + 1;
+        }
+        Assert.All(deciders.Where(agent => agent.Role == "citizen"), agent => Assert.Equal(1, turns[agent.Id]));
+        Assert.DoesNotContain(world.Agents.Values.Where(agent => agent.Role == "business" && agent.OwnerId is not null),
+            agent => turns.ContainsKey(agent.Id)); // owned firms act through their entrepreneur
+    }
+
+    [Fact]
+    public void DecisionOnAViewOlderThanAWeekExpires()
+    {
+        var world = SocietyFactory.Create("expiry", true, 1000);
         var now = DateTimeOffset.UtcNow;
-        var pending = world.Agents.Values.Take(10).Select(agent => agent.Id).ToHashSet();
-        var selected = SocietyScheduler.Select(world, pending, 64, now);
-        Assert.Equal(64, selected.Length);
-        Assert.Contains(selected, agent => agent.Role == "government");
-        Assert.Contains(selected, agent => agent.Role == "citizen");
-        Assert.All(selected, agent => Assert.DoesNotContain(agent.Id, pending));
-        Assert.Empty(SocietyScheduler.Select(world, pending, 0, now));
-        var resident = selected.First(agent => agent.Role == "citizen");
-        resident.LastAttemptAt = now;
-        Assert.False(SocietyScheduler.IsDue(world, resident, now.AddSeconds(599)));
-        Assert.True(SocietyScheduler.IsDue(world, resident, now.AddSeconds(600)));
+        var job = SocietyEngine.Observe(world, "aster_citizen_00001", now);
+        for (var tick = 0; tick <= SocietyEngine.DecisionMaxAgeDays; tick++)
+            SocietyEngine.Advance(world);
+        var record = SocietyEngine.Apply(world, job, Choose(job, "household_policy"), now.AddSeconds(10));
+        Assert.False(record.Accepted);
+        Assert.Equal("EXPIRED_PROPOSAL", record.Code);
     }
 
     [Fact]
@@ -194,41 +218,20 @@ public sealed class SocietyTests
         if (repay)
             SocietyEconomy.Transfer(government, borrower, loan.DueMinor);
         else
+        {
             SocietyEconomy.Transfer(borrower, government, borrower.CashMinor);
+            government.Inventory["tools"] += borrower.Inventory["tools"]; // nothing left to sell before maturity
+            borrower.Inventory["tools"] = 0;
+        }
         foreach (var citizen in world.Agents.Values.Where(agent => agent.EmployerId == borrower.Id))
             citizen.WorkEffort = 0;
         world.Tick = loan.DueTick;
-        SocietyEconomy.Cycle(world);
+        SocietyEconomy.Week(world);
         Assert.Equal(repay ? "repaid" : "defaulted", loan.Status);
         Assert.Single(world.Events, item => item.EventType == "loan_settled");
-        world.Tick += 5;
-        SocietyEconomy.Cycle(world);
+        world.Tick += 7;
+        SocietyEconomy.Week(world);
         Assert.Single(world.Events, item => item.EventType == "loan_settled");
         SocietyEconomy.AssertConservation(world);
-    }
-
-    [Fact]
-    public void SingleSlotSelectionsPreserveResidentShareUnderInstitutionalBacklog()
-    {
-        var world = SocietyFactory.Create("fairness", true, 1100);
-        var selected = Enumerable.Range(0, 10).Select(_ =>
-            Assert.Single(SocietyScheduler.Select(world, new HashSet<string>(), 1, DateTimeOffset.UtcNow))).ToArray();
-        Assert.Equal(3, selected.Count(agent => agent.Role != "citizen"));
-        Assert.Equal(7, selected.Count(agent => agent.Role == "citizen"));
-    }
-
-    [Fact]
-    public void FailedResidentTurnCanRetryWithoutWaitingTenMinutes()
-    {
-        var world = SocietyFactory.Create("retry", true, 1100);
-        var now = DateTimeOffset.UtcNow;
-        var agent = world.Agents["aster_citizen_00001"];
-        var job = SocietyEngine.Observe(world, agent.Id, now);
-        agent.LastAttemptAt = now;
-        var result = new DecisionResult(job.RequestId, new("hold", new JsonObject(), "Timed out.", []),
-            "rule_fallback", "none", 0, "TimeoutError");
-        SocietyEngine.Apply(world, job, result, now);
-        Assert.False(SocietyScheduler.IsDue(world, agent, now.AddSeconds(29)));
-        Assert.True(SocietyScheduler.IsDue(world, agent, now.AddSeconds(30)));
     }
 }

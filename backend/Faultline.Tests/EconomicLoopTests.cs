@@ -4,62 +4,90 @@ namespace Faultline.Tests;
 
 public sealed class EconomicLoopTests
 {
-    // 120 economic cycles with no agent decisions: wages, taxes, public services and household
-    // spending alone must keep money moving in countries that can feed and power themselves.
+    // A full simulated year (365 daily ticks) with no agent decisions: wages, taxes, public services,
+    // household spending, hiring and price drift alone must keep every country that can feed and power
+    // itself running. Resource-poor countries depend on imports, which only agent decisions arrange.
     [Fact]
-    public void MoneyKeepsCirculatingInSelfSufficientCountries()
+    public void MoneyKeepsCirculatingForAFullYear()
     {
         var world = SocietyFactory.Create("loop_test", false, 1100);
         var start = CashByCountryAndRole(world);
 
-        for (var tick = 0; tick < 600; tick++)
-            SocietyEngine.Advance(world);
+        for (var tick = 0; tick < 365; tick++)
+            SocietyEngine.Advance(world); // asserts money and goods conservation every day
 
         var end = CashByCountryAndRole(world);
-        var selfSufficient = world.Society!.Nations.Values
-            .Where(nation => nation.FoodMultiplier >= 0.8 && nation.EnergyMultiplier >= 0.8).ToArray();
-        Assert.NotEmpty(selfSufficient);
-        foreach (var nation in selfSufficient)
+        foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.FoodMultiplier >= 0.8 && nation.EnergyMultiplier >= 0.8))
         {
-            // Planned economies move business cash to the state, so producers are judged with the treasury.
-            double Ratio(params string[] roles) => roles.Sum(role => end[(nation.Id, role)])
-                / (double)roles.Sum(role => start[(nation.Id, role)]);
+            double Ratio(params string[] roles) => roles.Sum(role => end.GetValueOrDefault((nation.Id, role)))
+                / (double)roles.Sum(role => start.GetValueOrDefault((nation.Id, role)));
             var producers = Ratio("government", "business");
-            var households = Ratio("citizen");
+            var households = Ratio("citizen", "entrepreneur");
             Assert.True(producers is > 0.3 and < 3, $"{nation.Id} government+business cash ratio {producers:F2}");
             Assert.True(households is > 0.3 and < 3, $"{nation.Id} household cash ratio {households:F2}");
-            Assert.True(nation.UnmetNeedsLastCycle < nation.Population / 2, $"{nation.Id} unmet {nation.UnmetNeedsLastCycle}");
-            Assert.True(nation.SalesTaxCollectedMinor > 0 && nation.ProfitTaxCollectedMinor > 0, $"{nation.Id} taxes");
-            Assert.True(nation.PublicDoctorVisits > 0, $"{nation.Id} public care");
+            var residents = world.Agents.Values.Where(agent => agent.CountryId == nation.Id && SocietyLabor.IsResident(agent)).ToArray();
+            Assert.True(residents.Average(resident => resident.Health) > 70, $"{nation.Id} health");
+            Assert.True(residents.Average(resident => resident.Wellbeing) > 60, $"{nation.Id} quality of life");
+            Assert.True(nation.Unemployed < residents.Length * 0.15, $"{nation.Id} unemployed {nation.Unemployed}");
+            foreach (var sector in SocietyLabor.Sectors.Where(sector => sector.Id != "freight"))
+                Assert.True(SocietyLabor.Firms(world, nation.Id, sector.Id).Any(), $"{nation.Id} has no {sector.Id} firm");
+            var lastWeek = world.Events.Last(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(nation.Id));
+            Assert.True(lastWeek.Payload["wages_paid_minor"]!.GetValue<long>() > 0, $"{nation.Id} wages");
         }
-        var lastCycle = world.Events.Last(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(selfSufficient[0].Id));
-        Assert.True(lastCycle.Payload["wages_paid_minor"]!.GetValue<long>() > 0);
     }
 
     [Fact]
-    public void SickWorkersEarnLessAndDoctorVisitsRestoreHealth()
+    public void SickResidentSeesTheCheapestDoctorAndClinicUsesSupplies()
     {
-        var world = SocietyFactory.Create("health_test", false, 170);
-        var sick = world.Agents["aster_citizen_00001"];
-        var healthy = world.Agents["aster_citizen_00009"]; // same employer: farmers are 1, 9, 17…
-        Assert.Equal(sick.EmployerId, healthy.EmployerId);
-        sick.Health = 10;
-        sick.HealthThreshold = 0; // no private visit, so the cycle's pay reflects the illness
-        world.Society!.Nations["aster"].ServiceBudgetPerResidentMinor = 0;
-        var (sickCash, healthyCash) = (sick.CashMinor, healthy.CashMinor);
+        var world = SocietyFactory.Create("health_test", false, 300);
+        var patient = world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen");
+        patient.Health = 20;
+        var clinic = world.Agents["aster_clinic"];
+        var (cash, supplies) = (patient.CashMinor, clinic.Inventory["medicine"]);
+        var price = clinic.PriceMinor;
 
-        while (world.Tick < 5)
+        SocietyEngine.Advance(world);
+
+        Assert.True(patient.Health >= 50);
+        Assert.True(cash - patient.CashMinor >= price); // the visit, plus any daily shopping
+        Assert.True(world.Society!.PeriodRevenueMinor[clinic.Id] > 0); // net cash can fall: it also buys supplies
+        Assert.True(world.Society!.Nations["aster"].DoctorVisits >= 1);
+        Assert.True(world.Society.ConsumedGoods["medicine"] >= 1 || clinic.Inventory["medicine"] < supplies);
+    }
+
+    // Utility from outcomes with diminishing returns: each extra unit adds less, so richer households buy
+    // more but spread it across goods and entertainment.
+    [Fact]
+    public void RicherHouseholdsBuyMoreAndEachExtraUnitAddsLess()
+    {
+        var world = SocietyFactory.Create("qol_test", false, 1100);
+        var farmers = world.Agents.Values.Where(agent => agent.CountryId == "aster" && agent.Role == "citizen"
+            && agent.Occupation == "farmer").OrderBy(agent => agent.Id).ToArray();
+        var (rich, modest) = (farmers[0], farmers[1]);
+        SocietyEconomy.Transfer(world.Agents["aster_bank"], rich, 20000);
+
+        for (var day = 0; day < SocietyLabor.DaysPerWeek; day++)
             SocietyEngine.Advance(world);
 
-        Assert.True(sick.CashMinor - sickCash < healthy.CashMinor - healthyCash);
+        Assert.True(rich.GoodsBoughtLastWeek + rich.ServicesBoughtLastWeek > modest.GoodsBoughtLastWeek + modest.ServicesBoughtLastWeek);
+        Assert.True(rich.GoodsBoughtLastWeek > 0 && rich.ServicesBoughtLastWeek > 0);
+        int Score(int goods) { modest.GoodsBoughtLastWeek = goods; return SocietyEconomy.QualityOfLife(modest, 2, false); }
+        Assert.True(Score(1) - Score(0) > Score(10) - Score(9));
+        Assert.True(Score(10) > Score(9) || Score(20) > Score(10)); // but more is still better
+    }
 
-        sick.HealthThreshold = 50;
-        var visits = world.Society.Nations["aster"].DoctorVisits;
-        while (world.Tick < 10)
-            SocietyEngine.Advance(world);
+    // Shoppers lean toward cheaper sellers without all going to the cheapest.
+    [Fact]
+    public void HouseholdsFavourCheaperSellersWithoutBuyingOnlyFromThem()
+    {
+        var cheap = new Agent { Id = "cheap", PriceMinor = 100 };
+        var dearer = new Agent { Id = "dearer", PriceMinor = 110 };
+        var expensive = new Agent { Id = "expensive", PriceMinor = 200 };
+        double CheapShare(Agent other) => Enumerable.Range(0, 2000)
+            .Count(index => SocietyEconomy.PickSeller([cheap, other], 7, $"buyer:{index}") == cheap) / 2000.0;
 
-        Assert.True(world.Society.Nations["aster"].DoctorVisits > visits);
-        Assert.True(sick.Health >= 50);
+        Assert.InRange(CheapShare(dearer), 0.5, 0.7); // 10% dearer keeps about 40% of custom
+        Assert.InRange(CheapShare(expensive), 0.9, 1.0); // twice the price keeps almost none
     }
 
     private static Dictionary<(string Country, string Role), long> CashByCountryAndRole(World world) =>

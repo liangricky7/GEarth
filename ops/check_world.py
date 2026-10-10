@@ -124,8 +124,11 @@ def check_run(base_url, require_model=False, require_full_coverage=False):
         if require_model:
             assert snapshot["run"]["mode"] == "LIVE" and model_coverage > 0
         if require_full_coverage:
-            assert model_coverage == total, (
-                f"Model coverage is {model_coverage}/{total}"
+            # Owned and closed businesses act through their entrepreneur, so coverage counts decision makers.
+            deciders = sum(agent["decision_maker"] for agent in agents)
+            assert deciders == snapshot["agents_summary"]["decision_makers"]
+            assert model_coverage == deciders, (
+                f"Model coverage is {model_coverage}/{deciders}"
             )
         sample = next(
             (agent for agent in agents if agent["model_decisions"]), agents[0]

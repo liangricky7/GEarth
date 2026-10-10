@@ -48,7 +48,7 @@ public static class RunAnalysis
         {
             var effort = work.GroupBy(item => item.Payload["action"]!["params"]!["effort"]!.GetValue<int>())
                 .OrderByDescending(group => group.Count()).Select(group => $"effort {group.Key}: {group.Count()}");
-            observations.Add(new("work", $"Work choices were {string.Join(", ", effort)}. Extra effort raises configured wages and costs wellbeing; these counts alone do not establish its net benefit.", Evidence(work)));
+            observations.Add(new("work", $"Work choices were {string.Join(", ", effort)}. Effort 2 accepts employer-offered overtime (a quarter more hours at 1.5x pay) and costs free time and some health; it has no effect when no overtime is offered.", Evidence(work)));
         }
         var imports = events.Where(item => item.EventType == "shipment_dispatched").ToArray();
         var deliveries = events.Where(item => item.EventType == "shipment_delivered").ToArray();
@@ -95,6 +95,14 @@ public static class RunAnalysis
                 .OrderByDescending(group => group.Count()).Take(4)
                 .Select(group => $"{group.Key}: {group.Count()}");
             observations.Add(new("payments", $"{payments.Length} chosen payments moved {Money(payments.Sum(item => item.Payload["amount_minor"]!.GetValue<long>()))} WLD ({string.Join(", ", flows)}); {purchases.Length} chosen household purchases spent {Money(purchases.Sum(item => item.Payload["total_minor"]!.GetValue<long>()))} WLD. Routine wages, taxes and restocking are not included.", Evidence(payments.Concat(purchases))));
+        }
+        var started = events.Where(item => item.EventType == "business_started").ToArray();
+        var closed = events.Where(item => item.EventType == "business_closed").ToArray();
+        if (world.Society is { } labor)
+        {
+            var residents = world.Agents.Values.Count(agent => agent.Role is "citizen" or "entrepreneur");
+            var unemployed = labor.Nations.Values.Sum(nation => nation.Unemployed);
+            observations.Add(new("labor", $"{started.Length} businesses were started ({started.Count(item => item.CauseIds.Length > 0)} by agent decision, the rest by the empty-sector rule) and {closed.Length} closed; {unemployed} of {residents} residents ({(residents == 0 ? 0 : unemployed / (double)residents):P0}) were unemployed at the last weekly review. Wages follow employer offers; entrepreneurs are paid from profit and receive business cash above 8 weeks of payroll as dividends.", Evidence(started.Concat(closed))));
         }
         if (world.MedicineRoutePlan is { } plan)
             observations.Add(new("routing", $"The final medicine route plan required {plan.TravelTicks} travel ticks and {Money(plan.CostMinor)} WLD. A route plan is not a completed delivery.", Evidence(accepted.Where(item => Action(item) == "choose_route"))));

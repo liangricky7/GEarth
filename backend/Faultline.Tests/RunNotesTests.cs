@@ -5,7 +5,7 @@ namespace Faultline.Tests;
 
 public sealed class RunNotesTests
 {
-    private static World Create() => SocietyFactory.Create("notes_test", true, 100);
+    private static World Create() => SocietyFactory.Create("notes_test", true, 400);
 
     [Fact]
     public void NotesSeparateAcceptedBehaviorFromFallbacksAndRejections()

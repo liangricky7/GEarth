@@ -4,8 +4,8 @@ namespace Faultline.Tests;
 
 public sealed class FinanceTests
 {
-    // 170 agents = 10 countries x (10 citizens + 7 institutions); small and fast.
-    private static World NewWorld() => SocietyFactory.Create("finance_test", false, 170);
+    // 400 agents = 10 countries x (25 residents + 15 institutions); small and fast.
+    private static World NewWorld() => SocietyFactory.Create("finance_test", false, 400);
 
     [Fact]
     public void ApprovedLoanMovesPrincipalAndIsRepaidWithInterest()
@@ -146,7 +146,7 @@ public sealed class FinanceTests
     {
         var world = NewWorld();
         var payer = world.Agents["aster_citizen_00001"];
-        var (job, result) = Propose(world, payer.Id, "pay", ToRole(world, "citizen"));
+        var (job, result) = Propose(world, payer.Id, "pay", ToResident(world));
         var recipient = world.Agents[result.Action.Params["recipient_id"]!.GetValue<string>()];
         var (payerBefore, recipientBefore) = (payer.CashMinor, recipient.CashMinor);
 
@@ -164,12 +164,12 @@ public sealed class FinanceTests
     {
         var world = NewWorld();
         var payer = world.Agents["aster_citizen_00001"];
-        var (job, result) = Propose(world, payer.Id, "pay", ToRole(world, "citizen"));
-        world.Agents["aster_citizen_00005"].Wellbeing = 0; // a different citizen is now the neediest
+        var (job, result) = Propose(world, payer.Id, "pay", ToResident(world));
+        world.Agents["aster_citizen_00007"].Wellbeing = 0; // a different resident is now the neediest
 
         Assert.True(SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow).Accepted);
 
-        var (second, secondResult) = Propose(world, payer.Id, "pay", ToRole(world, "citizen"));
+        var (second, secondResult) = Propose(world, payer.Id, "pay", ToResident(world));
         SocietyEconomy.Transfer(payer, world.Agents["aster_government"], payer.CashMinor - 50);
         var rejected = SocietyEngine.Apply(world, second, secondResult, DateTimeOffset.UtcNow);
 
@@ -220,7 +220,7 @@ public sealed class FinanceTests
         var delay = Governments.Get(world.Society!.Nations["aster"].GovernmentId).PolicyDelay;
         Assert.True(delay > 0); // aster starts as a market democracy
 
-        Decide(world, government.Id, "pay", ToRole(world, "citizen"));
+        Decide(world, government.Id, "pay", ToResident(world));
         Assert.DoesNotContain(world.Events, item => item.EventType == "payment_sent");
 
         for (var tick = 0; tick < delay; tick++)
@@ -232,8 +232,8 @@ public sealed class FinanceTests
         Assert.Contains(world.Events, item => item.EventType == "policy_enacted");
     }
 
-    private static Func<Candidate, bool> ToRole(World world, string role) =>
-        candidate => world.Agents[candidate.Params["recipient_id"]!.GetValue<string>()].Role == role;
+    private static Func<Candidate, bool> ToResident(World world) =>
+        candidate => SocietyLabor.IsResident(world.Agents[candidate.Params["recipient_id"]!.GetValue<string>()]);
 
     private static Func<Candidate, bool> Good(string good) =>
         candidate => candidate.Params["good"]!.GetValue<string>() == good;
@@ -270,7 +270,7 @@ public sealed class FinanceTests
 
     private static void AdvanceUntilSettled(World world, Credit loan)
     {
-        while (loan.Status == "active" && world.Tick <= loan.DueTick + 5)
+        while (loan.Status == "active" && world.Tick <= loan.DueTick + SocietyLabor.DaysPerWeek)
             SocietyEngine.Advance(world);
     }
 

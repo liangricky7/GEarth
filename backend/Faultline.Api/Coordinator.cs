@@ -135,20 +135,23 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
         world.Society!.WorkerCapacity = capacity;
         world.Society.TickIntervalMilliseconds = interval;
-        world.Society.InstitutionIntervalSeconds = ReadNumber("FAULTLINE_INSTITUTION_SECONDS", 120, 10, 3600);
-        world.Society.ResidentIntervalSeconds = ReadNumber("FAULTLINE_RESIDENT_SECONDS", 600, 10, 7200);
         var pending = new Dictionary<string, (DecisionJob Job, Task<DecisionResult> Task)>();
+        var queue = new Queue<string>(); // this week's decision makers still waiting for a worker slot
         long revision = 0;
 
         async Task Commit(CancellationToken? token = null)
         {
             world.UpdatedAt = DateTimeOffset.UtcNow;
-            SocietyScheduler.UpdateMetrics(world, pending.Keys.ToHashSet(), world.UpdatedAt);
+            SocietyScheduler.UpdateMetrics(world, pending.Keys.ToHashSet(), queue, world.UpdatedAt);
             world.Revision = revision + 1;
-            await store.Save(world, revision, token ?? cancellationToken);
+            // One serialization feeds both the store and the API's read-only copy.
+            var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
+            await store.Save(world, revision, token ?? cancellationToken, serialized);
             revision = world.Revision;
             world.Events = world.Events.TakeLast(512).ToList();
-            current = Wire.Copy(world);
+            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+            copy.Events = copy.Events.TakeLast(512).ToList();
+            current = copy;
             logger.LogInformation("World tick {Tick}: {Coverage}/{Population} model coverage, {Pending} pending",
                 world.Tick, world.Agents.Values.Count(agent => agent.ModelDecisions > 0), world.Agents.Count, pending.Count);
         }
@@ -163,6 +166,22 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             }
         }
 
+        // Fill free worker slots from the week's queue; each job observes the world as it is now.
+        void Dispatch()
+        {
+            while (pending.Count < capacity && queue.TryDequeue(out var agentId))
+            {
+                var agent = world.Agents[agentId];
+                if (pending.ContainsKey(agentId) || !SocietyLabor.DecidesForItself(agent))
+                    continue;
+                var now = DateTimeOffset.UtcNow;
+                agent.LastAttemptAt = now;
+                agent.LastAttemptTick = world.Tick;
+                var job = SocietyEngine.Observe(world, agent.Id, now);
+                pending.Add(agent.Id, (job, Decide(job, live, requests.Token)));
+            }
+        }
+
         try
         {
             await Commit();
@@ -171,18 +190,21 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             {
                 var started = DateTimeOffset.UtcNow;
                 ApplyCompleted();
-                SocietyEngine.Advance(world);
-                if (tick < tickLimit)
-                {
-                    var agents = SocietyScheduler.Select(world, pending.Keys.ToHashSet(), capacity - pending.Count, started);
-                    foreach (var agent in agents)
+                // Weekly barrier: the week's decisions land before payroll and the weekly reviews run.
+                if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)
+                    while (queue.Count > 0 || pending.Count > 0)
                     {
-                        agent.LastAttemptAt = started;
-                        agent.LastAttemptTick = world.Tick;
-                        var job = SocietyEngine.Observe(world, agent.Id, started);
-                        pending.Add(agent.Id, (job, Decide(job, live, requests.Token)));
+                        Dispatch();
+                        if (pending.Count > 0)
+                            await Task.WhenAny(pending.Values.Select(item => item.Task));
+                        ApplyCompleted();
                     }
-                }
+                SocietyEngine.Advance(world);
+                if (world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0)
+                    foreach (var agent in SocietyScheduler.WeeklyCohort(world))
+                        queue.Enqueue(agent.Id);
+                if (tick < tickLimit)
+                    Dispatch();
                 ApplyCompleted();
                 if (tick % 5 == 0)
                     await Commit();

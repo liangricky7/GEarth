@@ -33,7 +33,33 @@ public sealed class Agent
     public int TargetStock { get; set; } = 8;
     public int Wellbeing { get; set; } = 100;
     public int Health { get; set; } = 100;
-    public int HealthThreshold { get; set; } = 50;
+    public int HealthThreshold { get; set; } = 70;
+    // Labor market: residents hold a salary with an employer (null employer = unemployed).
+    public long SalaryMinor { get; set; }
+    public int UnemployedSinceTick { get; set; } = -1;
+    // Entrepreneurs own exactly one business; FormerOccupation is restored if it closes.
+    public string? OwnedBusinessId { get; set; }
+    public string? FormerOccupation { get; set; }
+    // Businesses: owner (null = state-owned), wage offer, headcount target and distress tracking.
+    public string? OwnerId { get; set; }
+    public long WageOfferMinor { get; set; }
+    public int TargetHeadcount { get; set; }
+    public long InvestedMinor { get; set; }
+    public int FoundedTick { get; set; }
+    public int DistressWeeks { get; set; }
+    // Overtime: firms offer it when short-handed; residents count the days they worked it this week.
+    public bool OvertimeOffered { get; set; }
+    public int LastWeekUnitsSold { get; set; }
+    public int OvertimeDays { get; set; }
+    // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
+    public int GoodsBoughtLastWeek { get; set; }
+    public int ServicesBoughtLastWeek { get; set; }
+    public int LastWeekWellbeing { get; set; } = 100;
+    // Money in and out this week and last week, for budgets shown to decision makers.
+    public long WeekInMinor { get; set; }
+    public long WeekOutMinor { get; set; }
+    public long LastWeekInMinor { get; set; }
+    public long LastWeekOutMinor { get; set; }
     public bool SupportsLeadership { get; set; } = true;
     public int LastAttemptTick { get; set; } = -1;
     public int LastDecisionTick { get; set; } = -1;
@@ -43,6 +69,14 @@ public sealed class Agent
     public DateTimeOffset? LastAttemptAt { get; set; }
     public DateTimeOffset? LastModelDecisionAt { get; set; }
     public DecisionRecord? LastDecision { get; set; }
+
+    // Agents keep their five most recent memories.
+    public void Remember(string memory)
+    {
+        Memories.Add(memory);
+        if (Memories.Count > 5)
+            Memories.RemoveAt(0);
+    }
 }
 
 public sealed class Route
@@ -95,6 +129,23 @@ public sealed class World
     public PathPlan? MedicineRoutePlan { get; set; }
     public string ScenarioHash { get; set; } = "";
     public SocietyState? Society { get; set; }
+
+    // Agents grouped by country in insertion order, so per-country scans skip the rest of the world.
+    // Not saved; rebuilt when an agent is added (agents are never removed) or after Reindex (migration).
+    private Dictionary<string, Agent[]>? byCountry;
+    private int indexedAgents;
+
+    public Agent[] InCountry(string country)
+    {
+        if (byCountry is null || indexedAgents != Agents.Count)
+        {
+            byCountry = Agents.Values.GroupBy(agent => agent.CountryId).ToDictionary(group => group.Key, group => group.ToArray());
+            indexedAgents = Agents.Count;
+        }
+        return byCountry.GetValueOrDefault(country, []);
+    }
+
+    public void Reindex() => byCountry = null;
 
     public WorldEvent Emit(string type, string source, string[] entities, object payload, params string[] causes)
     {

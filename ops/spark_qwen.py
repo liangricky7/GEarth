@@ -346,6 +346,10 @@ def launch(state, owner, fresh=False, provider="SPARK_A"):
     except BaseException:
         rollback(state)
         raise
+    write_connection(state, owner, provider)
+
+
+def write_connection(state, owner, provider):
     connection = {
         "SPARK_A_ENABLED": "true",
         "SPARK_A_MODEL": "Qwen/Qwen3-8B",
@@ -378,10 +382,94 @@ def launch(state, owner, fresh=False, provider="SPARK_A"):
     )
 
 
+def resume(state, owner, fresh=False, provider="SPARK_A"):
+    prepared = json.loads((state / "prepared.json").read_text())
+    saved = json.loads((state / "rollback.json").read_text())
+    original_id = saved["container_id"]
+    if fresh != (original_id is None):
+        raise RuntimeError("Resume mode does not match the saved deployment")
+    original = inspect(ORIGINAL)
+    if original_id is not None and (original is None or original["Id"] != original_id):
+        raise RuntimeError("Original container identity changed; resume stopped")
+    if original_id is None and original is not None and original["State"]["Running"]:
+        raise RuntimeError("Fresh resume refuses to stop a running original container")
+    existing = {}
+    for role, model, port, memory, sequences in MODELS:
+        name = f"faultline-qwen-{role}"
+        container = inspect(name)
+        existing[role] = container
+        if container is None:
+            with socket.socket() as connection:
+                connection.settimeout(2)
+                if connection.connect_ex(("127.0.0.1", port)) == 0:
+                    raise RuntimeError(
+                        f"Port {port} is occupied without its expected container"
+                    )
+            continue
+        arguments = serving_arguments(
+            prepared["image"],
+            state,
+            role,
+            model,
+            port,
+            memory,
+            sequences,
+            prepared["revisions"][model],
+        )
+        config = container.get("Config", {})
+        ports = container.get("HostConfig", {}).get("PortBindings", {})
+        cache = any(
+            mount.get("Source") == str(state / "cache")
+            and mount.get("Destination") == "/root/.cache/huggingface"
+            for mount in container.get("Mounts", [])
+        )
+        if (
+            config.get("Labels", {}).get("io.faultline.workload") != "qwen-roles"
+            or container.get("Image") != prepared["image"]
+            or config.get("Entrypoint") != ["vllm"]
+            or config.get("Cmd") != arguments[arguments.index(prepared["image"]) + 1 :]
+            or f"VLLM_API_KEY={api_key(state, role)}" not in config.get("Env", [])
+            or ports != {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": str(port)}]}
+            or not cache
+        ):
+            raise RuntimeError(
+                f"Existing {role} container does not match the prepared deployment"
+            )
+    if original_id is not None and original["State"]["Running"]:
+        docker("stop", ORIGINAL)
+    try:
+        for role, model, port, memory, sequences in MODELS:
+            container = existing[role]
+            if container is None:
+                docker(
+                    *serving_arguments(
+                        prepared["image"],
+                        state,
+                        role,
+                        model,
+                        port,
+                        memory,
+                        sequences,
+                        prepared["revisions"][model],
+                    )
+                )
+            elif not container["State"]["Running"]:
+                docker("start", f"faultline-qwen-{role}")
+            print(f"Resuming {model} on loopback port {port}", flush=True)
+            wait_ready(state, role, model, port)
+            validate_server(state, role, model, port)
+            print(f"Verified {model} on loopback port {port}", flush=True)
+    except BaseException:
+        rollback(state)
+        raise
+    write_connection(state, owner, provider)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "action", choices=("prepare", "launch", "deploy", "rollback", "status")
+        "action",
+        choices=("prepare", "launch", "resume", "deploy", "rollback", "status"),
     )
     parser.add_argument("--image", default="vllm/vllm-openai:qwen38")
     parser.add_argument("--fresh", action="store_true")
@@ -401,6 +489,8 @@ def main():
         prepare(state, owner, options.image)
     elif options.action == "launch":
         launch(state, owner, options.fresh, options.provider)
+    elif options.action == "resume":
+        resume(state, owner, options.fresh, options.provider)
     elif options.action == "rollback":
         rollback(state)
     else:

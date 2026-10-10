@@ -63,6 +63,14 @@ sudo python3 ~/faultline-qwen-setup.py launch
 
 This is still a pending launch, not a verified deployment. Eleven focused installer tests pass, including the process-probe and rollback checks.
 
+If launch reports that a replacement container already exists, use the updated installer's recovery action:
+
+```bash
+sudo python3 ~/faultline-qwen-setup.py resume
+```
+
+Resume requires the saved preparation and rollback state. It validates existing containers against the prepared image, exact serving arguments, private key, cache mount, ownership label and loopback ports before changing anything. Matching running models are retained; missing models are started and both APIs are verified before writing the connection file. A startup failure attempts the saved rollback. For a fresh Spark B deployment, use `resume --fresh --provider SPARK_B`. Nineteen focused installer tests pass, including rejection of mismatched partial deployments.
+
 ## Spark B: fresh installation for Ken
 
 Unzip the shared bundle locally. Copy both files to Spark B, substituting its actual SSH target:

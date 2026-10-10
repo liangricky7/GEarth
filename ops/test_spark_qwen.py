@@ -218,3 +218,116 @@ def test_fresh_rollback_only_removes_owned_replacements(tmp_path, monkeypatch):
     spark_qwen.rollback(tmp_path)
     assert len(calls) == 2
     assert all(arguments[:2] == ("rm", "-f") for arguments in calls)
+
+
+@pytest.fixture
+def partial_deployment(tmp_path, monkeypatch):
+    prepared = {
+        "image": "sha256:pinned",
+        "revisions": {"Qwen/Qwen3-8B": "rev8", "Qwen/Qwen3-4B": "rev4"},
+    }
+    (tmp_path / "prepared.json").write_text(json.dumps(prepared))
+    (tmp_path / "rollback.json").write_text(json.dumps({"container_id": "original"}))
+    for role, *_ in spark_qwen.MODELS:
+        (tmp_path / f"{role}.env").write_text(f"VLLM_API_KEY={role}-private-key\n")
+    arguments = spark_qwen.serving_arguments(
+        "sha256:pinned", tmp_path, *spark_qwen.MODELS[0], "rev8"
+    )
+    institution = {
+        "Image": "sha256:pinned",
+        "State": {"Running": True},
+        "Config": {
+            "Labels": {"io.faultline.workload": "qwen-roles"},
+            "Entrypoint": ["vllm"],
+            "Cmd": arguments[arguments.index("sha256:pinned") + 1 :],
+            "Env": ["VLLM_API_KEY=institution-private-key"],
+        },
+        "HostConfig": {
+            "PortBindings": {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8000"}]}
+        },
+        "Mounts": [
+            {
+                "Source": str(tmp_path / "cache"),
+                "Destination": "/root/.cache/huggingface",
+            }
+        ],
+    }
+    original = {"Id": "original", "State": {"Running": True}}
+    containers = {"vllm_node": original, "faultline-qwen-institution": institution}
+    monkeypatch.setattr(spark_qwen, "inspect", lambda name: containers.get(name))
+
+    class AvailablePort:
+        def __enter__(self):
+            return SimpleNamespace(
+                settimeout=lambda value: None, connect_ex=lambda address: 1
+            )
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(spark_qwen.socket, "socket", AvailablePort)
+    owner = SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid())
+    return tmp_path, owner, containers
+
+
+def test_resume_keeps_matching_running_model_and_starts_missing_citizen(
+    partial_deployment, monkeypatch, capsys
+):
+    state, owner, _ = partial_deployment
+    calls = []
+    verified = []
+    monkeypatch.setattr(spark_qwen, "docker", lambda *args: calls.append(args))
+    monkeypatch.setattr(spark_qwen, "wait_ready", lambda *args: None)
+    monkeypatch.setattr(
+        spark_qwen, "validate_server", lambda state, role, *args: verified.append(role)
+    )
+    spark_qwen.resume(state, owner)
+    assert calls[0] == ("stop", "vllm_node")
+    assert len(calls) == 2
+    assert calls[1][calls[1].index("--name") + 1] == "faultline-qwen-citizen"
+    assert verified == ["institution", "citizen"]
+    assert (state / "connection.env").stat().st_mode & 0o777 == 0o600
+    assert "private-key" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "mismatch", ["owner", "image", "key", "port", "command", "original"]
+)
+def test_resume_rejects_mismatched_partial_deployment_before_mutations(
+    partial_deployment, monkeypatch, mismatch
+):
+    state, owner, containers = partial_deployment
+    container = containers["faultline-qwen-institution"]
+    if mismatch == "owner":
+        container["Config"]["Labels"] = {}
+    elif mismatch == "image":
+        container["Image"] = "sha256:changed"
+    elif mismatch == "key":
+        container["Config"]["Env"] = ["VLLM_API_KEY=wrong-key"]
+    elif mismatch == "port":
+        container["HostConfig"]["PortBindings"]["8000/tcp"][0]["HostIp"] = "0.0.0.0"
+    elif mismatch == "command":
+        container["Config"]["Cmd"][1] = "other/model"
+    else:
+        containers["vllm_node"]["Id"] = "changed"
+    monkeypatch.setattr(
+        spark_qwen, "docker", lambda *args: pytest.fail("No container may be changed")
+    )
+    with pytest.raises(RuntimeError, match="match|identity"):
+        spark_qwen.resume(state, owner)
+
+
+def test_resume_failure_attempts_saved_rollback(partial_deployment, monkeypatch):
+    state, owner, _ = partial_deployment
+    restored = []
+    monkeypatch.setattr(spark_qwen, "docker", lambda *args: "")
+
+    def fail_readiness(*args):
+        raise RuntimeError("Model failed to load")
+
+    monkeypatch.setattr(spark_qwen, "wait_ready", fail_readiness)
+    monkeypatch.setattr(spark_qwen, "rollback", lambda path: restored.append(path))
+    with pytest.raises(RuntimeError, match="failed to load"):
+        spark_qwen.resume(state, owner)
+    assert restored == [state]
+    assert not (state / "connection.env").exists()

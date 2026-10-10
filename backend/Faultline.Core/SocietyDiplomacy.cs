@@ -82,6 +82,8 @@ public static class SocietyDiplomacy
             case "fund_services":
                 nation.ServiceBudgetPerResidentMinor = parameters["amount_minor"]!.GetValue<int>();
                 return true;
+            case "pay":
+                return SocietyPayments.Pay(world, government, parameters, policy.CauseId);
             case "invest":
                 var amount = parameters["amount_minor"]!.GetValue<int>();
                 if (government.CashMinor < amount)

@@ -68,7 +68,8 @@
         "support_changed",
         "agent_migrated",
         "metrics_updated",
-        "run_completed"
+        "run_completed",
+        "run_stopped"
       ]
     },
     "source": {

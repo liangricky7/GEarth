@@ -4,6 +4,10 @@ let selectedAgent = null;
 let lastSequence = 0;
 let displayedEvents = [];
 let busy = false;
+let agentOffset = 0;
+let agentTotal = 0;
+let followCurrent = true;
+let notesKey = "";
 
 async function getJson(path) {
   const response = await fetch(path);
@@ -29,14 +33,21 @@ function svgNode(tag, attributes, text) {
 function drawMap(snapshot) {
   const map = element("map");
   map.replaceChildren();
-  const point = (location) => [
-    100 + (location.lon + 80) * 6,
-    65 + (50 - location.lat) * 4.2,
-  ];
+  const point = (location) =>
+    snapshot.run.stage === 2
+      ? [
+          40 + ((location.lon + 180) * 820) / 360,
+          30 + ((90 - location.lat) * 410) / 180,
+        ]
+      : [100 + (location.lon + 80) * 6, 65 + (50 - location.lat) * 4.2];
   const locations = new Map(
     snapshot.locations.map((location) => [location.id, location]),
   );
-  const planned = new Set(snapshot.shipments[0].plan?.edge_ids ?? []);
+  const planned = new Set(
+    snapshot.shipments
+      .filter((cargo) => !cargo.status || cargo.status === "in_transit")
+      .flatMap((cargo) => cargo.plan?.edge_ids ?? []),
+  );
 
   for (let x = 40; x < 900; x += 60)
     map.append(
@@ -89,6 +100,34 @@ function drawMap(snapshot) {
     map.append(line);
   }
 
+  for (const cargo of snapshot.shipments.filter(
+    (item) => item.status === "in_transit",
+  )) {
+    const location = locations.get(cargo.location_id);
+    if (!location) continue;
+    let [x, y] = point(location);
+    const edge = snapshot.routes.find(
+      (route) => route.id === cargo.plan?.edge_ids[cargo.edge_index],
+    );
+    if (edge && cargo.edge_remaining_ticks > 0) {
+      const [toX, toY] = point(locations.get(edge.to));
+      const fraction = 1 - cargo.edge_remaining_ticks / edge.travel_ticks;
+      x += (toX - x) * fraction;
+      y += (toY - y) * fraction;
+    }
+    const marker = svgNode("circle", {
+      cx: x,
+      cy: y,
+      r: 5,
+      fill: "#bba0ff",
+      stroke: "#131c27",
+      "stroke-width": 2,
+    });
+    marker.append(
+      svgNode("title", {}, `${cargo.id}: ${cargo.quantity} ${cargo.good}`),
+    );
+    map.append(marker);
+  }
   for (const location of snapshot.locations) {
     const [x, y] = point(location);
     map.append(svgNode("circle", { cx: x, cy: y, r: 3, fill: "#98a9bd" }));
@@ -115,7 +154,15 @@ function showEvents(snapshot) {
   const list = element("events");
   list.replaceChildren();
   element("event-count").textContent = `${snapshot.seq} events`;
-  for (const event of displayedEvents.slice(-35).reverse()) {
+  const important = displayedEvents.filter(
+    (event) =>
+      event.event_type !== "economy_cycle" &&
+      !(
+        event.event_type === "action_accepted" &&
+        event.entity_ids[0]?.includes("_citizen_")
+      ),
+  );
+  for (const event of important.slice(-35).reverse()) {
     const item = document.createElement("li");
     item.append(
       textNode(
@@ -154,22 +201,22 @@ function showEvents(snapshot) {
   }
 }
 
-function showAgents(snapshot) {
+function showAgents(agents) {
   const list = element("agents");
   list.replaceChildren();
-  for (const agent of snapshot.agents) {
+  for (const agent of agents) {
     const button = textNode("button", agent.id, "agent-button");
     button.type = "button";
     if (agent.id === selectedAgent) button.classList.add("selected");
     button.append(
       textNode(
         "span",
-        `${agent.role} · ${(agent.cash_minor / 100).toFixed(2)} WLD`,
+        `${agent.role} · ${(agent.cash_minor / 100).toFixed(2)} WLD · ${agent.model_decisions} model turns`,
       ),
     );
     button.addEventListener("click", async () => {
       selectedAgent = agent.id;
-      showAgents(snapshot);
+      showAgents(agents);
       await showProfile();
     });
     list.append(button);
@@ -193,6 +240,18 @@ async function showProfile() {
         `Food: ${data.agent.inventory.food} · Energy: ${data.agent.inventory.energy} · ${(data.agent.cash_minor / 100).toFixed(2)} WLD`,
       ),
     );
+    if (data.agent.last_model_decision_at) {
+      const age = Math.max(
+        0,
+        (Date.now() - new Date(data.agent.last_model_decision_at)) / 1000,
+      );
+      profile.append(
+        textNode(
+          "p",
+          `Accepted model turns: ${data.agent.model_decisions} · last turn ${Math.round(age)}s ago`,
+        ),
+      );
+    }
     const traits = document.createElement("div");
     traits.className = "traits";
     for (const [name, value] of Object.entries(data.agent.traits)) {
@@ -212,6 +271,36 @@ async function showProfile() {
     for (const memory of data.agent.memories)
       memories.append(textNode("li", memory));
     profile.append(memories);
+    const decision = data.last_decision ?? data.decisions.at(-1);
+    if (decision) {
+      profile.append(
+        textNode("h3", "Last decision"),
+        textNode(
+          "p",
+          `${decision.result.source} · ${decision.code} · observation T${decision.job.observation_tick}`,
+        ),
+        textNode(
+          "p",
+          `${decision.result.action.action_type}: ${decision.result.action.reason}`,
+        ),
+      );
+      const details = document.createElement("details");
+      details.append(
+        textNode("summary", "Inspect observation and proposed action"),
+        textNode(
+          "pre",
+          JSON.stringify(
+            {
+              observation: decision.job.observation,
+              action: decision.result.action,
+            },
+            null,
+            2,
+          ),
+        ),
+      );
+      profile.append(details);
+    }
   } catch (error) {
     element("message").textContent = error.message;
   }
@@ -222,17 +311,26 @@ async function refresh() {
   busy = true;
   try {
     const health = await getJson("/api/health");
-    if (!selectedRun) {
-      const runs = await getJson("/api/runs");
-      selectedRun = runs.current_run_id ?? runs.run_ids[0];
-      element("runs").replaceChildren();
-      for (const id of runs.run_ids) {
-        const option = textNode("option", id);
-        option.value = id;
-        element("runs").append(option);
-      }
-      element("runs").value = selectedRun ?? "";
+    const runs = await getJson("/api/runs");
+    if (
+      followCurrent &&
+      runs.current_run_id &&
+      selectedRun !== runs.current_run_id
+    ) {
+      selectedRun = runs.current_run_id;
+      lastSequence = 0;
+      displayedEvents = [];
+      selectedAgent = null;
+      agentOffset = 0;
     }
+    selectedRun ??= runs.current_run_id ?? runs.run_ids[0];
+    element("runs").replaceChildren();
+    for (const id of runs.run_ids) {
+      const option = textNode("option", id);
+      option.value = id;
+      element("runs").append(option);
+    }
+    element("runs").value = selectedRun ?? "";
     if (!selectedRun) {
       element("connection").textContent = "Initializing world";
       return;
@@ -241,6 +339,8 @@ async function refresh() {
     const snapshot = await getJson(
       `/api/runs/${encodeURIComponent(selectedRun)}/snapshot`,
     );
+    if (lastSequence === 0 && snapshot.run.stage === 2)
+      lastSequence = Math.max(0, snapshot.seq - 200);
     let events;
     do {
       events = await getJson(
@@ -250,7 +350,7 @@ async function refresh() {
       if (events.length) lastSequence = events.at(-1).seq;
     } while (events.length === 500);
 
-    displayedEvents = displayedEvents.slice(-100);
+    displayedEvents = displayedEvents.slice(-500);
     element("tick").textContent = snapshot.tick;
     element("population").textContent = snapshot.agents_summary.spawned;
     element("coverage").textContent =
@@ -264,14 +364,16 @@ async function refresh() {
       health.status === "paused" ? "Paused" : `Connected · ${health.storage}`;
     element("updated").textContent =
       `Last commit ${new Date(snapshot.updated_at).toLocaleTimeString()}`;
-    const plan = snapshot.shipments[0].plan;
+    const plan = snapshot.shipments[0]?.plan;
     element("route-plan").textContent = plan
       ? `${plan.objective} plan · ${plan.travel_ticks} travel ticks · ${(plan.cost_minor / 100).toFixed(2)} WLD`
       : "No active medicine route plan.";
     element("message").textContent = health.error ?? "";
     drawMap(snapshot);
     showEvents(snapshot);
-    showAgents(snapshot);
+    showWorld(snapshot);
+    await showRunNotes(snapshot, health);
+    await refreshAgents(snapshot);
     await showProfile();
   } catch (error) {
     element("connection").textContent = "Connection interrupted";
@@ -283,6 +385,8 @@ async function refresh() {
 
 element("runs").addEventListener("change", () => {
   selectedRun = element("runs").value;
+  followCurrent = false;
+  agentOffset = 0;
   selectedAgent = null;
   lastSequence = 0;
   displayedEvents = [];
@@ -292,5 +396,224 @@ element("runs").addEventListener("change", () => {
   refresh();
 });
 
+for (const id of ["country-filter", "role-filter", "agent-search"]) {
+  element(id).addEventListener(
+    id === "agent-search" ? "input" : "change",
+    () => {
+      agentOffset = 0;
+      refresh();
+    },
+  );
+}
+element("previous-page").addEventListener("click", () => {
+  agentOffset = Math.max(0, agentOffset - 50);
+  refresh();
+});
+element("next-page").addEventListener("click", () => {
+  if (agentOffset + 50 < agentTotal) agentOffset += 50;
+  refresh();
+});
+
 refresh();
 setInterval(refresh, 1500);
+
+async function refreshAgents(snapshot) {
+  const countrySelect = element("country-filter");
+  if (countrySelect.options.length !== snapshot.countries.length + 1) {
+    countrySelect.replaceChildren(textNode("option", "All countries"));
+    countrySelect.firstChild.value = "";
+    for (const country of snapshot.countries) {
+      const option = textNode("option", country.name);
+      option.value = country.id;
+      countrySelect.append(option);
+    }
+  }
+  const query = new URLSearchParams({
+    country: countrySelect.value,
+    role: element("role-filter").value,
+    q: element("agent-search").value,
+    offset: agentOffset,
+    limit: 50,
+  });
+  const page = await getJson(
+    `/api/runs/${encodeURIComponent(selectedRun)}/agents?${query}`,
+  );
+  agentTotal = page.total;
+  element("agent-page").textContent =
+    `${page.total ? page.offset + 1 : 0}–${Math.min(page.offset + page.agents.length, page.total)} of ${page.total}`;
+  element("previous-page").disabled = agentOffset === 0;
+  element("next-page").disabled = agentOffset + 50 >= agentTotal;
+  showAgents(page.agents);
+}
+
+function showWorld(snapshot) {
+  const enabled = snapshot.run.stage === 2;
+  element("world-details").hidden = !enabled;
+  if (!enabled) {
+    element("compute").textContent =
+      "Stage 1 recorded run · route planning prototype";
+    return;
+  }
+  const compute = snapshot.compute[0];
+  element("compute").textContent =
+    `One Spark · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions every ${compute.institution_interval_seconds}s, residents every ${compute.resident_interval_seconds}s`;
+  element("route-plan").textContent =
+    `${snapshot.shipments.filter((cargo) => cargo.status === "in_transit").length} shipments in transit · ${snapshot.metrics.delivered_shipments} delivered · ${snapshot.metrics.failed_shipments} failed`;
+  const nations = element("nations");
+  nations.replaceChildren();
+  for (const nation of snapshot.nations) {
+    const card = document.createElement("article");
+    card.className = "nation-card";
+    const government = snapshot.government_profiles.find(
+      (profile) => profile.id === nation.government_id,
+    );
+    const metric = nation.history.at(-1);
+    card.append(
+      textNode("h3", nation.name),
+      textNode("p", government.name, "government-name"),
+      textNode(
+        "p",
+        `${nation.population} agents · leadership term ${nation.leadership_term}`,
+      ),
+      textNode(
+        "strong",
+        `${Math.round((metric?.needs_met ?? 1) * 100)}% needs met`,
+      ),
+      textNode(
+        "p",
+        `Support ${Math.round(nation.approval * 100)}% · cash Gini ${nation.gini_cash.toFixed(2)}`,
+      ),
+      textNode(
+        "p",
+        `Treasury ${((metric?.treasury_minor ?? 0) / 100).toLocaleString()} WLD · tax ${nation.tax_basis_points / 100}%`,
+      ),
+      textNode(
+        "p",
+        `Welfare ${(nation.welfare_minor / 100).toFixed(2)} WLD/resident/cycle`,
+      ),
+      textNode(
+        "p",
+        `Food ${nation.stocks.food ?? 0} · Energy ${nation.stocks.energy ?? 0}`,
+      ),
+      textNode(
+        "p",
+        `Trade ${(nation.trade_value_minor / 100).toLocaleString()} WLD · ${nation.unmet_needs_last_cycle} unmet needs this cycle`,
+      ),
+    );
+    const chart = svgNode("svg", {
+      viewBox: "0 0 200 40",
+      role: "img",
+      "aria-label": `${nation.name} needs met history`,
+    });
+    chart.append(
+      svgNode("polyline", {
+        fill: "none",
+        stroke: "#65d5be",
+        "stroke-width": 2,
+        points: nation.history
+          .map(
+            (value, index) =>
+              `${(index * 200) / Math.max(1, nation.history.length - 1)},${38 - value.needs_met * 36}`,
+          )
+          .join(" "),
+      }),
+    );
+    card.append(chart, textNode("span", "Needs met over time", "muted"));
+    const policy = snapshot.policies.find(
+      (item) => item.country_id === nation.id,
+    );
+    if (policy)
+      card.append(
+        textNode(
+          "p",
+          `${policy.action_type} pending until T${policy.effective_tick}`,
+          "policy",
+        ),
+      );
+    nations.append(card);
+  }
+  element("shipping-count").textContent =
+    `${snapshot.metrics.delivered_shipments} settled`;
+  const shipments = element("shipments");
+  shipments.replaceChildren();
+  const cargoList = snapshot.shipments
+    .slice()
+    .sort(
+      (a, b) =>
+        (b.status === "in_transit") - (a.status === "in_transit") ||
+        b.created_tick - a.created_tick,
+    )
+    .slice(0, 12);
+  for (const cargo of cargoList) {
+    shipments.append(
+      textNode(
+        "p",
+        `${cargo.seller_id} → ${cargo.buyer_id} · ${cargo.quantity} ${cargo.good} · ${cargo.status.replaceAll("_", " ")} · ${(cargo.escrow_minor / 100).toFixed(2)} WLD escrow`,
+      ),
+    );
+  }
+  if (!cargoList.length)
+    shipments.append(textNode("p", "No cross-border shipments yet.", "muted"));
+  const relations = element("relations");
+  relations.replaceChildren();
+  const visible = snapshot.relationships
+    .filter((item) => item.at_war || item.trade_agreement || item.proposed_by)
+    .sort((a, b) => Number(b.at_war) - Number(a.at_war));
+  for (const relation of visible)
+    relations.append(
+      textNode(
+        "p",
+        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · tension ${relation.tension}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
+        relation.at_war ? "event-rejected" : "",
+      ),
+    );
+  if (!visible.length)
+    relations.append(
+      textNode("p", "No active agreements or conflicts.", "muted"),
+    );
+  for (const loan of snapshot.loans.slice(-8).reverse())
+    relations.append(
+      textNode(
+        "p",
+        `${loan.bank_id} → ${loan.borrower_id} · ${(loan.principal_minor / 100).toFixed(2)} WLD · ${loan.status} · due T${loan.due_tick}`,
+      ),
+    );
+}
+
+async function showRunNotes(snapshot, health) {
+  element("notes-download").href =
+    `/api/runs/${encodeURIComponent(selectedRun)}/notes.md`;
+  const status =
+    health.run_id === selectedRun && health.status === "paused"
+      ? "paused"
+      : snapshot.run.status;
+  const key = `${selectedRun}:${snapshot.seq}:${status}`;
+  if (status === "running") {
+    element("notes-status").textContent =
+      "Simulation in progress. Notes are saved at completion or stop; download a checkpoint report at any time.";
+    element("run-notes").replaceChildren();
+    notesKey = "";
+    return;
+  }
+  if (notesKey === key) return;
+  const report = await getJson(
+    `/api/runs/${encodeURIComponent(selectedRun)}/notes`,
+  );
+  element("notes-status").textContent =
+    `${report.status.toUpperCase()} · notes through T${report.tick} / event ${report.through_sequence} · ${report.history_complete ? "complete recorded history" : "partial history"}`;
+  const list = element("run-notes");
+  list.replaceChildren();
+  for (const observation of report.observations) {
+    const item = textNode("li", observation.text);
+    if (observation.evidence_ids.length)
+      item.append(
+        textNode(
+          "span",
+          `Evidence: ${observation.evidence_ids.join(", ")}`,
+          "muted",
+        ),
+      );
+    list.append(item);
+  }
+  notesKey = key;
+}

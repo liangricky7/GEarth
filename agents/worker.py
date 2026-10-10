@@ -3,6 +3,7 @@ import json
 import os
 import secrets
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,7 +23,21 @@ MODEL_BASE_URL = os.environ.get("SPARK_A_BASE_URL", "http://127.0.0.1:18001/v1")
 )
 CAPACITY = int(os.environ.get("WORKER_CAPACITY", "4"))
 TIMEOUT_SECONDS = float(os.environ.get("WORKER_TIMEOUT_SECONDS", "13"))
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@asynccontextmanager
+async def lifespan(application):
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT_SECONDS,
+        limits=httpx.Limits(
+            max_connections=CAPACITY, max_keepalive_connections=CAPACITY
+        ),
+    ) as client:
+        application.state.model_client = client
+        yield
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 active_requests = 0
 
 
@@ -53,7 +68,7 @@ def validate_action(action: dict, job: DecisionJob) -> dict:
         return {
             "action_type": candidate["action_type"],
             "params": candidate["params"],
-            "reason": reason,
+            "reason": reason.strip(),
             "evidence_ids": job.evidence_ids[:1],
         }
     jsonschema.Draft202012Validator(ACTION_SCHEMA).validate(action)
@@ -172,15 +187,14 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         headers = {"Authorization": f"Bearer {os.environ.get('SPARK_A_API_KEY', '')}"}
 
         async with asyncio.timeout(min(TIMEOUT_SECONDS, remaining_seconds)):
-            async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
-                response = await client.post(
-                    f"{MODEL_BASE_URL}/chat/completions",
-                    headers=headers,
-                    json=build_prompt(job),
-                )
-                response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"]
-                action = validate_action(json.loads(content), job)
+            response = await app.state.model_client.post(
+                f"{MODEL_BASE_URL}/chat/completions",
+                headers=headers,
+                json=build_prompt(job),
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+            action = validate_action(json.loads(content), job)
 
         return decision_result(job, action, "model", started_at)
 

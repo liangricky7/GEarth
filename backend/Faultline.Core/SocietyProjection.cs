@@ -39,7 +39,8 @@ public static class SocietyProjection
                     .ToDictionary(group => group.Key, group => group.Count()),
                 unique_model_deciding = world.Agents.Values.Count(agent => agent.ModelDecisions > 0)
             },
-            agents = world.Agents.Values,
+            agents = world.Agents.Values.Where(agent => agent.Role != "citizen").Select(agent => new
+            { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions }),
             metrics = new
             {
                 society.ModelDecisionCount,
@@ -55,7 +56,14 @@ public static class SocietyProjection
                 society.InitialGoods,
                 society.ProducedGoods,
                 society.ConsumedGoods,
-                society.LostGoods
+                society.LostGoods,
+                held_goods = SocietyFactory.Goods.ToDictionary(good => good, good =>
+                    world.Agents.Values.Sum(agent => (long)agent.Inventory[good])
+                    + society.Cargo.Where(cargo => cargo.Status == "in_transit" && cargo.Good == good).Sum(cargo => (long)cargo.Quantity)),
+                society.StartedAt,
+                society.CoverageCompletedAt,
+                elapsed_seconds = (world.UpdatedAt - society.StartedAt).TotalSeconds,
+                latency_p95_ms = society.LatenciesMs.Count == 0 ? 0 : society.LatenciesMs.Order().ElementAt(Math.Min(society.LatenciesMs.Count - 1, (int)(society.LatenciesMs.Count * 0.95)))
             },
             compute = new[]
             {
@@ -67,7 +75,11 @@ public static class SocietyProjection
                     society.PendingDecisions,
                     society.DueAgents,
                     society.OldestWaitTicks,
-                    society.RecentModelDecisionsPerSecond
+                    average_model_decisions_per_second = society.RecentModelDecisionsPerSecond,
+                    society.MaxPendingObserved,
+                    society.InstitutionIntervalSeconds,
+                    society.ResidentIntervalSeconds,
+                    society.TickIntervalMilliseconds
                 }
             }
         };

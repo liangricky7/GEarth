@@ -38,6 +38,9 @@ public sealed class Agent
     public long ModelDecisions { get; set; }
     public string LastRequestId { get; set; } = "";
     public int PriceMinor { get; set; }
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? LastModelDecisionAt { get; set; }
+    public DecisionRecord? LastDecision { get; set; }
 }
 
 public sealed class Route

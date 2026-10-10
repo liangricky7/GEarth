@@ -48,6 +48,7 @@ sys.exit(1)
 
 def ensure_port_available(port):
     with socket.socket() as connection:
+        connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             connection.bind(("127.0.0.1", port))
         except OSError:
@@ -74,7 +75,7 @@ def stop_process(process):
         return
     os.killpg(process.pid, signal.SIGTERM)
     try:
-        process.wait(timeout=5)
+        process.wait(timeout=30)
     except subprocess.TimeoutExpired:
         os.killpg(process.pid, signal.SIGKILL)
         process.wait(timeout=5)
@@ -84,13 +85,50 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--storage", choices=("neon", "local"), default="neon")
-    parser.add_argument("--ticks", type=int, default=16)
-    parser.add_argument("--interval", type=float, default=3)
+    parser.add_argument("--world", action="store_true")
+    parser.add_argument("--run-id")
+    parser.add_argument("--population", type=int, default=1100)
+    parser.add_argument("--capacity", type=int, default=64)
+    parser.add_argument("--institution-seconds", type=int, default=120)
+    parser.add_argument("--resident-seconds", type=int, default=600)
+    parser.add_argument("--government-rotation", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=20261010)
+    parser.add_argument("--ticks", type=int)
+    parser.add_argument("--interval", type=float)
     parser.add_argument("--exit-on-complete", action="store_true")
     options = parser.parse_args()
 
-    if not 1 <= options.ticks <= 120 or not 0 <= options.interval <= 30:
-        parser.error("Use 1-120 ticks and an interval of 0-30 seconds.")
+    options.ticks = (
+        options.ticks if options.ticks is not None else (360 if options.world else 16)
+    )
+    options.interval = (
+        options.interval
+        if options.interval is not None
+        else (2 if options.world else 3)
+    )
+    if (
+        not 1 <= options.ticks <= (10000 if options.world else 120)
+        or not 0 <= options.interval <= 30
+    ):
+        parser.error("Invalid tick count or interval; interval must be 0-30 seconds.")
+    if not 100 <= options.population <= 100000 or not 1 <= options.capacity <= 128:
+        parser.error("Use 100-100000 population and 1-128 concurrent requests.")
+    if (
+        not 10 <= options.institution_seconds <= 3600
+        or not 10 <= options.resident_seconds <= 7200
+    ):
+        parser.error("Invalid decision cadence.")
+    if not 0 <= options.government_rotation <= 4 or options.seed < 1:
+        parser.error("Use rotation 0-4 and a positive seed.")
+
+    if options.run_id:
+        if options.live:
+            parser.error("Saved-run inspection does not need --live.")
+        if len(options.run_id) > 100 or not all(
+            character.isascii() and (character.isalnum() or character in "-_")
+            for character in options.run_id
+        ):
+            parser.error("Invalid saved run ID.")
 
     os.chdir(ROOT)
     config = {
@@ -155,6 +193,10 @@ def main():
                     *SSH_OPTIONS,
                     "-o",
                     "ExitOnForwardFailure=yes",
+                    "-o",
+                    "ServerAliveInterval=30",
+                    "-o",
+                    "ServerAliveCountMax=3",
                     "-N",
                     "-L",
                     "127.0.0.1:18001:127.0.0.1:8000",
@@ -174,6 +216,8 @@ def main():
             worker_environment.update(
                 {
                     "WORKER_TOKEN": token,
+                    "WORKER_CAPACITY": str(options.capacity if options.world else 4),
+                    "WORKER_TIMEOUT_SECONDS": str(60 if options.world else 13),
                     "SPARK_A_API_KEY": api_key,
                     "SPARK_A_MODEL": config.get("SPARK_A_MODEL", "openai/gpt-oss-120b"),
                     "SPARK_A_BASE_URL": "http://127.0.0.1:18001/v1",
@@ -203,6 +247,14 @@ def main():
                 "DATABASE_URL": config.get("DATABASE_URL", ""),
                 "FAULTLINE_STORAGE": options.storage,
                 "FAULTLINE_LIVE": str(options.live).lower(),
+                "FAULTLINE_WORLD": str(options.world).lower(),
+                "FAULTLINE_SAVED_RUN_ID": options.run_id or "",
+                "FAULTLINE_POPULATION": str(options.population),
+                "FAULTLINE_CAPACITY": str(options.capacity),
+                "FAULTLINE_INSTITUTION_SECONDS": str(options.institution_seconds),
+                "FAULTLINE_RESIDENT_SECONDS": str(options.resident_seconds),
+                "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
+                "FAULTLINE_SEED": str(options.seed),
                 "FAULTLINE_TICKS": str(options.ticks),
                 "FAULTLINE_INTERVAL_MS": str(round(options.interval * 1000)),
                 "WORKER_TOKEN": token,
@@ -215,12 +267,28 @@ def main():
             "api.log",
             api_environment,
         )
+        if sys.platform == "darwin":
+            start(
+                ["caffeinate", "-i", "-w", str(api.pid)], "awake.log", os.environ.copy()
+            )
         wait_for_service(f"{API_URL}/api/health", api)
         print(f"Observer: {API_URL}", flush=True)
+        mode = (
+            "SAVED (no new inference)"
+            if options.run_id
+            else "LIVE Spark"
+            if options.live
+            else "RULE (no inference)"
+        )
         print(
-            f"Mode: {'LIVE Spark' if options.live else 'RULE (no inference)'}; storage: {options.storage}",
+            f"Mode: {mode}; storage: {options.storage}",
             flush=True,
         )
+        if options.run_id:
+            print(
+                f"Inspecting saved run {options.run_id}; no new simulation or inference.",
+                flush=True,
+            )
         print("Press Ctrl+C to stop.", flush=True)
 
         completed = False

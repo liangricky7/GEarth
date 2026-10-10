@@ -10,7 +10,7 @@
   <body>
     <header>
       <div>
-        <p class="eyebrow">Autonomous society · Stage 1</p>
+        <p class="eyebrow">Autonomous society · World simulation</p>
         <h1>FAULTLINE<span> / </span><small>world observer</small></h1>
       </div>
       <div class="status">
@@ -49,14 +49,15 @@
           <div class="legend">
             <span class="open">Open corridor</span
             ><span class="closed">Closed border</span
-            ><span class="planned">Medicine route plan</span>
+            ><span class="planned">Active shipments</span>
           </div>
           <div id="route-plan" class="route-plan">
             Waiting for a route decision.
           </div>
           <p class="scope">
-            Local purchases and route planning are active. Shipments, loans, and
-            blockchain settlement are pending implementation.
+            Synthetic countries trade, produce, consume and govern. Government
+            rules are experimental assumptions; currency and escrow are
+            simulated.
           </p>
         </section>
         <section class="panel timeline">
@@ -67,12 +68,77 @@
           <ol id="events" aria-live="polite"></ol>
         </section>
       </div>
+      <p id="compute" class="scope">Waiting for compute telemetry.</p>
+      <section class="panel notes-panel">
+        <div class="panel-heading">
+          <h2>Run observations</h2>
+          <a id="notes-download" href="#">Download Markdown notes</a>
+        </div>
+        <p id="notes-status" class="scope">
+          Notes are saved when a run completes or stops.
+        </p>
+        <ul id="run-notes"></ul>
+        <p class="scope">
+          Recorded behavior and synthetic outcomes. Agent explanations are
+          attributed statements; government comparisons require matched
+          experiments.
+        </p>
+      </section>
+      <section id="world-details">
+        <section class="panel countries-panel">
+          <div class="panel-heading">
+            <h2>Governments and outcomes</h2>
+            <span class="muted"
+              >Needs met · public support · inequality · treasury</span
+            >
+          </div>
+          <div id="nations"></div>
+        </section>
+        <div class="columns world-ledgers">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Shipment ledger</h2>
+              <span id="shipping-count" class="muted"></span>
+            </div>
+            <div id="shipments" class="ledger"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Diplomacy and credit</h2>
+              <span class="muted">Offers, agreements, conflicts and loans</span>
+            </div>
+            <div id="relations" class="ledger"></div>
+          </section>
+        </div>
+      </section>
       <section class="panel agents-panel">
         <div class="panel-heading">
           <h2>Agents</h2>
           <span class="muted"
             >Select an agent to inspect its profile and decisions</span
           >
+        </div>
+        <div class="agent-filters">
+          <select id="country-filter" aria-label="Filter agents by country">
+            <option value="">All countries</option>
+          </select>
+          <select id="role-filter" aria-label="Filter agents by role">
+            <option value="">All roles</option>
+            <option value="citizen">Residents</option>
+            <option value="government">Governments</option>
+            <option value="business">Businesses</option>
+            <option value="bank">Banks</option>
+            <option value="media">Journalists</option>
+          </select>
+          <input
+            id="agent-search"
+            type="search"
+            placeholder="Search name or occupation"
+            aria-label="Search agents"
+          />
+          <button id="previous-page" type="button">Previous</button
+          ><button id="next-page" type="button">Next</button
+          ><span id="agent-page" class="muted"></span>
         </div>
         <div class="agent-columns">
           <div id="agents"></div>

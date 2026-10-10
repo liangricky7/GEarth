@@ -29,10 +29,11 @@ public static class SocietyFactory
             Seed = seed, UpdatedAt = DateTimeOffset.UtcNow,
             Society = new SocietyState { StartedAt = DateTimeOffset.UtcNow, GovernmentRotation = rotation }
         };
-        var citizensPerCountry = (population - Geography.Length * 7) / Geography.Length;
+        var residentPopulation = population - Geography.Length * 7;
 
         for (var index = 0; index < Geography.Length; index++)
         {
+            var citizensPerCountry = residentPopulation / Geography.Length + (index < residentPopulation % Geography.Length ? 1 : 0);
             var (countryId, name, lat, lon) = Geography[index];
             var profile = Governments.Profiles[(index + rotation) % Governments.Profiles.Length];
             var nation = new Nation

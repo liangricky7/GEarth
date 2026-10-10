@@ -75,7 +75,7 @@ public static class SocietyEngine
             return existing;
         var code = Validate(world, job, result, now);
         var accepted = code == "OK";
-        var compactJob = job with { Observation = Wire.Node(new { world_stage = 2, job.ObservationTick }), Candidates = [] };
+        var compactJob = job with { Candidates = [] };
         var record = new DecisionRecord(compactJob, result, accepted, code);
         world.Decisions[job.RequestId] = record;
         while (world.Decisions.Count > 256)
@@ -95,6 +95,8 @@ public static class SocietyEngine
             if (society.LatenciesMs.Count > 200)
                 society.LatenciesMs.RemoveAt(0);
         }
+        if (world.Agents.TryGetValue(job.AgentId, out var decidingAgent))
+            decidingAgent.LastDecision = record;
         var decisionEvent = world.Emit(accepted ? "action_accepted" : "action_rejected",
             result.Source is "model" or "rule" or "rule_fallback" ? result.Source : "rule",
             [job.AgentId], new
@@ -109,7 +111,10 @@ public static class SocietyEngine
         agent.LastDecisionTick = world.Tick;
         agent.LastRequestId = job.RequestId;
         if (result.Source == "model")
+        {
             agent.ModelDecisions++;
+            agent.LastModelDecisionAt = now;
+        }
         agent.Version++;
         agent.Memories.Add($"T{world.Tick}: {result.Action.ActionType}: {result.Action.Reason}");
         if (agent.Memories.Count > 5)
@@ -124,6 +129,8 @@ public static class SocietyEngine
             return "UNKNOWN_ENTITY";
         if (agent.LastRequestId == job.RequestId)
             return "DUPLICATE_REQUEST";
+        if (job.Dependencies.GetValueOrDefault(agent.Id, -1) != agent.Version)
+            return "STALE_AGENT_INTENT";
         if (result.Source is not ("model" or "rule" or "rule_fallback"))
             return "INVALID_SOURCE";
         if (job.ObservationTick > world.Tick || now > job.Deadline || world.Tick - job.ObservationTick > 90)
@@ -138,6 +145,17 @@ public static class SocietyEngine
         if (!job.Candidates.Any(candidate => candidate.ActionType == action.ActionType
             && JsonNode.DeepEquals(candidate.Params, action.Params)))
             return "UNAVAILABLE_ACTION";
+        if (action.ActionType == "publish" && agent.Role == "media")
+            return "OK";
+        if (action.ActionType is "pay" or "buy_goods" && agent.Role != "government")
+            return SocietyPayments.StillValid(world, agent, action.Params) ? "OK" : "CURRENT_PRECONDITION_FAILED";
+        if (action.ActionType == "migrate" && agent.Role == "citizen")
+        {
+            var destination = action.Params["country_id"]!.GetValue<string>();
+            return destination != agent.CountryId && world.Society!.Nations.ContainsKey(destination)
+                && agent.CashMinor >= 100 && !SocietyDiplomacy.Relation(world, agent.CountryId, destination).AtWar
+                ? "OK" : "CURRENT_PRECONDITION_FAILED";
+        }
         if (!SocietyActions.Available(world, agent).Any(candidate => candidate.ActionType == action.ActionType
             && JsonNode.DeepEquals(candidate.Params, action.Params)))
             return "CURRENT_PRECONDITION_FAILED";
@@ -171,7 +189,7 @@ public static class SocietyEngine
                 {
                     text = parameters["text"]!.GetValue<string>(),
                     provenance = "engine-generated country aggregate at observation tick",
-                    report_tick = world.Tick
+                    report_tick = parameters["observed_tick"]!.GetValue<int>()
                 }, cause);
                 break;
             case "migrate":
@@ -204,6 +222,12 @@ public static class SocietyEngine
                 {
                     approved.PrincipalMinor, approved.DueMinor, approved.DueTick, settlement = "simulated internal ledger"
                 }, cause);
+                break;
+            case "pay":
+                SocietyPayments.Pay(world, agent, parameters, cause);
+                break;
+            case "buy_goods":
+                SocietyPayments.Buy(world, agent, parameters, cause);
                 break;
         }
     }

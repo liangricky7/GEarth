@@ -138,4 +138,8 @@ public sealed class SocietyState
     public List<double> LatenciesMs { get; set; } = [];
     public DateTimeOffset StartedAt { get; set; }
     public int GovernmentRotation { get; set; }
+    public int InstitutionIntervalSeconds { get; set; } = 120;
+    public int ResidentIntervalSeconds { get; set; } = 600;
+    public int MaxPendingObserved { get; set; }
+    public DateTimeOffset? CoverageCompletedAt { get; set; }
 }

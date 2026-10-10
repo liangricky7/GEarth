@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from dotenv import dotenv_values
+from share_site import supervisor_running
 
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "http://127.0.0.1:5080"
@@ -273,6 +274,13 @@ def main():
             )
         wait_for_service(f"{API_URL}/api/health", api)
         print(f"Observer: {API_URL}", flush=True)
+        if config.get("FAULTLINE_SHARE_URL") and config.get("FAULTLINE_SHARE_KEY"):
+            if not supervisor_running():
+                start(
+                    [sys.executable, str(ROOT / "ops/share_site.py")],
+                    "share-supervisor.log", os.environ.copy(),
+                )
+            print(f"Share address: {config['FAULTLINE_SHARE_URL']}", flush=True)
         mode = (
             "SAVED (no new inference)"
             if options.run_id

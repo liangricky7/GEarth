@@ -61,6 +61,12 @@ Keep Stage 1 available by omitting `--world`. To inspect a saved checkpoint with
 
 World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--institution-seconds`, `--resident-seconds`, `--seed`, and `--government-rotation`. Defaults are 1,100 agents, 64 concurrent requests, two-second ticks, institution attempts every 120 seconds, and resident attempts every 600 seconds. Eligibility is a target cadence; measured queue wait and coverage determine achieved cadence. The default world run lasts 360 ticks; use 420 for the longer qualification. Routine economic activity runs every five ticks. Full events are durable; the checkpoint retains recent events, decisions and each agent's last observation.
 
+## Share the observer
+
+Use [the permanent Faultline link](https://diarockets-faultline.finebear64.chatgpt.site). The address stays the same after restarts and deployments. The hosted Site forwards the read-only observer to the laptop; keep the laptop awake, online and running the application.
+
+When FAULTLINE_SHARE_URL and FAULTLINE_SHARE_KEY are configured in the ignored .env.local file, the launcher starts an automatic reconnect supervisor. See [sharing operations](docs/faultline/09-sharing.md) for configuration and manual reconnects. No Spark networking changes are needed.
+
 ## Automatic run observations
 
 Every new run saves observations at completion, graceful stop or pause. Reports describe accepted choices by role/source, work effort, trade and reroutes, policy changes, crises, migration, diplomacy, credit outcomes, country metrics, example model explanations, and inference failures. Findings reference recorded event IDs and separate descriptive behavior from political or causal claims. Paused runs use the available checkpoint and label incomplete history.

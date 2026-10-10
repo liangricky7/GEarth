@@ -147,6 +147,8 @@ public static class SocietyEngine
             return "UNAVAILABLE_ACTION";
         if (action.ActionType == "publish" && agent.Role == "media")
             return "OK";
+        if (action.ActionType is "pay" or "buy_goods" && agent.Role != "government")
+            return SocietyPayments.StillValid(world, agent, action.Params) ? "OK" : "CURRENT_PRECONDITION_FAILED";
         if (action.ActionType == "migrate" && agent.Role == "citizen")
         {
             var destination = action.Params["country_id"]!.GetValue<string>();
@@ -220,6 +222,12 @@ public static class SocietyEngine
                 {
                     approved.PrincipalMinor, approved.DueMinor, approved.DueTick, settlement = "simulated internal ledger"
                 }, cause);
+                break;
+            case "pay":
+                SocietyPayments.Pay(world, agent, parameters, cause);
+                break;
+            case "buy_goods":
+                SocietyPayments.Buy(world, agent, parameters, cause);
                 break;
         }
     }

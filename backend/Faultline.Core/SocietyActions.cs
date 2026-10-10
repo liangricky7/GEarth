@@ -40,6 +40,8 @@ public static class SocietyActions
                 options.Add(Make("publish", new { text, observed_tick = world.Tick }));
                 break;
         }
+        if (agent.Role != "government")
+            SocietyPayments.AddOptions(world, agent, options);
         return options.ToArray();
     }
 
@@ -107,6 +109,7 @@ public static class SocietyActions
         foreach (var route in world.Routes.Values.Where(route => route.ControllerCountryId == nation.Id)
             .OrderBy(route => route.Open).ThenBy(route => route.Id).Take(2))
             options.Add(Make("set_border", new { edge_id = route.Id, open = !route.Open }));
+        SocietyPayments.AddOptions(world, agent, options);
     }
 
     public static Candidate Make(string action, object parameters) => new(action, Wire.Node(parameters).AsObject());

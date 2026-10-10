@@ -60,7 +60,7 @@ public static class SocietyPayments
         var good = parameters["good"]!.GetValue<string>();
         var quantity = parameters["quantity"]!.GetValue<int>();
         var total = (long)quantity * seller.PriceMinor;
-        SocietyEconomy.Transfer(buyer, seller, total);
+        SocietyEconomy.Sell(world, buyer, seller, total, true);
         seller.Inventory[good] -= quantity;
         buyer.Inventory[good] += quantity;
         world.Emit("goods_purchased", "rule", [buyer.Id, seller.Id], new

@@ -27,9 +27,12 @@ public static class SocietyTrade
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
         buyer.CashMinor -= value;
-        SocietyEconomy.Transfer(buyer, world.Agents[buyer.CountryId + "_bank"], path.CostMinor);
+        // Dockworkers are employed by the tools business, which carries the freight.
+        SocietyEconomy.Sell(world, buyer, world.Agents[buyer.CountryId + "_tools"], path.CostMinor);
         var tariff = Tariff(world, buyer, seller, value);
         SocietyEconomy.Transfer(buyer, world.Agents[buyer.CountryId + "_government"], tariff);
+        var costs = world.Society!.PeriodCostMinor;
+        costs[buyer.Id] = costs.GetValueOrDefault(buyer.Id) + value + tariff;
         seller.Inventory[good] -= quantity;
         var cargo = new Cargo
         {
@@ -42,7 +45,7 @@ public static class SocietyTrade
         world.Emit("shipment_dispatched", "rule", [cargo.Id, buyer.Id, seller.Id], new
         {
             good, quantity, escrow_minor = value, shipping_minor = path.CostMinor,
-            tariff_minor = tariff, plan = path, settlement = "internal_escrow"
+            tariff_minor = tariff, carrier_id = buyer.CountryId + "_tools", plan = path, settlement = "internal_escrow"
         }, cause);
     }
 
@@ -103,6 +106,8 @@ public static class SocietyTrade
         var seller = world.Agents[cargo.SellerId];
         buyer.Inventory[cargo.Good] += cargo.Quantity;
         seller.CashMinor += cargo.EscrowMinor;
+        var revenue = world.Society!.PeriodRevenueMinor;
+        revenue[seller.Id] = revenue.GetValueOrDefault(seller.Id) + cargo.EscrowMinor;
         var relation = SocietyDiplomacy.Relation(world, buyer.CountryId, seller.CountryId);
         relation.DeliveredUnits += cargo.Quantity;
         relation.DeliveredValueMinor += cargo.EscrowMinor;
@@ -122,6 +127,8 @@ public static class SocietyTrade
     private static void Fail(World world, Cargo cargo)
     {
         world.Agents[cargo.BuyerId].CashMinor += cargo.EscrowMinor;
+        var costs = world.Society!.PeriodCostMinor;
+        costs[cargo.BuyerId] = costs.GetValueOrDefault(cargo.BuyerId) - cargo.EscrowMinor;
         cargo.EscrowMinor = 0;
         cargo.Status = "failed";
         world.Society!.LostGoods[cargo.Good] += cargo.Quantity;

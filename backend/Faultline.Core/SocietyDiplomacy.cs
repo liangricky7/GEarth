@@ -79,6 +79,9 @@ public static class SocietyDiplomacy
             case "set_welfare":
                 nation.WelfareMinor = parameters["amount_minor"]!.GetValue<int>();
                 return true;
+            case "set_sales_tax":
+                nation.SalesTaxBasisPoints = parameters["sales_tax_basis_points"]!.GetValue<int>();
+                return true;
             case "fund_services":
                 nation.ServiceBudgetPerResidentMinor = parameters["amount_minor"]!.GetValue<int>();
                 return true;
@@ -88,7 +91,7 @@ public static class SocietyDiplomacy
                 var amount = parameters["amount_minor"]!.GetValue<int>();
                 if (government.CashMinor < amount)
                     return false;
-                SocietyEconomy.Transfer(government, world.Agents[nation.Id + "_tools"], amount);
+                SocietyEconomy.Sell(world, government, world.Agents[nation.Id + "_tools"], amount);
                 nation.Productivity = Math.Min(2, nation.Productivity + 0.05);
                 return true;
             case "set_border":

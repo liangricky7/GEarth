@@ -183,13 +183,16 @@ public sealed class FinanceTests
         var world = NewWorld();
         var buyer = world.Agents["aster_citizen_00001"];
         var seller = world.Agents["aster_food"];
-        var (cash, stock, sellerCash, sellerStock) = (buyer.CashMinor, buyer.Inventory["food"], seller.CashMinor, seller.Inventory["food"]);
+        var government = world.Agents["aster_government"];
+        var (cash, stock, sellerCash, sellerStock, treasury) = (buyer.CashMinor, buyer.Inventory["food"], seller.CashMinor, seller.Inventory["food"], government.CashMinor);
         var total = SocietyPayments.BuyQuantity * seller.PriceMinor;
+        var salesTax = total * world.Society!.Nations["aster"].SalesTaxBasisPoints / 10000;
 
         Decide(world, buyer.Id, "buy_goods", Good("food"));
 
         Assert.Equal(cash - total, buyer.CashMinor);
-        Assert.Equal(sellerCash + total, seller.CashMinor);
+        Assert.Equal(sellerCash + total - salesTax, seller.CashMinor);
+        Assert.Equal(treasury + salesTax, government.CashMinor);
         Assert.Equal(stock + SocietyPayments.BuyQuantity, buyer.Inventory["food"]);
         Assert.Equal(sellerStock - SocietyPayments.BuyQuantity, seller.Inventory["food"]);
     }

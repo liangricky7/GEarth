@@ -71,6 +71,34 @@ sudo python3 ~/faultline-qwen-setup.py resume
 
 Resume requires the saved preparation and rollback state. It validates existing containers against the prepared image, exact serving arguments, private key, cache mount, ownership label and loopback ports before changing anything. Matching running models are retained; missing models are started and both APIs are verified before writing the connection file. A startup failure attempts the saved rollback. For a fresh Spark B deployment, use `resume --fresh --provider SPARK_B`. Nineteen focused installer tests pass, including rejection of mismatched partial deployments.
 
+Spark A's later launch reached weight loading but repeatedly failed during tokenizer initialization. CPU checks in the serving image confirmed that both pinned tokenizer revisions and their local snapshots load correctly; the unpinned `main` revisions were unavailable in the offline cache. The installer now serves weights and tokenizers directly from the downloaded revision directories and keeps the public `Qwen/Qwen3-8B` and `Qwen/Qwen3-4B` model names. Launch and resume check both cached configurations and tokenizers offline before stopping the original container. Twenty-two installer tests pass; GPU serving still requires verification on the Spark.
+
+For an existing container created with the earlier serving arguments, `resume` intentionally rejects the mismatch. After updating the installer, run rollback first, then launch only if rollback succeeds:
+
+```bash
+sudo python3 ~/faultline-qwen-setup.py rollback
+sudo python3 ~/faultline-qwen-setup.py launch
+```
+
+This reuses the prepared downloads and existing keys, removes the installer's replacement containers, and preserves the original container and its restoration script. Wait for `Both models verified` before using the new endpoints.
+
+If rollback reports that the original container identity changed, inspect `vllm_node` before recovery. A container ID changes when a container is recreated, so a saved rollback ID must not be replaced blindly. The guarded recovery action requires the full inspected ID, the original `vllm-node-mxfp4` image, a running GPT-OSS serve process, the restoration script, owned replacement containers, and passing offline tokenizer checks:
+
+```bash
+sudo docker inspect --format '{{.Id}} | image={{.Config.Image}} | status={{.State.Status}}' vllm_node
+sudo python3 ~/faultline-qwen-setup.py recover --original-id FULL_INSPECTED_CONTAINER_ID
+```
+
+Recovery backs up the previous rollback record, records the verified current original, removes the owned replacements through rollback, and launches the patched Qwen pair. It stops if the original ID changes during its checks or before launch. Stop any competing manual recipe launches before recovery; the installer does not stop host recipe processes. Thirty installer tests pass; successful GPU serving still requires `Both models verified` on the Spark.
+
+For a clean Qwen reinstall when recipe launches keep invalidating the old rollback ID, use:
+
+```bash
+sudo python3 ~/faultline-qwen-setup.py reinstall
+```
+
+This uses the prepared runtime, cached weights and existing API keys. It verifies the cached tokenizers first, pauses the known host GPT-OSS solo recipe launcher and its children, then reads the current original container ID. It preserves that container and verifies its restoration script, backs up the stale rollback record, and removes only labeled Qwen replacement containers before starting both models with local snapshot paths. It does not require the original GPT-OSS model to be running or an ID copied from an earlier terminal command. The paused launcher PIDs and their process start times are recorded privately; successful Qwen serving leaves them paused, and rollback resumes them after restoring GPT-OSS. Failure before server startup also resumes the launcher. Thirty-nine focused installer tests pass; live deployment still requires `Both models verified`.
+
 ## Spark B: fresh installation for Ken
 
 Unzip the shared bundle locally. Copy both files to Spark B, substituting its actual SSH target:

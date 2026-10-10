@@ -3,9 +3,11 @@ import json
 import os
 import pwd
 import secrets
+import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,7 +64,147 @@ def private_write(path, text, owner):
     os.chown(path, owner.pw_uid, owner.pw_gid)
 
 
+def snapshot_path(model, revision):
+    return (
+        Path("/root/.cache/huggingface/hub")
+        / f"models--{model.replace('/', '--')}"
+        / "snapshots"
+        / revision
+    )
+
+
+def process_record(pid):
+    try:
+        path = Path("/proc") / str(pid)
+        fields = (path / "stat").read_text().rsplit(") ", 1)[1].split()
+        return {
+            "pid": int(pid),
+            "parent": int(fields[1]),
+            "state": fields[0],
+            "start": fields[19],
+            "arguments": (path / "cmdline").read_bytes().split(b"\x00"),
+        }
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def original_recipe_processes():
+    records = {}
+    roots = []
+    for path in Path("/proc").iterdir():
+        if path.name.isdigit():
+            record = process_record(path.name)
+            if record is not None:
+                records[record["pid"]] = record
+                args = record["arguments"]
+                if (
+                    b"/home/admin/vllm/spark-vllm-docker/run-recipe.py" in args
+                    and b"openai-gpt-oss-120b" in args
+                    and b"--solo" in args
+                    and b"-c" not in args
+                ):
+                    roots.append(record["pid"])
+    ordered = list(roots)
+    seen = set(roots)
+    for parent in ordered:
+        for pid, record in records.items():
+            if record["parent"] == parent and pid not in seen:
+                seen.add(pid)
+                ordered.append(pid)
+    return [records[pid] for pid in ordered]
+
+
+def pause_original_recipes(state, owner):
+    record_file = state / "paused-gpt-oss-launchers.json"
+    paused = json.loads(record_file.read_text()) if record_file.exists() else []
+    recorded = {(entry["pid"], entry["start"]) for entry in paused}
+    # Rescan after stopping parents so children cannot keep launching containers.
+    for _ in range(5):
+        stopped = False
+        for entry in original_recipe_processes():
+            current = process_record(entry["pid"])
+            if current is None or current["start"] != entry["start"]:
+                continue
+            identity = (entry["pid"], entry["start"])
+            if current["state"] in ("T", "t"):
+                continue
+            if identity not in recorded:
+                paused.append({"pid": entry["pid"], "start": entry["start"]})
+                recorded.add(identity)
+                private_write(record_file, json.dumps(paused), owner)
+            try:
+                os.kill(entry["pid"], signal.SIGSTOP)
+            except ProcessLookupError:
+                continue
+            stopped = True
+        if not stopped:
+            break
+        time.sleep(0.1)
+    for entry in paused:
+        current = process_record(entry["pid"])
+        if (
+            current is not None
+            and current["start"] == entry["start"]
+            and current["state"] not in ("T", "t", "Z")
+        ):
+            raise RuntimeError("The GPT-OSS launcher did not pause; reinstall stopped")
+    print(
+        f"Paused {len(paused)} GPT-OSS launcher processes for Qwen installation.",
+        flush=True,
+    )
+
+
+def resume_original_recipes(state):
+    record_file = state / "paused-gpt-oss-launchers.json"
+    if not record_file.exists():
+        return
+    for entry in json.loads(record_file.read_text()):
+        current = process_record(entry["pid"])
+        if current is not None and current["start"] == entry["start"]:
+            try:
+                os.kill(entry["pid"], signal.SIGCONT)
+            except ProcessLookupError:
+                pass
+    record_file.unlink()
+
+
+def validate_cached_tokenizers(state, prepared):
+    probe = """import json, sys
+from transformers import AutoConfig, AutoTokenizer
+for model, snapshot in json.loads(sys.argv[1]).items():
+    AutoConfig.from_pretrained(snapshot, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(snapshot, local_files_only=True)
+    if not tokenizer.encode('Hello from Faultline'):
+        raise RuntimeError('Cached tokenizer returned no tokens')
+    print('Verified cached tokenizer: ' + model, flush=True)
+"""
+    snapshots = {
+        model: str(snapshot_path(model, prepared["revisions"][model]))
+        for _, model, *_ in MODELS
+    }
+    docker(
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-e",
+        "HF_HUB_OFFLINE=1",
+        "-e",
+        "TRANSFORMERS_OFFLINE=1",
+        "-v",
+        f"{state / 'cache'}:/root/.cache/huggingface:ro",
+        "--entrypoint",
+        "python3",
+        prepared["image"],
+        "-c",
+        probe,
+        json.dumps(snapshots),
+    )
+    print("Both cached tokenizers verified offline.", flush=True)
+
+
 def serving_arguments(image, state, role, model, port, memory, sequences, revision):
+    snapshot = str(snapshot_path(model, revision))
     return [
         "run",
         "-d",
@@ -85,8 +227,14 @@ def serving_arguments(image, state, role, model, port, memory, sequences, revisi
         "vllm",
         image,
         "serve",
+        snapshot,
+        "--served-model-name",
         model,
+        "--tokenizer",
+        snapshot,
         "--revision",
+        revision,
+        "--tokenizer-revision",
         revision,
         "--host",
         "0.0.0.0",
@@ -281,6 +429,7 @@ def rollback(state):
             docker("start", ORIGINAL)
         if not original_workload_running():
             docker("exec", "-d", ORIGINAL, "bash", RESTORE_SCRIPT)
+    resume_original_recipes(state)
     (state / "connection.env").unlink(missing_ok=True)
     print(
         "Fresh-install containers removed."
@@ -290,9 +439,144 @@ def rollback(state):
     )
 
 
-def launch(state, owner, fresh=False, provider="SPARK_A"):
-    prepared = json.loads((state / "prepared.json").read_text())
+def recover(state, owner, original_id, provider="SPARK_A"):
+    saved = json.loads((state / "rollback.json").read_text())
+    if saved.get("container_id") is None:
+        raise RuntimeError("Recovery requires an existing migration rollback record")
     original = inspect(ORIGINAL)
+    if (
+        original is None
+        or original["Id"] != original_id
+        or not original["State"]["Running"]
+        or original.get("Config", {}).get("Image") != "vllm-node-mxfp4"
+    ):
+        raise RuntimeError(
+            "Current original container does not match the inspected ID and image"
+        )
+    if not original_workload_running():
+        raise RuntimeError(
+            "Current original container is not running the expected GPT-OSS workload"
+        )
+    docker("exec", ORIGINAL, "test", "-f", RESTORE_SCRIPT)
+    for role, *_ in MODELS:
+        container = inspect(f"faultline-qwen-{role}")
+        if container is not None and (
+            container.get("Config", {}).get("Labels", {}).get("io.faultline.workload")
+            != "qwen-roles"
+        ):
+            raise RuntimeError("Replacement container ownership does not match")
+    prepared = json.loads((state / "prepared.json").read_text())
+    validate_cached_tokenizers(state, prepared)
+    current = inspect(ORIGINAL)
+    if (
+        current is None
+        or current["Id"] != original_id
+        or not current["State"]["Running"]
+    ):
+        raise RuntimeError(
+            "Original container changed during recovery checks; no saved state changed"
+        )
+    backup = state / ("rollback.before-recovery-" + str(time.time_ns()) + ".json")
+    private_write(backup, json.dumps(saved), owner)
+    private_write(
+        state / "rollback.json", json.dumps({"container_id": original_id}), owner
+    )
+    print(
+        "Verified current GPT-OSS container; prior rollback record backed up.",
+        flush=True,
+    )
+    rollback(state)
+    launch(state, owner, provider=provider, expected_original_id=original_id)
+
+
+def reinstall(state, owner, provider="SPARK_A"):
+    prepared = json.loads((state / "prepared.json").read_text())
+    validate_cached_tokenizers(state, prepared)
+    for role, *_ in MODELS:
+        api_key(state, role)
+        container = inspect(f"faultline-qwen-{role}")
+        if container is not None and (
+            container.get("Config", {}).get("Labels", {}).get("io.faultline.workload")
+            != "qwen-roles"
+        ):
+            raise RuntimeError("Replacement container ownership does not match")
+    pending_cleanup = False
+    try:
+        pause_original_recipes(state, owner)
+        original = inspect(ORIGINAL)
+        if original is not None:
+            original_image = original.get("Config", {}).get("Image")
+            if original_image not in ("vllm-node-mxfp4", "vllm-node-mxfp4:latest"):
+                raise RuntimeError(
+                    f"Reinstall found original image {original_image!r}; container preserved"
+                )
+            # docker cp also works when the preserved container is stopped.
+            with tempfile.TemporaryDirectory() as temporary:
+                docker(
+                    "cp",
+                    f"{original['Id']}:{RESTORE_SCRIPT}",
+                    str(Path(temporary) / "restore.sh"),
+                )
+        replacements = []
+        for role, *_ in MODELS:
+            container = inspect(f"faultline-qwen-{role}")
+            if container is not None:
+                if (
+                    container.get("Config", {})
+                    .get("Labels", {})
+                    .get("io.faultline.workload")
+                    != "qwen-roles"
+                ):
+                    raise RuntimeError(
+                        "Replacement ownership changed; reinstall stopped"
+                    )
+                replacements.append(container["Id"])
+        current = inspect(ORIGINAL)
+        original_id = original["Id"] if original is not None else None
+        if (current["Id"] if current is not None else None) != original_id:
+            raise RuntimeError(
+                "Another launcher is still replacing vllm_node; reinstall stopped"
+            )
+        rollback_file = state / "rollback.json"
+        if rollback_file.exists():
+            backup = state / (
+                "rollback.before-reinstall-" + str(time.time_ns()) + ".json"
+            )
+            private_write(backup, rollback_file.read_text(), owner)
+        private_write(rollback_file, json.dumps({"container_id": original_id}), owner)
+        pending_cleanup = True
+        (state / "connection.env").unlink(missing_ok=True)
+        for container_id in replacements:
+            docker("rm", "-f", container_id)
+        if original is not None and original["State"]["Running"]:
+            docker("stop", original_id)
+        print(
+            "Reinstalling both Qwen servers from cached weights; original container preserved.",
+            flush=True,
+        )
+        pending_cleanup = (
+            False  # start_models handles failures after server startup begins.
+        )
+        start_models(state, owner, prepared, provider)
+    except BaseException:
+        try:
+            if pending_cleanup:
+                rollback(state)
+        finally:
+            resume_original_recipes(state)
+        raise
+
+
+def launch(state, owner, fresh=False, provider="SPARK_A", expected_original_id=None):
+    prepared = json.loads((state / "prepared.json").read_text())
+    validate_cached_tokenizers(state, prepared)
+    original = inspect(ORIGINAL)
+    if expected_original_id is not None and (
+        original is None or original["Id"] != expected_original_id
+    ):
+        raise RuntimeError(
+            "Original container changed before launch; deployment stopped"
+        )
     if fresh:
         if original is not None and original["State"]["Running"]:
             raise RuntimeError(
@@ -325,7 +609,11 @@ def launch(state, owner, fresh=False, provider="SPARK_A"):
         owner,
     )
     if not fresh:
-        docker("stop", ORIGINAL)
+        docker("stop", expected_original_id or ORIGINAL)
+    start_models(state, owner, prepared, provider)
+
+
+def start_models(state, owner, prepared, provider):
     try:
         for role, model, port, memory, sequences in MODELS:
             docker(
@@ -343,10 +631,10 @@ def launch(state, owner, fresh=False, provider="SPARK_A"):
             wait_ready(state, role, model, port)
             validate_server(state, role, model, port)
             print(f"Verified {model} on loopback port {port}", flush=True)
+        write_connection(state, owner, provider)
     except BaseException:
         rollback(state)
         raise
-    write_connection(state, owner, provider)
 
 
 def write_connection(state, owner, provider):
@@ -435,6 +723,7 @@ def resume(state, owner, fresh=False, provider="SPARK_A"):
             raise RuntimeError(
                 f"Existing {role} container does not match the prepared deployment"
             )
+    validate_cached_tokenizers(state, prepared)
     if original_id is not None and original["State"]["Running"]:
         docker("stop", ORIGINAL)
     try:
@@ -469,10 +758,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "action",
-        choices=("prepare", "launch", "resume", "deploy", "rollback", "status"),
+        choices=(
+            "prepare",
+            "launch",
+            "resume",
+            "recover",
+            "reinstall",
+            "deploy",
+            "rollback",
+            "status",
+        ),
     )
     parser.add_argument("--image", default="vllm/vllm-openai:qwen38")
     parser.add_argument("--fresh", action="store_true")
+    parser.add_argument(
+        "--original-id", help="Inspected original container ID for guarded recovery"
+    )
     parser.add_argument("--provider", choices=("SPARK_A", "SPARK_B"), default="SPARK_A")
     options = parser.parse_args()
     if os.geteuid() != 0 or not os.environ.get("SUDO_USER"):
@@ -491,6 +792,12 @@ def main():
         launch(state, owner, options.fresh, options.provider)
     elif options.action == "resume":
         resume(state, owner, options.fresh, options.provider)
+    elif options.action == "recover":
+        if not options.original_id or options.fresh:
+            raise RuntimeError("Recovery requires --original-id and migration mode")
+        recover(state, owner, options.original_id, options.provider)
+    elif options.action == "reinstall":
+        reinstall(state, owner, options.provider)
     elif options.action == "rollback":
         rollback(state)
     else:

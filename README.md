@@ -8,7 +8,7 @@ The expanded world is implemented: ten fictional countries, five government prof
 
 A 1,100-agent rule-mode smoke test completed 120 ticks, delivered 11 shipments and verified cash, goods, ordered events, persistence and pagination. The first live run reached 977/1,100 model coverage and 82 delivered shipments, but a laptop sleep interrupted inference and invalidated its sustained-capacity measurement. The launcher now prevents idle sleep on macOS, the scheduler retries failed turns sooner. The repeat coverage test was stopped at the user’s request; it is not required for the next implementation stage. This population is a test target, not an absolute hardware maximum.
 
-The implementation passes 30 C# tests and 14 Python tests. Browser layout inspection remains unverified.
+The implementation passes 36 C# tests and 14 Python tests. Jayden's Stage 2 scheduling/API review adds explicit request admission, cancellable final draining, role-level coverage and decision ages. Browser layout inspection remains unverified.
 
 ## Start locally
 
@@ -77,6 +77,7 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 
 - [Current plan and design](faultline-current-plan-and-design.md): the current one-Spark architecture, world design, benchmark results, and implementation plan.
 - [World runbook](docs/faultline/08-world-runbook.md): launch, inspect and verify the expanded world.
+- [Jayden's Stage 2 review](docs/faultline/10-stage2-jayden.md): scheduling guarantees, website data, API examples and saved evidence.
 - [Stage 1 runbook](docs/faultline/07-stage1-runbook.md): operation and verification of the working demo.
 - [Earlier full design](faultline-full-design.md): detailed historical contracts, scenarios, and prior targets; the current plan takes precedence.
 - [Recorded evidence](docs/faultline/evidence): Stage 1, expanded world results and one-Spark load sweeps.

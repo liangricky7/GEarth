@@ -2,15 +2,17 @@ namespace Faultline.Core;
 
 public static class SocietyScheduler
 {
-    public static bool IsDue(World world, Agent agent, DateTimeOffset now)
+    public static DateTimeOffset DueAt(World world, Agent agent)
     {
         var seconds = agent.Role == "citizen" ? world.Society!.ResidentIntervalSeconds
             : world.Society!.InstitutionIntervalSeconds;
         if (world.Mode == "LIVE" && agent.LastDecision is { } decision
             && (!decision.Accepted || decision.Result.Source == "rule_fallback"))
             seconds = Math.Min(seconds, 30);
-        return agent.LastAttemptAt is null || (now - agent.LastAttemptAt.Value).TotalSeconds >= seconds;
+        return agent.LastAttemptAt?.AddSeconds(seconds) ?? world.Society!.StartedAt;
     }
+
+    public static bool IsDue(World world, Agent agent, DateTimeOffset now) => now >= DueAt(world, agent);
 
     public static Agent[] Select(World world, IReadOnlySet<string> pending, int slots, DateTimeOffset now)
     {
@@ -45,6 +47,8 @@ public static class SocietyScheduler
         var society = world.Society!;
         var due = world.Agents.Values.Where(agent => !pending.Contains(agent.Id) && IsDue(world, agent, now)).ToArray();
         society.PendingDecisions = pending.Count;
+        society.PendingByRole = world.Agents.Values.Where(agent => pending.Contains(agent.Id))
+            .GroupBy(agent => agent.Role).ToDictionary(group => group.Key, group => group.Count());
         society.MaxPendingObserved = Math.Max(society.MaxPendingObserved, pending.Count);
         society.DueAgents = due.Length;
         society.OldestWaitTicks = due.Length == 0 ? 0 : due.Max(agent => world.Tick - Math.Max(0, agent.LastAttemptTick));

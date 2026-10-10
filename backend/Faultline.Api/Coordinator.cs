@@ -122,7 +122,6 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
 
     private async Task RunSociety(bool live, CancellationToken cancellationToken)
     {
-        using var requests = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var tickLimit = ReadNumber("FAULTLINE_TICKS", 360, 1, 10000);
         var interval = ReadNumber("FAULTLINE_INTERVAL_MS", 2000, 0, 30000);
         var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 128);
@@ -137,13 +136,13 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         world.Society.TickIntervalMilliseconds = interval;
         world.Society.InstitutionIntervalSeconds = ReadNumber("FAULTLINE_INSTITUTION_SECONDS", 120, 10, 3600);
         world.Society.ResidentIntervalSeconds = ReadNumber("FAULTLINE_RESIDENT_SECONDS", 600, 10, 7200);
-        var pending = new Dictionary<string, (DecisionJob Job, Task<DecisionResult> Task)>();
+        await using var pending = new DecisionQueue(capacity, cancellationToken);
         long revision = 0;
 
         async Task Commit(CancellationToken? token = null)
         {
             world.UpdatedAt = DateTimeOffset.UtcNow;
-            SocietyScheduler.UpdateMetrics(world, pending.Keys.ToHashSet(), world.UpdatedAt);
+            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, world.UpdatedAt);
             world.Revision = revision + 1;
             await store.Save(world, revision, token ?? cancellationToken);
             revision = world.Revision;
@@ -155,11 +154,9 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
 
         void ApplyCompleted()
         {
-            foreach (var agentId in pending.Where(item => item.Value.Task.IsCompleted).Select(item => item.Key).ToArray())
+            foreach (var request in pending.TakeCompleted())
             {
-                var request = pending[agentId];
                 SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), DateTimeOffset.UtcNow);
-                pending.Remove(agentId);
             }
         }
 
@@ -174,14 +171,17 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 SocietyEngine.Advance(world);
                 if (tick < tickLimit)
                 {
-                    var agents = SocietyScheduler.Select(world, pending.Keys.ToHashSet(), capacity - pending.Count, started);
+                    var agents = SocietyScheduler.Select(world, pending.AgentIds, pending.FreeSlots, started);
                     foreach (var agent in agents)
                     {
-                        agent.LastAttemptAt = started;
-                        agent.LastAttemptTick = world.Tick;
                         var job = SocietyEngine.Observe(world, agent.Id, started);
-                        pending.Add(agent.Id, (job, Decide(job, live, requests.Token)));
+                        if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
+                        {
+                            agent.LastAttemptAt = started;
+                            agent.LastAttemptTick = world.Tick;
+                        }
                     }
+                    SocietyScheduler.UpdateMetrics(world, pending.AgentIds, started);
                 }
                 ApplyCompleted();
                 if (tick % 5 == 0)
@@ -192,7 +192,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             }
             while (pending.Count > 0)
             {
-                await Task.WhenAny(pending.Values.Select(item => item.Task));
+                await pending.WaitForCompletion(cancellationToken);
                 ApplyCompleted();
             }
             world.Status = "completed";
@@ -207,10 +207,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            requests.Cancel();
-            await Task.WhenAll(pending.Values.Select(item => item.Task));
-            var abandoned = pending.Count;
-            pending.Clear();
+            var abandoned = await pending.CancelAndDrain();
             world.Status = "stopped";
             world.Emit("run_stopped", "rule", [world.Id], new
             {
@@ -219,12 +216,6 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 canceled_requests_applied = false
             });
             await Commit(CancellationToken.None);
-        }
-        finally
-        {
-            requests.Cancel();
-            try { await Task.WhenAll(pending.Values.Select(item => item.Task)); }
-            catch (OperationCanceledException) { }
         }
     }
 

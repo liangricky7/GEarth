@@ -65,9 +65,11 @@ Notes summarize role-specific choices, work effort, trade, policy changes, crise
 
 The model worker remains on loopback port 8100 and requires an ephemeral bearer token. Browser clients never receive that token or the Spark model key. The observer is read-only.
 
+Agent pages and details include committed revision, event sequence and update time. Model decision ages and role metrics are documented with sample responses in [Jayden's Stage 2 review](10-stage2-jayden.md). Run `ops/check_stage2_api.py` against a completed or stopped world to check these API contracts without new inference.
+
 ## Sharing and failure handling
 
-The existing temporary public tunnel forwards the read-only observer through the laptop. Free tunnel URLs can expire or change. The laptop must remain awake and online. Groupmates can inspect that observer; they can run rule mode locally without Spark access. They do not need direct model access to view Jayden's integrated runs.
+Use [the permanent Faultline address](https://diarockets-faultline.finebear64.chatgpt.site). Its temporary upstream tunnel reconnects automatically while the public address stays the same. The laptop must remain awake and online. Groupmates can inspect that observer; they can run rule mode locally without Spark access. They do not need direct model access to view Jayden's integrated runs. See [sharing operations](09-sharing.md).
 
 If health reports `paused`, the last committed state remains inspectable. Check `.logs/api.log`, `.logs/worker.log` and `.logs/tunnel.log` locally. Inference failures become explicit fallback holds; fallbacks do not count toward accepted model coverage. A storage failure pauses the run after bounded retries. Restarting normally creates a new run; inspect the old checkpoint with `--run-id`.
 

@@ -15,7 +15,7 @@ The current implementation direction uses **one DGX Spark**, with the largest po
 
 ## 1. Current state: implemented and measured
 
-The ten-country world is integrated with bounded asynchronous scheduling, Neon/local persistence and the observer. The implementation passes 30 C# tests and 14 Python tests. A completed 1,100-agent rule-mode run provides integrated accounting, event-history and API evidence. The first live-world test is recorded below. The repeat test was stopped at the user’s request; further coverage qualification is deferred.
+The ten-country world is integrated with bounded asynchronous scheduling, Neon/local persistence and the observer. The implementation passes 36 C# tests and 14 Python tests. A completed 1,100-agent rule-mode run provides integrated accounting, event-history and API evidence. The first live-world test is recorded below. The repeat test was stopped at the user's request; further coverage qualification is deferred.
 
 | Component                 | Current status                                                                                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -547,6 +547,8 @@ Using 75% of the 96-request short-sweep rate suggests approximately 1,100 total 
 - Drain or explicitly cancel outstanding requests when ending a run.
 
 Eligibility uses wall-clock time since the last attempt. Institutions default to 120 seconds and residents to 600 seconds. Never-attempted agents come first within each category. Initial all-at-once population creation produces a coverage backlog; this is visible in the observer. A configured interval is not a guarantee of a completed turn within that interval. Failed or rejected live turns are eligible again after 30 seconds. Never-model-covered eligible agents receive priority after never-attempted agents. Ending a run stops launching jobs and drains the bounded pending set.
+
+The Stage 2 review extracted request admission into `DecisionQueue`, which enforces capacity and one unfinished request per agent before calling the worker. The final drain honors host cancellation; shutdown cancels and awaits pending tasks before saving stopped state. Request high-water counts are sampled at admission, including fast rule requests that finish before a checkpoint. Read projections now expose role-level model coverage, pending counts, decision ages and eligibility times; ages use committed time and remain fixed during saved-run inspection. See [Jayden's Stage 2 review](docs/faultline/10-stage2-jayden.md) for evidence and API examples.
 
 ### Capacity acceptance gate
 

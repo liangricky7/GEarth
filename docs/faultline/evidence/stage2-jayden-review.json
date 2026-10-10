@@ -1,0 +1,81 @@
+{
+  "run_id": "world_20261010_143113_522d2b",
+  "mode": "RULE",
+  "ticks": 40,
+  "population": 100,
+  "new_model_calls": 0,
+  "max_pending": 8,
+  "notes_saved": true,
+  "checks": [
+    "role_metrics",
+    "decision_ages",
+    "country_role_filter",
+    "search",
+    "pagination",
+    "revision_metadata",
+    "request_bounds",
+    "read_only",
+    "missing_entities",
+    "secret_file_blocked",
+    "checkpoint_notes_agree"
+  ],
+  "graceful_stop": {
+    "run_id": "world_20261010_143245_f1fce1",
+    "ticks": 10,
+    "pending_after_stop": 0,
+    "notes_saved": true,
+    "last_event": "run_stopped"
+  },
+  "saved_live_api": {
+    "run_id": "world_20261010_125750_6d3812",
+    "mode": "LIVE",
+    "ticks": 420,
+    "population": 1100,
+    "new_model_calls": 0,
+    "max_pending": 64,
+    "notes_saved": true,
+    "checks": [
+      "role_metrics",
+      "decision_ages",
+      "country_role_filter",
+      "search",
+      "pagination",
+      "revision_metadata",
+      "request_bounds",
+      "read_only",
+      "missing_entities",
+      "secret_file_blocked",
+      "checkpoint_notes_agree"
+    ]
+  },
+  "public_api": {
+    "run_id": "world_20261010_125750_6d3812",
+    "mode": "LIVE",
+    "ticks": 420,
+    "population": 1100,
+    "new_model_calls": 0,
+    "max_pending": 64,
+    "notes_saved": true,
+    "checks": [
+      "role_metrics",
+      "decision_ages",
+      "country_role_filter",
+      "search",
+      "pagination",
+      "revision_metadata",
+      "request_bounds",
+      "read_only",
+      "missing_entities",
+      "secret_file_blocked",
+      "checkpoint_notes_agree"
+    ]
+  },
+  "public_url": "https://diarockets-faultline.finebear64.chatgpt.site",
+  "csharp_tests_passed": 36,
+  "browser_layout": "unverified",
+  "limitations": [
+    "No new live inference or repeat coverage qualification",
+    "Prior live evidence includes a host sleep interruption",
+    "Worker and storage teammate reviews remain separate"
+  ]
+}

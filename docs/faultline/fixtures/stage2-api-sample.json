@@ -1,0 +1,4523 @@
+{
+  "run_id": "world_20261010_143113_522d2b",
+  "snapshot": {
+    "schema_version": 2,
+    "seq": 266,
+    "tick": 40,
+    "updated_at": "2026-10-10T14:31:14.403679+00:00",
+    "run": {
+      "id": "world_20261010_143113_522d2b",
+      "scenario_id": "earthlike_society_v2",
+      "mode": "RULE",
+      "status": "completed",
+      "seed": 20261010,
+      "population": 100,
+      "revision": 10,
+      "scenario_hash": "99e6f54ca8890da8302afd122e7ffee1b573f62604f743362b57b946ee010f03",
+      "stage": 2
+    },
+    "countries": [
+      {
+        "id": "aster",
+        "name": "Aster",
+        "lat": 40,
+        "lon": -105,
+        "government_id": "market_democracy"
+      },
+      {
+        "id": "beryl",
+        "name": "Beryl",
+        "lat": -18,
+        "lon": -58,
+        "government_id": "social_democracy"
+      },
+      {
+        "id": "cinder",
+        "name": "Cinder",
+        "lat": 50,
+        "lon": 15,
+        "government_id": "planned_republic"
+      },
+      {
+        "id": "dune",
+        "name": "Dune",
+        "lat": 25,
+        "lon": 42,
+        "government_id": "dictatorship"
+      },
+      {
+        "id": "ember",
+        "name": "Ember",
+        "lat": -27,
+        "lon": 135,
+        "government_id": "monarchy"
+      },
+      {
+        "id": "fjord",
+        "name": "Fjord",
+        "lat": 64,
+        "lon": -22,
+        "government_id": "market_democracy"
+      },
+      {
+        "id": "grove",
+        "name": "Grove",
+        "lat": 3,
+        "lon": 23,
+        "government_id": "social_democracy"
+      },
+      {
+        "id": "haven",
+        "name": "Haven",
+        "lat": 25,
+        "lon": 110,
+        "government_id": "planned_republic"
+      },
+      {
+        "id": "ionia",
+        "name": "Ionia",
+        "lat": 8,
+        "lon": 80,
+        "government_id": "dictatorship"
+      },
+      {
+        "id": "jade",
+        "name": "Jade",
+        "lat": 35,
+        "lon": 140,
+        "government_id": "monarchy"
+      }
+    ],
+    "locations": [
+      {
+        "id": "aster_city",
+        "country_id": "aster",
+        "lat": 40,
+        "lon": -105
+      },
+      {
+        "id": "beryl_city",
+        "country_id": "beryl",
+        "lat": -18,
+        "lon": -58
+      },
+      {
+        "id": "cinder_city",
+        "country_id": "cinder",
+        "lat": 50,
+        "lon": 15
+      },
+      {
+        "id": "dune_city",
+        "country_id": "dune",
+        "lat": 25,
+        "lon": 42
+      },
+      {
+        "id": "ember_city",
+        "country_id": "ember",
+        "lat": -27,
+        "lon": 135
+      },
+      {
+        "id": "fjord_city",
+        "country_id": "fjord",
+        "lat": 64,
+        "lon": -22
+      },
+      {
+        "id": "grove_city",
+        "country_id": "grove",
+        "lat": 3,
+        "lon": 23
+      },
+      {
+        "id": "haven_city",
+        "country_id": "haven",
+        "lat": 25,
+        "lon": 110
+      },
+      {
+        "id": "ionia_city",
+        "country_id": "ionia",
+        "lat": 8,
+        "lon": 80
+      },
+      {
+        "id": "jade_city",
+        "country_id": "jade",
+        "lat": 35,
+        "lon": 140
+      }
+    ],
+    "nations": [
+      {
+        "id": "aster",
+        "name": "Aster",
+        "government_id": "market_democracy",
+        "tax_basis_points": 1500,
+        "welfare_minor": 0,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 12,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 10,
+        "taxes_collected_minor": 840,
+        "welfare_paid_minor": 0,
+        "wages_paid_minor": 5600,
+        "trade_value_minor": 3900,
+        "produced_units": 382,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.7,
+        "gini_cash": 0.0115,
+        "food_multiplier": 1.4,
+        "energy_multiplier": 0.8,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 109,
+          "energy": 257,
+          "tools": 15,
+          "medicine": 2
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0135,
+            "treasury_minor": 20405,
+            "trade_value_minor": 0,
+            "produced_units": 54
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0132,
+            "treasury_minor": 20580,
+            "trade_value_minor": 1000,
+            "produced_units": 108
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0128,
+            "treasury_minor": 20685,
+            "trade_value_minor": 2900,
+            "produced_units": 162
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0125,
+            "treasury_minor": 20790,
+            "trade_value_minor": 3900,
+            "produced_units": 216
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0123,
+            "treasury_minor": 20895,
+            "trade_value_minor": 3900,
+            "produced_units": 270
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.012,
+            "treasury_minor": 21000,
+            "trade_value_minor": 3900,
+            "produced_units": 324
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0117,
+            "treasury_minor": 21105,
+            "trade_value_minor": 3900,
+            "produced_units": 361
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.7,
+            "gini_cash": 0.0115,
+            "treasury_minor": 21210,
+            "trade_value_minor": 3900,
+            "produced_units": 382
+          }
+        ]
+      },
+      {
+        "id": "beryl",
+        "name": "Beryl",
+        "government_id": "social_democracy",
+        "tax_basis_points": 3000,
+        "welfare_minor": 40,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 10,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 6,
+        "taxes_collected_minor": 966,
+        "welfare_paid_minor": 960,
+        "wages_paid_minor": 3220,
+        "trade_value_minor": 5000,
+        "produced_units": 100,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.632,
+        "gini_cash": 0.1338,
+        "food_multiplier": 1.6,
+        "energy_multiplier": 0.55,
+        "productivity": 1,
+        "crisis_until_tick": 90,
+        "crisis_good": "food",
+        "stocks": {
+          "food": 19,
+          "energy": 37,
+          "tools": 57,
+          "medicine": 12
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 0.667,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.667,
+            "gini_cash": 0.0438,
+            "treasury_minor": 23844,
+            "trade_value_minor": 0,
+            "produced_units": 10
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.662,
+            "gini_cash": 0.0604,
+            "treasury_minor": 27582,
+            "trade_value_minor": 1400,
+            "produced_units": 24
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.657,
+            "gini_cash": 0.0755,
+            "treasury_minor": 31114,
+            "trade_value_minor": 4600,
+            "produced_units": 37
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.652,
+            "gini_cash": 0.0832,
+            "treasury_minor": 34476,
+            "trade_value_minor": 5000,
+            "produced_units": 50
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.647,
+            "gini_cash": 0.0904,
+            "treasury_minor": 37659,
+            "trade_value_minor": 5000,
+            "produced_units": 63
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.642,
+            "gini_cash": 0.1039,
+            "treasury_minor": 40673,
+            "trade_value_minor": 5000,
+            "produced_units": 76
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.637,
+            "gini_cash": 0.1193,
+            "treasury_minor": 43527,
+            "trade_value_minor": 5000,
+            "produced_units": 88
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.632,
+            "gini_cash": 0.1338,
+            "treasury_minor": 46226,
+            "trade_value_minor": 5000,
+            "produced_units": 100
+          }
+        ]
+      },
+      {
+        "id": "cinder",
+        "name": "Cinder",
+        "government_id": "planned_republic",
+        "tax_basis_points": 500,
+        "welfare_minor": 60,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 10,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 6,
+        "taxes_collected_minor": 161,
+        "welfare_paid_minor": 1380,
+        "wages_paid_minor": 3220,
+        "trade_value_minor": 3500,
+        "produced_units": 128,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 1,
+        "gini_cash": 0.0378,
+        "food_multiplier": 1,
+        "energy_multiplier": 1.25,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 87,
+          "energy": 6,
+          "tools": 49,
+          "medicine": 22
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 0.833,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0,
+            "treasury_minor": 27734,
+            "trade_value_minor": 0,
+            "produced_units": 16
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0244,
+            "treasury_minor": 34620,
+            "trade_value_minor": 600,
+            "produced_units": 36
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0288,
+            "treasury_minor": 40726,
+            "trade_value_minor": 3500,
+            "produced_units": 56
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0327,
+            "treasury_minor": 46175,
+            "trade_value_minor": 3500,
+            "produced_units": 76
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0361,
+            "treasury_minor": 51033,
+            "trade_value_minor": 3500,
+            "produced_units": 96
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.039,
+            "treasury_minor": 55358,
+            "trade_value_minor": 3500,
+            "produced_units": 116
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0399,
+            "treasury_minor": 59205,
+            "trade_value_minor": 3500,
+            "produced_units": 128
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0378,
+            "treasury_minor": 62618,
+            "trade_value_minor": 3500,
+            "produced_units": 128
+          }
+        ]
+      },
+      {
+        "id": "dune",
+        "name": "Dune",
+        "government_id": "dictatorship",
+        "tax_basis_points": 1000,
+        "welfare_minor": 0,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 9,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 4,
+        "taxes_collected_minor": 224,
+        "welfare_paid_minor": 0,
+        "wages_paid_minor": 2240,
+        "trade_value_minor": 4200,
+        "produced_units": 80,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 1,
+        "gini_cash": 0.0211,
+        "food_multiplier": 0.55,
+        "energy_multiplier": 1.6,
+        "productivity": 1.05,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 46,
+          "energy": 22,
+          "tools": 47,
+          "medicine": 12
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0894,
+            "treasury_minor": 18528,
+            "trade_value_minor": 0,
+            "produced_units": 10
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0277,
+            "treasury_minor": 18661,
+            "trade_value_minor": 200,
+            "produced_units": 20
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0264,
+            "treasury_minor": 18689,
+            "trade_value_minor": 4200,
+            "produced_units": 30
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0251,
+            "treasury_minor": 18717,
+            "trade_value_minor": 4200,
+            "produced_units": 40
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.024,
+            "treasury_minor": 18745,
+            "trade_value_minor": 4200,
+            "produced_units": 50
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0229,
+            "treasury_minor": 18773,
+            "trade_value_minor": 4200,
+            "produced_units": 60
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.022,
+            "treasury_minor": 18801,
+            "trade_value_minor": 4200,
+            "produced_units": 70
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0.0211,
+            "treasury_minor": 18829,
+            "trade_value_minor": 4200,
+            "produced_units": 80
+          }
+        ]
+      },
+      {
+        "id": "ember",
+        "name": "Ember",
+        "government_id": "monarchy",
+        "tax_basis_points": 2000,
+        "welfare_minor": 20,
+        "service_budget_per_resident_minor": 30,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 9,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 4,
+        "taxes_collected_minor": 252,
+        "welfare_paid_minor": 340,
+        "wages_paid_minor": 1260,
+        "trade_value_minor": 3800,
+        "produced_units": 84,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.75,
+        "gini_cash": 0.1606,
+        "food_multiplier": 0.85,
+        "energy_multiplier": 1.1,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 96,
+          "energy": 25,
+          "tools": 19,
+          "medicine": 12
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 0.833,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.833,
+            "gini_cash": 0.0457,
+            "treasury_minor": 21936,
+            "trade_value_minor": 0,
+            "produced_units": 14
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.0726,
+            "treasury_minor": 23875,
+            "trade_value_minor": 0,
+            "produced_units": 24
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.0937,
+            "treasury_minor": 25719,
+            "trade_value_minor": 3600,
+            "produced_units": 34
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1072,
+            "treasury_minor": 27513,
+            "trade_value_minor": 3800,
+            "produced_units": 44
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1207,
+            "treasury_minor": 29263,
+            "trade_value_minor": 3800,
+            "produced_units": 54
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1341,
+            "treasury_minor": 30969,
+            "trade_value_minor": 3800,
+            "produced_units": 64
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1474,
+            "treasury_minor": 32632,
+            "trade_value_minor": 3800,
+            "produced_units": 74
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1606,
+            "treasury_minor": 34253,
+            "trade_value_minor": 3800,
+            "produced_units": 84
+          }
+        ]
+      },
+      {
+        "id": "fjord",
+        "name": "Fjord",
+        "government_id": "market_democracy",
+        "tax_basis_points": 3000,
+        "welfare_minor": 0,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 10,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 6,
+        "taxes_collected_minor": 1344,
+        "welfare_paid_minor": 0,
+        "wages_paid_minor": 4480,
+        "trade_value_minor": 2700,
+        "produced_units": 294,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.793,
+        "gini_cash": 0.0709,
+        "food_multiplier": 1.4,
+        "energy_multiplier": 0.8,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 137,
+          "energy": 127,
+          "tools": 57,
+          "medicine": 22
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 0.833,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.828,
+            "gini_cash": 0.0118,
+            "treasury_minor": 20168,
+            "trade_value_minor": 0,
+            "produced_units": 39
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.823,
+            "gini_cash": 0.0225,
+            "treasury_minor": 20336,
+            "trade_value_minor": 0,
+            "produced_units": 77
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.818,
+            "gini_cash": 0.0323,
+            "treasury_minor": 20629,
+            "trade_value_minor": 1000,
+            "produced_units": 115
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.813,
+            "gini_cash": 0.0412,
+            "treasury_minor": 20797,
+            "trade_value_minor": 2700,
+            "produced_units": 152
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.808,
+            "gini_cash": 0.0493,
+            "treasury_minor": 20965,
+            "trade_value_minor": 2700,
+            "produced_units": 188
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.803,
+            "gini_cash": 0.0569,
+            "treasury_minor": 21133,
+            "trade_value_minor": 2700,
+            "produced_units": 224
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.798,
+            "gini_cash": 0.0638,
+            "treasury_minor": 21301,
+            "trade_value_minor": 2700,
+            "produced_units": 259
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.793,
+            "gini_cash": 0.0709,
+            "treasury_minor": 21469,
+            "trade_value_minor": 2700,
+            "produced_units": 294
+          }
+        ]
+      },
+      {
+        "id": "grove",
+        "name": "Grove",
+        "government_id": "social_democracy",
+        "tax_basis_points": 3000,
+        "welfare_minor": 40,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 10,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 6,
+        "taxes_collected_minor": 1344,
+        "welfare_paid_minor": 960,
+        "wages_paid_minor": 4480,
+        "trade_value_minor": 1900,
+        "produced_units": 274,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.46,
+        "gini_cash": 0.039,
+        "food_multiplier": 1.6,
+        "energy_multiplier": 0.55,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 197,
+          "energy": 47,
+          "tools": 47,
+          "medicine": 2
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 0.5,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.495,
+            "gini_cash": 0.0314,
+            "treasury_minor": 23928,
+            "trade_value_minor": 0,
+            "produced_units": 48
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.49,
+            "gini_cash": 0.0221,
+            "treasury_minor": 27660,
+            "trade_value_minor": 0,
+            "produced_units": 95
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.485,
+            "gini_cash": 0.0163,
+            "treasury_minor": 31282,
+            "trade_value_minor": 1900,
+            "produced_units": 141
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.48,
+            "gini_cash": 0.0189,
+            "treasury_minor": 34702,
+            "trade_value_minor": 1900,
+            "produced_units": 185
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.475,
+            "gini_cash": 0.0213,
+            "treasury_minor": 37933,
+            "trade_value_minor": 1900,
+            "produced_units": 228
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.47,
+            "gini_cash": 0.026,
+            "treasury_minor": 40984,
+            "trade_value_minor": 1900,
+            "produced_units": 250
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.465,
+            "gini_cash": 0.0327,
+            "treasury_minor": 43862,
+            "trade_value_minor": 1900,
+            "produced_units": 262
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.46,
+            "gini_cash": 0.039,
+            "treasury_minor": 46576,
+            "trade_value_minor": 1900,
+            "produced_units": 274
+          }
+        ]
+      },
+      {
+        "id": "haven",
+        "name": "Haven",
+        "government_id": "planned_republic",
+        "tax_basis_points": 1500,
+        "welfare_minor": 60,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 11,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 8,
+        "taxes_collected_minor": 819,
+        "welfare_paid_minor": 1920,
+        "wages_paid_minor": 5460,
+        "trade_value_minor": 3600,
+        "produced_units": 300,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.849,
+        "gini_cash": 0.098,
+        "food_multiplier": 1,
+        "energy_multiplier": 1.25,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 90,
+          "energy": 103,
+          "tools": 99,
+          "medicine": 12
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.875,
+            "gini_cash": 0.0642,
+            "treasury_minor": 27624,
+            "trade_value_minor": 0,
+            "produced_units": 35
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.871,
+            "gini_cash": 0.0713,
+            "treasury_minor": 34513,
+            "trade_value_minor": 0,
+            "produced_units": 74
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.867,
+            "gini_cash": 0.0773,
+            "treasury_minor": 40509,
+            "trade_value_minor": 1900,
+            "produced_units": 112
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.864,
+            "gini_cash": 0.0826,
+            "treasury_minor": 45904,
+            "trade_value_minor": 3600,
+            "produced_units": 150
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.86,
+            "gini_cash": 0.0871,
+            "treasury_minor": 50702,
+            "trade_value_minor": 3600,
+            "produced_units": 188
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.856,
+            "gini_cash": 0.0912,
+            "treasury_minor": 54963,
+            "trade_value_minor": 3600,
+            "produced_units": 226
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.852,
+            "gini_cash": 0.0948,
+            "treasury_minor": 58741,
+            "trade_value_minor": 3600,
+            "produced_units": 263
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.849,
+            "gini_cash": 0.098,
+            "treasury_minor": 62084,
+            "trade_value_minor": 3600,
+            "produced_units": 300
+          }
+        ]
+      },
+      {
+        "id": "ionia",
+        "name": "Ionia",
+        "government_id": "dictatorship",
+        "tax_basis_points": 1000,
+        "welfare_minor": 0,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 9,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 4,
+        "taxes_collected_minor": 112,
+        "welfare_paid_minor": 0,
+        "wages_paid_minor": 1120,
+        "trade_value_minor": 720,
+        "produced_units": 32,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.75,
+        "gini_cash": 0.1798,
+        "food_multiplier": 0.55,
+        "energy_multiplier": 1.6,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 20,
+          "energy": 30,
+          "tools": 47,
+          "medicine": 12
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 0.667,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.0177,
+            "treasury_minor": 20014,
+            "trade_value_minor": 0,
+            "produced_units": 4
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.0445,
+            "treasury_minor": 20028,
+            "trade_value_minor": 0,
+            "produced_units": 8
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.0698,
+            "treasury_minor": 20062,
+            "trade_value_minor": 520,
+            "produced_units": 12
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.0943,
+            "treasury_minor": 20076,
+            "trade_value_minor": 720,
+            "produced_units": 16
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1181,
+            "treasury_minor": 20090,
+            "trade_value_minor": 720,
+            "produced_units": 20
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1411,
+            "treasury_minor": 20104,
+            "trade_value_minor": 720,
+            "produced_units": 24
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1634,
+            "treasury_minor": 20118,
+            "trade_value_minor": 720,
+            "produced_units": 28
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.75,
+            "gini_cash": 0.1798,
+            "treasury_minor": 20132,
+            "trade_value_minor": 720,
+            "produced_units": 32
+          }
+        ]
+      },
+      {
+        "id": "jade",
+        "name": "Jade",
+        "government_id": "monarchy",
+        "tax_basis_points": 2000,
+        "welfare_minor": 20,
+        "service_budget_per_resident_minor": 10,
+        "leadership_term": 0,
+        "next_election_tick": 100,
+        "population": 10,
+        "unmet_needs": 0,
+        "unmet_needs_last_cycle": 0,
+        "fulfilled_needs_last_cycle": 6,
+        "taxes_collected_minor": 896,
+        "welfare_paid_minor": 480,
+        "wages_paid_minor": 4480,
+        "trade_value_minor": 1320,
+        "produced_units": 297,
+        "lost_units": 0,
+        "defaulted_loans": 0,
+        "approval": 0.627,
+        "gini_cash": 0.0778,
+        "food_multiplier": 0.85,
+        "energy_multiplier": 1.1,
+        "productivity": 1,
+        "crisis_until_tick": 0,
+        "crisis_good": null,
+        "stocks": {
+          "food": 83,
+          "energy": 210,
+          "tools": 57,
+          "medicine": 12
+        },
+        "history": [
+          {
+            "tick": 0,
+            "needs_met": 1,
+            "approval": 1,
+            "gini_cash": 0,
+            "treasury_minor": 20000,
+            "trade_value_minor": 0,
+            "produced_units": 0
+          },
+          {
+            "tick": 5,
+            "needs_met": 1,
+            "approval": 0.828,
+            "gini_cash": 0.0132,
+            "treasury_minor": 21992,
+            "trade_value_minor": 0,
+            "produced_units": 40
+          },
+          {
+            "tick": 10,
+            "needs_met": 1,
+            "approval": 0.657,
+            "gini_cash": 0.025,
+            "treasury_minor": 23940,
+            "trade_value_minor": 0,
+            "produced_units": 79
+          },
+          {
+            "tick": 15,
+            "needs_met": 1,
+            "approval": 0.652,
+            "gini_cash": 0.0358,
+            "treasury_minor": 25858,
+            "trade_value_minor": 320,
+            "produced_units": 117
+          },
+          {
+            "tick": 20,
+            "needs_met": 1,
+            "approval": 0.647,
+            "gini_cash": 0.0457,
+            "treasury_minor": 27656,
+            "trade_value_minor": 1320,
+            "produced_units": 155
+          },
+          {
+            "tick": 25,
+            "needs_met": 1,
+            "approval": 0.642,
+            "gini_cash": 0.0547,
+            "treasury_minor": 29402,
+            "trade_value_minor": 1320,
+            "produced_units": 192
+          },
+          {
+            "tick": 30,
+            "needs_met": 1,
+            "approval": 0.637,
+            "gini_cash": 0.063,
+            "treasury_minor": 31098,
+            "trade_value_minor": 1320,
+            "produced_units": 228
+          },
+          {
+            "tick": 35,
+            "needs_met": 1,
+            "approval": 0.632,
+            "gini_cash": 0.0707,
+            "treasury_minor": 32743,
+            "trade_value_minor": 1320,
+            "produced_units": 263
+          },
+          {
+            "tick": 40,
+            "needs_met": 1,
+            "approval": 0.627,
+            "gini_cash": 0.0778,
+            "treasury_minor": 34341,
+            "trade_value_minor": 1320,
+            "produced_units": 297
+          }
+        ]
+      }
+    ],
+    "government_profiles": [
+      {
+        "id": "market_democracy",
+        "name": "Market democracy",
+        "policy_delay": 3,
+        "elected": true,
+        "minimum_approval_percent": 45,
+        "public_ownership_percent": 0,
+        "default_tax_basis_points": 1500,
+        "default_welfare_minor": 0
+      },
+      {
+        "id": "social_democracy",
+        "name": "Socialist democracy",
+        "policy_delay": 2,
+        "elected": true,
+        "minimum_approval_percent": 45,
+        "public_ownership_percent": 50,
+        "default_tax_basis_points": 3000,
+        "default_welfare_minor": 40
+      },
+      {
+        "id": "planned_republic",
+        "name": "Single-party planned economy",
+        "policy_delay": 1,
+        "elected": false,
+        "minimum_approval_percent": 0,
+        "public_ownership_percent": 100,
+        "default_tax_basis_points": 2500,
+        "default_welfare_minor": 60
+      },
+      {
+        "id": "dictatorship",
+        "name": "Personal dictatorship",
+        "policy_delay": 0,
+        "elected": false,
+        "minimum_approval_percent": 0,
+        "public_ownership_percent": 0,
+        "default_tax_basis_points": 1000,
+        "default_welfare_minor": 0
+      },
+      {
+        "id": "monarchy",
+        "name": "Absolute monarchy",
+        "policy_delay": 1,
+        "elected": false,
+        "minimum_approval_percent": 0,
+        "public_ownership_percent": 25,
+        "default_tax_basis_points": 2000,
+        "default_welfare_minor": 20
+      }
+    ],
+    "routes": [
+      {
+        "id": "aster_to_beryl",
+        "from": "aster_city",
+        "to": "beryl_city",
+        "travel_ticks": 3,
+        "cost_minor": 74,
+        "risk_score": 0.15,
+        "open": true,
+        "controller_country_id": "beryl",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "beryl_to_aster",
+        "from": "beryl_city",
+        "to": "aster_city",
+        "travel_ticks": 3,
+        "cost_minor": 74,
+        "risk_score": 0.15,
+        "open": true,
+        "controller_country_id": "aster",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "aster_to_fjord",
+        "from": "aster_city",
+        "to": "fjord_city",
+        "travel_ticks": 3,
+        "cost_minor": 86,
+        "risk_score": 0.08,
+        "open": true,
+        "controller_country_id": "fjord",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "fjord_to_aster",
+        "from": "fjord_city",
+        "to": "aster_city",
+        "travel_ticks": 3,
+        "cost_minor": 86,
+        "risk_score": 0.08,
+        "open": true,
+        "controller_country_id": "aster",
+        "version": 2,
+        "expires_tick": null
+      },
+      {
+        "id": "aster_to_jade",
+        "from": "aster_city",
+        "to": "jade_city",
+        "travel_ticks": 4,
+        "cost_minor": 115,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "jade",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "jade_to_aster",
+        "from": "jade_city",
+        "to": "aster_city",
+        "travel_ticks": 4,
+        "cost_minor": 115,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "aster",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "beryl_to_grove",
+        "from": "beryl_city",
+        "to": "grove_city",
+        "travel_ticks": 3,
+        "cost_minor": 83,
+        "risk_score": 0.18,
+        "open": true,
+        "controller_country_id": "grove",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "grove_to_beryl",
+        "from": "grove_city",
+        "to": "beryl_city",
+        "travel_ticks": 3,
+        "cost_minor": 83,
+        "risk_score": 0.18,
+        "open": true,
+        "controller_country_id": "beryl",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "beryl_to_fjord",
+        "from": "beryl_city",
+        "to": "fjord_city",
+        "travel_ticks": 3,
+        "cost_minor": 89,
+        "risk_score": 0.17,
+        "open": true,
+        "controller_country_id": "fjord",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "fjord_to_beryl",
+        "from": "fjord_city",
+        "to": "beryl_city",
+        "travel_ticks": 3,
+        "cost_minor": 89,
+        "risk_score": 0.17,
+        "open": true,
+        "controller_country_id": "beryl",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "beryl_to_cinder",
+        "from": "beryl_city",
+        "to": "cinder_city",
+        "travel_ticks": 3,
+        "cost_minor": 99,
+        "risk_score": 0.14,
+        "open": true,
+        "controller_country_id": "cinder",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "cinder_to_beryl",
+        "from": "cinder_city",
+        "to": "beryl_city",
+        "travel_ticks": 3,
+        "cost_minor": 99,
+        "risk_score": 0.14,
+        "open": true,
+        "controller_country_id": "beryl",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "cinder_to_dune",
+        "from": "cinder_city",
+        "to": "dune_city",
+        "travel_ticks": 2,
+        "cost_minor": 36,
+        "risk_score": 0.05,
+        "open": true,
+        "controller_country_id": "dune",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "dune_to_cinder",
+        "from": "dune_city",
+        "to": "cinder_city",
+        "travel_ticks": 2,
+        "cost_minor": 36,
+        "risk_score": 0.05,
+        "open": true,
+        "controller_country_id": "cinder",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "cinder_to_fjord",
+        "from": "cinder_city",
+        "to": "fjord_city",
+        "travel_ticks": 2,
+        "cost_minor": 39,
+        "risk_score": 0.12,
+        "open": true,
+        "controller_country_id": "fjord",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "fjord_to_cinder",
+        "from": "fjord_city",
+        "to": "cinder_city",
+        "travel_ticks": 2,
+        "cost_minor": 39,
+        "risk_score": 0.12,
+        "open": true,
+        "controller_country_id": "cinder",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "cinder_to_grove",
+        "from": "cinder_city",
+        "to": "grove_city",
+        "travel_ticks": 2,
+        "cost_minor": 47,
+        "risk_score": 0.18,
+        "open": true,
+        "controller_country_id": "grove",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "grove_to_cinder",
+        "from": "grove_city",
+        "to": "cinder_city",
+        "travel_ticks": 2,
+        "cost_minor": 47,
+        "risk_score": 0.18,
+        "open": true,
+        "controller_country_id": "cinder",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "dune_to_grove",
+        "from": "dune_city",
+        "to": "grove_city",
+        "travel_ticks": 2,
+        "cost_minor": 29,
+        "risk_score": 0.08,
+        "open": true,
+        "controller_country_id": "grove",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "grove_to_dune",
+        "from": "grove_city",
+        "to": "dune_city",
+        "travel_ticks": 2,
+        "cost_minor": 29,
+        "risk_score": 0.08,
+        "open": true,
+        "controller_country_id": "dune",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "dune_to_ionia",
+        "from": "dune_city",
+        "to": "ionia_city",
+        "travel_ticks": 2,
+        "cost_minor": 41,
+        "risk_score": 0.01,
+        "open": true,
+        "controller_country_id": "ionia",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ionia_to_dune",
+        "from": "ionia_city",
+        "to": "dune_city",
+        "travel_ticks": 2,
+        "cost_minor": 41,
+        "risk_score": 0.01,
+        "open": true,
+        "controller_country_id": "dune",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "dune_to_ember",
+        "from": "dune_city",
+        "to": "ember_city",
+        "travel_ticks": 4,
+        "cost_minor": 106,
+        "risk_score": 0.04,
+        "open": true,
+        "controller_country_id": "ember",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ember_to_dune",
+        "from": "ember_city",
+        "to": "dune_city",
+        "travel_ticks": 4,
+        "cost_minor": 106,
+        "risk_score": 0.04,
+        "open": true,
+        "controller_country_id": "dune",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ember_to_haven",
+        "from": "ember_city",
+        "to": "haven_city",
+        "travel_ticks": 2,
+        "cost_minor": 57,
+        "risk_score": 0.14,
+        "open": true,
+        "controller_country_id": "haven",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "haven_to_ember",
+        "from": "haven_city",
+        "to": "ember_city",
+        "travel_ticks": 2,
+        "cost_minor": 57,
+        "risk_score": 0.14,
+        "open": true,
+        "controller_country_id": "ember",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ember_to_jade",
+        "from": "ember_city",
+        "to": "jade_city",
+        "travel_ticks": 2,
+        "cost_minor": 62,
+        "risk_score": 0.09,
+        "open": true,
+        "controller_country_id": "jade",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "jade_to_ember",
+        "from": "jade_city",
+        "to": "ember_city",
+        "travel_ticks": 2,
+        "cost_minor": 62,
+        "risk_score": 0.09,
+        "open": true,
+        "controller_country_id": "ember",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ember_to_ionia",
+        "from": "ember_city",
+        "to": "ionia_city",
+        "travel_ticks": 2,
+        "cost_minor": 65,
+        "risk_score": 0.01,
+        "open": true,
+        "controller_country_id": "ionia",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ionia_to_ember",
+        "from": "ionia_city",
+        "to": "ember_city",
+        "travel_ticks": 2,
+        "cost_minor": 65,
+        "risk_score": 0.01,
+        "open": true,
+        "controller_country_id": "ember",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ember_to_fjord",
+        "from": "ember_city",
+        "to": "fjord_city",
+        "travel_ticks": 6,
+        "cost_minor": 181,
+        "risk_score": 0.03,
+        "open": true,
+        "controller_country_id": "fjord",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "fjord_to_ember",
+        "from": "fjord_city",
+        "to": "ember_city",
+        "travel_ticks": 6,
+        "cost_minor": 181,
+        "risk_score": 0.03,
+        "open": true,
+        "controller_country_id": "ember",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "fjord_to_dune",
+        "from": "fjord_city",
+        "to": "dune_city",
+        "travel_ticks": 3,
+        "cost_minor": 74,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "dune",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "dune_to_fjord",
+        "from": "dune_city",
+        "to": "fjord_city",
+        "travel_ticks": 3,
+        "cost_minor": 74,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "fjord",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "fjord_to_grove",
+        "from": "fjord_city",
+        "to": "grove_city",
+        "travel_ticks": 3,
+        "cost_minor": 75,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "grove",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "grove_to_fjord",
+        "from": "grove_city",
+        "to": "fjord_city",
+        "travel_ticks": 3,
+        "cost_minor": 75,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "fjord",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "grove_to_ionia",
+        "from": "grove_city",
+        "to": "ionia_city",
+        "travel_ticks": 2,
+        "cost_minor": 57,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "ionia",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ionia_to_grove",
+        "from": "ionia_city",
+        "to": "grove_city",
+        "travel_ticks": 2,
+        "cost_minor": 57,
+        "risk_score": 0.1,
+        "open": true,
+        "controller_country_id": "grove",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "grove_to_haven",
+        "from": "grove_city",
+        "to": "haven_city",
+        "travel_ticks": 3,
+        "cost_minor": 89,
+        "risk_score": 0.15,
+        "open": true,
+        "controller_country_id": "haven",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "haven_to_grove",
+        "from": "haven_city",
+        "to": "grove_city",
+        "travel_ticks": 3,
+        "cost_minor": 89,
+        "risk_score": 0.15,
+        "open": true,
+        "controller_country_id": "grove",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "haven_to_jade",
+        "from": "haven_city",
+        "to": "jade_city",
+        "travel_ticks": 2,
+        "cost_minor": 31,
+        "risk_score": 0.17,
+        "open": true,
+        "controller_country_id": "jade",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "jade_to_haven",
+        "from": "jade_city",
+        "to": "haven_city",
+        "travel_ticks": 2,
+        "cost_minor": 31,
+        "risk_score": 0.17,
+        "open": true,
+        "controller_country_id": "haven",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "haven_to_ionia",
+        "from": "haven_city",
+        "to": "ionia_city",
+        "travel_ticks": 2,
+        "cost_minor": 34,
+        "risk_score": 0.18,
+        "open": true,
+        "controller_country_id": "ionia",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ionia_to_haven",
+        "from": "ionia_city",
+        "to": "haven_city",
+        "travel_ticks": 2,
+        "cost_minor": 34,
+        "risk_score": 0.18,
+        "open": true,
+        "controller_country_id": "haven",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "ionia_to_jade",
+        "from": "ionia_city",
+        "to": "jade_city",
+        "travel_ticks": 2,
+        "cost_minor": 65,
+        "risk_score": 0.19,
+        "open": true,
+        "controller_country_id": "jade",
+        "version": 0,
+        "expires_tick": null
+      },
+      {
+        "id": "jade_to_ionia",
+        "from": "jade_city",
+        "to": "ionia_city",
+        "travel_ticks": 2,
+        "cost_minor": 65,
+        "risk_score": 0.19,
+        "open": true,
+        "controller_country_id": "ionia",
+        "version": 0,
+        "expires_tick": null
+      }
+    ],
+    "relationships": [
+      {
+        "id": "aster:beryl",
+        "first": "aster",
+        "second": "beryl",
+        "tension": 3,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 1000
+      },
+      {
+        "id": "aster:cinder",
+        "first": "aster",
+        "second": "cinder",
+        "tension": 64,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 200
+      },
+      {
+        "id": "aster:dune",
+        "first": "aster",
+        "second": "dune",
+        "tension": 27,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 20,
+        "delivered_value_minor": 1700
+      },
+      {
+        "id": "aster:ember",
+        "first": "aster",
+        "second": "ember",
+        "tension": 28,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "aster:fjord",
+        "first": "aster",
+        "second": "fjord",
+        "tension": 27,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "aster:grove",
+        "first": "aster",
+        "second": "grove",
+        "tension": 19,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "aster:haven",
+        "first": "aster",
+        "second": "haven",
+        "tension": 23,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "aster:ionia",
+        "first": "aster",
+        "second": "ionia",
+        "tension": 46,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "aster:jade",
+        "first": "aster",
+        "second": "jade",
+        "tension": 76,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": "jade",
+        "proposal_kind": "trade",
+        "proposal_expires_tick": 65,
+        "delivered_units": 10,
+        "delivered_value_minor": 1000
+      },
+      {
+        "id": "beryl:cinder",
+        "first": "beryl",
+        "second": "cinder",
+        "tension": 11,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 20,
+        "delivered_value_minor": 1900
+      },
+      {
+        "id": "beryl:dune",
+        "first": "beryl",
+        "second": "dune",
+        "tension": 62,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 20,
+        "delivered_value_minor": 1700
+      },
+      {
+        "id": "beryl:ember",
+        "first": "beryl",
+        "second": "ember",
+        "tension": 43,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": "beryl",
+        "proposal_kind": "trade",
+        "proposal_expires_tick": 63,
+        "delivered_units": 10,
+        "delivered_value_minor": 200
+      },
+      {
+        "id": "beryl:fjord",
+        "first": "beryl",
+        "second": "fjord",
+        "tension": 68,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "beryl:grove",
+        "first": "beryl",
+        "second": "grove",
+        "tension": 0,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "beryl:haven",
+        "first": "beryl",
+        "second": "haven",
+        "tension": 11,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "beryl:ionia",
+        "first": "beryl",
+        "second": "ionia",
+        "tension": 26,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 200
+      },
+      {
+        "id": "beryl:jade",
+        "first": "beryl",
+        "second": "jade",
+        "tension": 73,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "cinder:dune",
+        "first": "cinder",
+        "second": "dune",
+        "tension": 65,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 200
+      },
+      {
+        "id": "cinder:ember",
+        "first": "cinder",
+        "second": "ember",
+        "tension": 2,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 200
+      },
+      {
+        "id": "cinder:fjord",
+        "first": "cinder",
+        "second": "fjord",
+        "tension": 76,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 1000
+      },
+      {
+        "id": "cinder:grove",
+        "first": "cinder",
+        "second": "grove",
+        "tension": 61,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "cinder:haven",
+        "first": "cinder",
+        "second": "haven",
+        "tension": 23,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "cinder:ionia",
+        "first": "cinder",
+        "second": "ionia",
+        "tension": 64,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "cinder:jade",
+        "first": "cinder",
+        "second": "jade",
+        "tension": 66,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "dune:ember",
+        "first": "dune",
+        "second": "ember",
+        "tension": 59,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 20,
+        "delivered_value_minor": 400
+      },
+      {
+        "id": "dune:fjord",
+        "first": "dune",
+        "second": "fjord",
+        "tension": 4,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "dune:grove",
+        "first": "dune",
+        "second": "grove",
+        "tension": 71,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": "grove",
+        "proposal_kind": "trade",
+        "proposal_expires_tick": 65,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "dune:haven",
+        "first": "dune",
+        "second": "haven",
+        "tension": 52,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "dune:ionia",
+        "first": "dune",
+        "second": "ionia",
+        "tension": 61,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 200
+      },
+      {
+        "id": "dune:jade",
+        "first": "dune",
+        "second": "jade",
+        "tension": 72,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "ember:fjord",
+        "first": "ember",
+        "second": "fjord",
+        "tension": 39,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "ember:grove",
+        "first": "ember",
+        "second": "grove",
+        "tension": 56,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 1500
+      },
+      {
+        "id": "ember:haven",
+        "first": "ember",
+        "second": "haven",
+        "tension": 40,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 1500
+      },
+      {
+        "id": "ember:ionia",
+        "first": "ember",
+        "second": "ionia",
+        "tension": 41,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "ember:jade",
+        "first": "ember",
+        "second": "jade",
+        "tension": 47,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "fjord:grove",
+        "first": "fjord",
+        "second": "grove",
+        "tension": 33,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "fjord:haven",
+        "first": "fjord",
+        "second": "haven",
+        "tension": 36,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 20,
+        "delivered_value_minor": 1700
+      },
+      {
+        "id": "fjord:ionia",
+        "first": "fjord",
+        "second": "ionia",
+        "tension": 51,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "fjord:jade",
+        "first": "fjord",
+        "second": "jade",
+        "tension": 50,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "grove:haven",
+        "first": "grove",
+        "second": "haven",
+        "tension": 57,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 10,
+        "delivered_value_minor": 400
+      },
+      {
+        "id": "grove:ionia",
+        "first": "grove",
+        "second": "ionia",
+        "tension": 77,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "grove:jade",
+        "first": "grove",
+        "second": "jade",
+        "tension": 34,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "haven:ionia",
+        "first": "haven",
+        "second": "ionia",
+        "tension": 22,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "haven:jade",
+        "first": "haven",
+        "second": "jade",
+        "tension": 27,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 0,
+        "delivered_value_minor": 0
+      },
+      {
+        "id": "ionia:jade",
+        "first": "ionia",
+        "second": "jade",
+        "tension": 47,
+        "trade_agreement": false,
+        "at_war": false,
+        "proposed_by": null,
+        "proposal_kind": null,
+        "proposal_expires_tick": 0,
+        "delivered_units": 20,
+        "delivered_value_minor": 320
+      }
+    ],
+    "policies": [],
+    "shipments": [
+      {
+        "id": "cargo_81",
+        "buyer_id": "aster_tools",
+        "seller_id": "beryl_tools",
+        "good": "tools",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "aster_city",
+        "destination_id": "aster_city",
+        "plan": {
+          "edge_ids": [
+            "beryl_to_aster"
+          ],
+          "travel_ticks": 3,
+          "cost_minor": 74,
+          "objective": "cheapest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 6,
+        "deadline_tick": 66,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e81"
+      },
+      {
+        "id": "cargo_85",
+        "buyer_id": "aster_medicine",
+        "seller_id": "cinder_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "aster_city",
+        "destination_id": "aster_city",
+        "plan": {
+          "edge_ids": [
+            "cinder_to_beryl",
+            "beryl_to_aster"
+          ],
+          "travel_ticks": 6,
+          "cost_minor": 173,
+          "objective": "fastest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 6,
+        "deadline_tick": 66,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e85"
+      },
+      {
+        "id": "cargo_88",
+        "buyer_id": "aster_food",
+        "seller_id": "dune_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "aster_city",
+        "destination_id": "aster_city",
+        "plan": {
+          "edge_ids": [
+            "dune_to_ionia",
+            "ionia_to_jade",
+            "jade_to_aster"
+          ],
+          "travel_ticks": 8,
+          "cost_minor": 221,
+          "objective": "fastest"
+        },
+        "edge_index": 3,
+        "edge_remaining_ticks": 0,
+        "created_tick": 6,
+        "deadline_tick": 66,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e88"
+      },
+      {
+        "id": "cargo_93",
+        "buyer_id": "cinder_energy",
+        "seller_id": "ember_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "cinder_city",
+        "destination_id": "cinder_city",
+        "plan": {
+          "edge_ids": [
+            "ember_to_dune",
+            "dune_to_cinder"
+          ],
+          "travel_ticks": 6,
+          "cost_minor": 142,
+          "objective": "cheapest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 7,
+        "deadline_tick": 67,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e93"
+      },
+      {
+        "id": "cargo_97",
+        "buyer_id": "beryl_medicine",
+        "seller_id": "dune_medicine",
+        "good": "medicine",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "beryl_city",
+        "destination_id": "beryl_city",
+        "plan": {
+          "edge_ids": [
+            "dune_to_cinder",
+            "cinder_to_beryl"
+          ],
+          "travel_ticks": 5,
+          "cost_minor": 135,
+          "objective": "fastest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 7,
+        "deadline_tick": 67,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e97"
+      },
+      {
+        "id": "cargo_100",
+        "buyer_id": "beryl_food",
+        "seller_id": "cinder_food",
+        "good": "food",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "beryl_city",
+        "destination_id": "beryl_city",
+        "plan": {
+          "edge_ids": [
+            "cinder_to_beryl"
+          ],
+          "travel_ticks": 3,
+          "cost_minor": 99,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 7,
+        "deadline_tick": 67,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e100"
+      },
+      {
+        "id": "cargo_102",
+        "buyer_id": "dune_tools",
+        "seller_id": "cinder_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "dune_city",
+        "destination_id": "dune_city",
+        "plan": {
+          "edge_ids": [
+            "cinder_to_dune"
+          ],
+          "travel_ticks": 2,
+          "cost_minor": 36,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 8,
+        "deadline_tick": 68,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e102"
+      },
+      {
+        "id": "cargo_104",
+        "buyer_id": "dune_medicine",
+        "seller_id": "aster_medicine",
+        "good": "medicine",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "dune_city",
+        "destination_id": "dune_city",
+        "plan": {
+          "edge_ids": [
+            "aster_to_fjord",
+            "fjord_to_dune"
+          ],
+          "travel_ticks": 6,
+          "cost_minor": 160,
+          "objective": "cheapest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 8,
+        "deadline_tick": 68,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e104"
+      },
+      {
+        "id": "cargo_108",
+        "buyer_id": "dune_food",
+        "seller_id": "beryl_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "dune_city",
+        "destination_id": "dune_city",
+        "plan": {
+          "edge_ids": [
+            "beryl_to_grove",
+            "grove_to_dune"
+          ],
+          "travel_ticks": 5,
+          "cost_minor": 112,
+          "objective": "cheapest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 8,
+        "deadline_tick": 68,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e108"
+      },
+      {
+        "id": "cargo_110",
+        "buyer_id": "dune_energy",
+        "seller_id": "ember_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "dune_city",
+        "destination_id": "dune_city",
+        "plan": {
+          "edge_ids": [
+            "ember_to_dune"
+          ],
+          "travel_ticks": 4,
+          "cost_minor": 106,
+          "objective": "cheapest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 8,
+        "deadline_tick": 68,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e110"
+      },
+      {
+        "id": "cargo_114",
+        "buyer_id": "cinder_medicine",
+        "seller_id": "beryl_medicine",
+        "good": "medicine",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "cinder_city",
+        "destination_id": "cinder_city",
+        "plan": {
+          "edge_ids": [
+            "beryl_to_cinder"
+          ],
+          "travel_ticks": 3,
+          "cost_minor": 99,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 8,
+        "deadline_tick": 68,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e114"
+      },
+      {
+        "id": "cargo_120",
+        "buyer_id": "ember_medicine",
+        "seller_id": "grove_medicine",
+        "good": "medicine",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "ember_city",
+        "destination_id": "ember_city",
+        "plan": {
+          "edge_ids": [
+            "grove_to_ionia",
+            "ionia_to_ember"
+          ],
+          "travel_ticks": 4,
+          "cost_minor": 122,
+          "objective": "cheapest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 9,
+        "deadline_tick": 69,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e120"
+      },
+      {
+        "id": "cargo_124",
+        "buyer_id": "ember_food",
+        "seller_id": "dune_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "ember_city",
+        "destination_id": "ember_city",
+        "plan": {
+          "edge_ids": [
+            "dune_to_ember"
+          ],
+          "travel_ticks": 4,
+          "cost_minor": 106,
+          "objective": "cheapest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 9,
+        "deadline_tick": 69,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e124"
+      },
+      {
+        "id": "cargo_126",
+        "buyer_id": "ember_energy",
+        "seller_id": "beryl_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "ember_city",
+        "destination_id": "ember_city",
+        "plan": {
+          "edge_ids": [
+            "beryl_to_grove",
+            "grove_to_ionia",
+            "ionia_to_ember"
+          ],
+          "travel_ticks": 7,
+          "cost_minor": 205,
+          "objective": "cheapest"
+        },
+        "edge_index": 3,
+        "edge_remaining_ticks": 0,
+        "created_tick": 9,
+        "deadline_tick": 69,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e126"
+      },
+      {
+        "id": "cargo_146",
+        "buyer_id": "fjord_tools",
+        "seller_id": "cinder_tools",
+        "good": "tools",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "fjord_city",
+        "destination_id": "fjord_city",
+        "plan": {
+          "edge_ids": [
+            "cinder_to_fjord"
+          ],
+          "travel_ticks": 2,
+          "cost_minor": 39,
+          "objective": "cheapest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 10,
+        "deadline_tick": 70,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e146"
+      },
+      {
+        "id": "cargo_148",
+        "buyer_id": "fjord_medicine",
+        "seller_id": "haven_medicine",
+        "good": "medicine",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "fjord_city",
+        "destination_id": "fjord_city",
+        "plan": {
+          "edge_ids": [
+            "haven_to_grove",
+            "grove_to_fjord"
+          ],
+          "travel_ticks": 6,
+          "cost_minor": 164,
+          "objective": "fastest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 10,
+        "deadline_tick": 70,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e148"
+      },
+      {
+        "id": "cargo_154",
+        "buyer_id": "haven_tools",
+        "seller_id": "fjord_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "haven_city",
+        "destination_id": "haven_city",
+        "plan": {
+          "edge_ids": [
+            "fjord_to_grove",
+            "grove_to_haven"
+          ],
+          "travel_ticks": 6,
+          "cost_minor": 164,
+          "objective": "fastest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 11,
+        "deadline_tick": 71,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e154"
+      },
+      {
+        "id": "cargo_156",
+        "buyer_id": "haven_medicine",
+        "seller_id": "ember_medicine",
+        "good": "medicine",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "haven_city",
+        "destination_id": "haven_city",
+        "plan": {
+          "edge_ids": [
+            "ember_to_haven"
+          ],
+          "travel_ticks": 2,
+          "cost_minor": 57,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 11,
+        "deadline_tick": 71,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e156"
+      },
+      {
+        "id": "cargo_159",
+        "buyer_id": "haven_food",
+        "seller_id": "grove_food",
+        "good": "food",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "haven_city",
+        "destination_id": "haven_city",
+        "plan": {
+          "edge_ids": [
+            "grove_to_haven"
+          ],
+          "travel_ticks": 3,
+          "cost_minor": 89,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 11,
+        "deadline_tick": 71,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e159"
+      },
+      {
+        "id": "cargo_171",
+        "buyer_id": "ionia_tools",
+        "seller_id": "beryl_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "ionia_city",
+        "destination_id": "ionia_city",
+        "plan": {
+          "edge_ids": [
+            "beryl_to_grove",
+            "grove_to_ionia"
+          ],
+          "travel_ticks": 5,
+          "cost_minor": 140,
+          "objective": "fastest"
+        },
+        "edge_index": 2,
+        "edge_remaining_ticks": 0,
+        "created_tick": 12,
+        "deadline_tick": 72,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e171"
+      },
+      {
+        "id": "cargo_173",
+        "buyer_id": "ionia_medicine",
+        "seller_id": "dune_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "ionia_city",
+        "destination_id": "ionia_city",
+        "plan": {
+          "edge_ids": [
+            "dune_to_ionia"
+          ],
+          "travel_ticks": 2,
+          "cost_minor": 41,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 12,
+        "deadline_tick": 72,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e173"
+      },
+      {
+        "id": "cargo_184",
+        "buyer_id": "jade_tools",
+        "seller_id": "aster_tools",
+        "good": "tools",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "jade_city",
+        "destination_id": "jade_city",
+        "plan": {
+          "edge_ids": [
+            "aster_to_jade"
+          ],
+          "travel_ticks": 4,
+          "cost_minor": 115,
+          "objective": "cheapest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 13,
+        "deadline_tick": 73,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e184"
+      },
+      {
+        "id": "cargo_186",
+        "buyer_id": "jade_medicine",
+        "seller_id": "ionia_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "jade_city",
+        "destination_id": "jade_city",
+        "plan": {
+          "edge_ids": [
+            "ionia_to_jade"
+          ],
+          "travel_ticks": 2,
+          "cost_minor": 65,
+          "objective": "cheapest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 13,
+        "deadline_tick": 73,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e186"
+      },
+      {
+        "id": "cargo_190",
+        "buyer_id": "jade_food",
+        "seller_id": "ionia_energy",
+        "good": "energy",
+        "quantity": 10,
+        "escrow_minor": 0,
+        "location_id": "jade_city",
+        "destination_id": "jade_city",
+        "plan": {
+          "edge_ids": [
+            "ionia_to_jade"
+          ],
+          "travel_ticks": 2,
+          "cost_minor": 65,
+          "objective": "fastest"
+        },
+        "edge_index": 1,
+        "edge_remaining_ticks": 0,
+        "created_tick": 13,
+        "deadline_tick": 73,
+        "status": "delivered",
+        "cause_id": "world_20261010_143113_522d2b:e190"
+      }
+    ],
+    "loans": [],
+    "agents_summary": {
+      "spawned": 100,
+      "by_role": {
+        "government": 10,
+        "bank": 10,
+        "media": 10,
+        "business": 40,
+        "citizen": 30
+      },
+      "unique_model_deciding": 0
+    },
+    "agents": [
+      {
+        "id": "aster_government",
+        "role": "government",
+        "country_id": "aster",
+        "occupation": "government",
+        "cash_minor": 21210,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.347533+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.347533+00:00"
+      },
+      {
+        "id": "aster_bank",
+        "role": "bank",
+        "country_id": "aster",
+        "occupation": "bank",
+        "cash_minor": 20468,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.491217+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.491217+00:00"
+      },
+      {
+        "id": "aster_journalist",
+        "role": "media",
+        "country_id": "aster",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.547926+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.547926+00:00"
+      },
+      {
+        "id": "aster_food",
+        "role": "business",
+        "country_id": "aster",
+        "occupation": "food",
+        "cash_minor": 21199,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.547926+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.547926+00:00"
+      },
+      {
+        "id": "aster_energy",
+        "role": "business",
+        "country_id": "aster",
+        "occupation": "energy",
+        "cash_minor": 16760,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.527022+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.527022+00:00"
+      },
+      {
+        "id": "aster_tools",
+        "role": "business",
+        "country_id": "aster",
+        "occupation": "tools",
+        "cash_minor": 19876,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.547926+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.547926+00:00"
+      },
+      {
+        "id": "aster_medicine",
+        "role": "business",
+        "country_id": "aster",
+        "occupation": "medicine",
+        "cash_minor": 21117,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.547926+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.547926+00:00"
+      },
+      {
+        "id": "beryl_government",
+        "role": "government",
+        "country_id": "beryl",
+        "occupation": "government",
+        "cash_minor": 46226,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.347533+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.347533+00:00"
+      },
+      {
+        "id": "beryl_bank",
+        "role": "bank",
+        "country_id": "beryl",
+        "occupation": "bank",
+        "cash_minor": 20234,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.547926+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.547926+00:00"
+      },
+      {
+        "id": "beryl_journalist",
+        "role": "media",
+        "country_id": "beryl",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "beryl_food",
+        "role": "business",
+        "country_id": "beryl",
+        "occupation": "food",
+        "cash_minor": 14220,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "beryl_energy",
+        "role": "business",
+        "country_id": "beryl",
+        "occupation": "energy",
+        "cash_minor": 13470,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.547926+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.547926+00:00"
+      },
+      {
+        "id": "beryl_tools",
+        "role": "business",
+        "country_id": "beryl",
+        "occupation": "tools",
+        "cash_minor": 12345,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "beryl_medicine",
+        "role": "business",
+        "country_id": "beryl",
+        "occupation": "medicine",
+        "cash_minor": 13381,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "cinder_government",
+        "role": "government",
+        "country_id": "cinder",
+        "occupation": "government",
+        "cash_minor": 62618,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.347533+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.347533+00:00"
+      },
+      {
+        "id": "cinder_bank",
+        "role": "bank",
+        "country_id": "cinder",
+        "occupation": "bank",
+        "cash_minor": 20241,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "cinder_journalist",
+        "role": "media",
+        "country_id": "cinder",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "cinder_food",
+        "role": "business",
+        "country_id": "cinder",
+        "occupation": "food",
+        "cash_minor": 8862,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "cinder_energy",
+        "role": "business",
+        "country_id": "cinder",
+        "occupation": "energy",
+        "cash_minor": 9311,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.568233+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.568233+00:00"
+      },
+      {
+        "id": "cinder_tools",
+        "role": "business",
+        "country_id": "cinder",
+        "occupation": "tools",
+        "cash_minor": 7947,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "cinder_medicine",
+        "role": "business",
+        "country_id": "cinder",
+        "occupation": "medicine",
+        "cash_minor": 8142,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "dune_government",
+        "role": "government",
+        "country_id": "dune",
+        "occupation": "government",
+        "cash_minor": 18829,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.367575+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.367575+00:00"
+      },
+      {
+        "id": "dune_bank",
+        "role": "bank",
+        "country_id": "dune",
+        "occupation": "bank",
+        "cash_minor": 20414,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "dune_journalist",
+        "role": "media",
+        "country_id": "dune",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "dune_food",
+        "role": "business",
+        "country_id": "dune",
+        "occupation": "food",
+        "cash_minor": 20458,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "dune_energy",
+        "role": "business",
+        "country_id": "dune",
+        "occupation": "energy",
+        "cash_minor": 20604,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "dune_tools",
+        "role": "business",
+        "country_id": "dune",
+        "occupation": "tools",
+        "cash_minor": 20134,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "dune_medicine",
+        "role": "business",
+        "country_id": "dune",
+        "occupation": "medicine",
+        "cash_minor": 19765,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.58901+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.58901+00:00"
+      },
+      {
+        "id": "ember_government",
+        "role": "government",
+        "country_id": "ember",
+        "occupation": "government",
+        "cash_minor": 34253,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.367575+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.367575+00:00"
+      },
+      {
+        "id": "ember_bank",
+        "role": "bank",
+        "country_id": "ember",
+        "occupation": "bank",
+        "cash_minor": 20433,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "ember_journalist",
+        "role": "media",
+        "country_id": "ember",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "ember_food",
+        "role": "business",
+        "country_id": "ember",
+        "occupation": "food",
+        "cash_minor": 16020,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "ember_energy",
+        "role": "business",
+        "country_id": "ember",
+        "occupation": "energy",
+        "cash_minor": 16769,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "ember_tools",
+        "role": "business",
+        "country_id": "ember",
+        "occupation": "tools",
+        "cash_minor": 16297,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "ember_medicine",
+        "role": "business",
+        "country_id": "ember",
+        "occupation": "medicine",
+        "cash_minor": 16280,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "fjord_government",
+        "role": "government",
+        "country_id": "fjord",
+        "occupation": "government",
+        "cash_minor": 21469,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.367575+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.367575+00:00"
+      },
+      {
+        "id": "fjord_bank",
+        "role": "bank",
+        "country_id": "fjord",
+        "occupation": "bank",
+        "cash_minor": 20203,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "fjord_journalist",
+        "role": "media",
+        "country_id": "fjord",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "fjord_food",
+        "role": "business",
+        "country_id": "fjord",
+        "occupation": "food",
+        "cash_minor": 19900,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "fjord_energy",
+        "role": "business",
+        "country_id": "fjord",
+        "occupation": "energy",
+        "cash_minor": 18740,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.609405+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.609405+00:00"
+      },
+      {
+        "id": "fjord_tools",
+        "role": "business",
+        "country_id": "fjord",
+        "occupation": "tools",
+        "cash_minor": 17751,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "fjord_medicine",
+        "role": "business",
+        "country_id": "fjord",
+        "occupation": "medicine",
+        "cash_minor": 18261,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "grove_government",
+        "role": "government",
+        "country_id": "grove",
+        "occupation": "government",
+        "cash_minor": 46576,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.390039+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.390039+00:00"
+      },
+      {
+        "id": "grove_bank",
+        "role": "bank",
+        "country_id": "grove",
+        "occupation": "bank",
+        "cash_minor": 20000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "grove_journalist",
+        "role": "media",
+        "country_id": "grove",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "grove_food",
+        "role": "business",
+        "country_id": "grove",
+        "occupation": "food",
+        "cash_minor": 12398,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "grove_energy",
+        "role": "business",
+        "country_id": "grove",
+        "occupation": "energy",
+        "cash_minor": 13243,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.629597+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.629597+00:00"
+      },
+      {
+        "id": "grove_tools",
+        "role": "business",
+        "country_id": "grove",
+        "occupation": "tools",
+        "cash_minor": 12491,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "grove_medicine",
+        "role": "business",
+        "country_id": "grove",
+        "occupation": "medicine",
+        "cash_minor": 14576,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "haven_government",
+        "role": "government",
+        "country_id": "haven",
+        "occupation": "government",
+        "cash_minor": 62084,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.390039+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.390039+00:00"
+      },
+      {
+        "id": "haven_bank",
+        "role": "bank",
+        "country_id": "haven",
+        "occupation": "bank",
+        "cash_minor": 20310,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "haven_journalist",
+        "role": "media",
+        "country_id": "haven",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "haven_food",
+        "role": "business",
+        "country_id": "haven",
+        "occupation": "food",
+        "cash_minor": 9486,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "haven_energy",
+        "role": "business",
+        "country_id": "haven",
+        "occupation": "energy",
+        "cash_minor": 8973,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "haven_tools",
+        "role": "business",
+        "country_id": "haven",
+        "occupation": "tools",
+        "cash_minor": 6544,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "haven_medicine",
+        "role": "business",
+        "country_id": "haven",
+        "occupation": "medicine",
+        "cash_minor": 9086,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.653271+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.653271+00:00"
+      },
+      {
+        "id": "ionia_government",
+        "role": "government",
+        "country_id": "ionia",
+        "occupation": "government",
+        "cash_minor": 20132,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.390039+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.390039+00:00"
+      },
+      {
+        "id": "ionia_bank",
+        "role": "bank",
+        "country_id": "ionia",
+        "occupation": "bank",
+        "cash_minor": 20181,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "ionia_journalist",
+        "role": "media",
+        "country_id": "ionia",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "ionia_food",
+        "role": "business",
+        "country_id": "ionia",
+        "occupation": "food",
+        "cash_minor": 20800,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "ionia_energy",
+        "role": "business",
+        "country_id": "ionia",
+        "occupation": "energy",
+        "cash_minor": 20612,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "ionia_tools",
+        "role": "business",
+        "country_id": "ionia",
+        "occupation": "tools",
+        "cash_minor": 18530,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "ionia_medicine",
+        "role": "business",
+        "country_id": "ionia",
+        "occupation": "medicine",
+        "cash_minor": 19749,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "jade_government",
+        "role": "government",
+        "country_id": "jade",
+        "occupation": "government",
+        "cash_minor": 34341,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.491217+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.491217+00:00"
+      },
+      {
+        "id": "jade_bank",
+        "role": "bank",
+        "country_id": "jade",
+        "occupation": "bank",
+        "cash_minor": 20245,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "jade_journalist",
+        "role": "media",
+        "country_id": "jade",
+        "occupation": "journalist",
+        "cash_minor": 10000,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.69396+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.69396+00:00"
+      },
+      {
+        "id": "jade_food",
+        "role": "business",
+        "country_id": "jade",
+        "occupation": "food",
+        "cash_minor": 16696,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.69396+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.69396+00:00"
+      },
+      {
+        "id": "jade_energy",
+        "role": "business",
+        "country_id": "jade",
+        "occupation": "energy",
+        "cash_minor": 15099,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.673501+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.673501+00:00"
+      },
+      {
+        "id": "jade_tools",
+        "role": "business",
+        "country_id": "jade",
+        "occupation": "tools",
+        "cash_minor": 14371,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.69396+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.69396+00:00"
+      },
+      {
+        "id": "jade_medicine",
+        "role": "business",
+        "country_id": "jade",
+        "occupation": "medicine",
+        "cash_minor": 16246,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.69396+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:33:13.69396+00:00"
+      }
+    ],
+    "metrics": {
+      "model_decision_count": 0,
+      "fallback_decision_count": 0,
+      "rejected_decision_count": 1,
+      "rule_decision_count": 99,
+      "cash_minor": 1360000,
+      "escrow_minor": 0,
+      "initial_cash_minor": 1360000,
+      "unmet_needs": 0,
+      "delivered_shipments": 24,
+      "failed_shipments": 0,
+      "initial_goods": {
+        "food": 480,
+        "energy": 660,
+        "tools": 150,
+        "medicine": 120
+      },
+      "produced_goods": {
+        "food": 838,
+        "energy": 789,
+        "tools": 344,
+        "medicine": 0
+      },
+      "consumed_goods": {
+        "food": 240,
+        "energy": 418,
+        "tools": 0,
+        "medicine": 0
+      },
+      "lost_goods": {
+        "food": 0,
+        "energy": 0,
+        "tools": 0,
+        "medicine": 0
+      },
+      "held_goods": {
+        "food": 1078,
+        "energy": 1031,
+        "tools": 494,
+        "medicine": 120
+      },
+      "started_at": "2026-10-10T14:31:13.268427+00:00",
+      "coverage_completed_at": null,
+      "elapsed_seconds": 1.135252,
+      "latency_p95_ms": 0
+    },
+    "compute": [
+      {
+        "id": "spark_a",
+        "status": "disabled",
+        "worker_capacity": 8,
+        "pending_decisions": 0,
+        "due_agents": 0,
+        "oldest_wait_ticks": 0,
+        "oldest_eligible_wait_seconds": 0,
+        "pending_by_role": {},
+        "by_role": [
+          {
+            "role": "bank",
+            "population": 10,
+            "unique_model_deciding": 0,
+            "model_decision_count": 0,
+            "never_attempted": 0,
+            "eligible_agents": 0,
+            "pending_decisions": 0,
+            "model_decision_age_p95_seconds": null,
+            "model_decision_age_max_seconds": null
+          },
+          {
+            "role": "business",
+            "population": 40,
+            "unique_model_deciding": 0,
+            "model_decision_count": 0,
+            "never_attempted": 0,
+            "eligible_agents": 0,
+            "pending_decisions": 0,
+            "model_decision_age_p95_seconds": null,
+            "model_decision_age_max_seconds": null
+          },
+          {
+            "role": "citizen",
+            "population": 30,
+            "unique_model_deciding": 0,
+            "model_decision_count": 0,
+            "never_attempted": 0,
+            "eligible_agents": 0,
+            "pending_decisions": 0,
+            "model_decision_age_p95_seconds": null,
+            "model_decision_age_max_seconds": null
+          },
+          {
+            "role": "government",
+            "population": 10,
+            "unique_model_deciding": 0,
+            "model_decision_count": 0,
+            "never_attempted": 0,
+            "eligible_agents": 0,
+            "pending_decisions": 0,
+            "model_decision_age_p95_seconds": null,
+            "model_decision_age_max_seconds": null
+          },
+          {
+            "role": "media",
+            "population": 10,
+            "unique_model_deciding": 0,
+            "model_decision_count": 0,
+            "never_attempted": 0,
+            "eligible_agents": 0,
+            "pending_decisions": 0,
+            "model_decision_age_p95_seconds": null,
+            "model_decision_age_max_seconds": null
+          }
+        ],
+        "average_model_decisions_per_second": 0,
+        "max_pending_observed": 8,
+        "institution_interval_seconds": 120,
+        "resident_interval_seconds": 600,
+        "tick_interval_milliseconds": 20
+      }
+    ]
+  },
+  "agent_page": {
+    "total": 5,
+    "offset": 0,
+    "limit": 1,
+    "revision": 10,
+    "seq": 266,
+    "updated_at": "2026-10-10T14:31:14.403679+00:00",
+    "agents": [
+      {
+        "id": "aster_citizen_00001",
+        "role": "citizen",
+        "country_id": "aster",
+        "occupation": "farmer",
+        "cash_minor": 2154,
+        "model_decisions": 0,
+        "last_attempt_at": "2026-10-10T14:31:13.347533+00:00",
+        "last_model_decision_at": null,
+        "model_decision_age_seconds": null,
+        "next_attempt_due_at": "2026-10-10T14:41:13.347533+00:00"
+      }
+    ]
+  },
+  "agent_detail": {
+    "agent": {
+      "id": "aster_citizen_00001",
+      "role": "citizen",
+      "country_id": "aster",
+      "location_id": "aster_city",
+      "goal": "Work as a farmer, meet household needs, preserve savings and influence leadership according to your values.",
+      "traits": {
+        "risk_tolerance": 0.56,
+        "patience": 0.75,
+        "generosity": 0.38,
+        "trust": 0.07
+      },
+      "cash_minor": 2154,
+      "version": 1,
+      "inventory": {
+        "food": 7,
+        "energy": 7,
+        "tools": 0,
+        "medicine": 0
+      },
+      "memories": [
+        "T1: hold: Deterministic rule choice; no model inference."
+      ],
+      "occupation": "farmer",
+      "employer_id": "aster_food",
+      "specialty": null,
+      "work_effort": 1,
+      "target_stock": 8,
+      "wellbeing": 100,
+      "supports_leadership": true,
+      "last_attempt_tick": 1,
+      "last_decision_tick": 1,
+      "model_decisions": 0,
+      "last_request_id": "05e64b97638b414384e8caab4e2d8f36",
+      "price_minor": 0,
+      "last_attempt_at": "2026-10-10T14:31:13.347533+00:00",
+      "last_model_decision_at": null,
+      "last_decision": {
+        "job": {
+          "request_id": "05e64b97638b414384e8caab4e2d8f36",
+          "run_id": "world_20261010_143113_522d2b",
+          "agent_id": "aster_citizen_00001",
+          "observation_tick": 1,
+          "deadline": "2026-10-10T14:32:18.347533+00:00",
+          "dependencies": {
+            "aster_citizen_00001": 0
+          },
+          "evidence_ids": [
+            "country:aster:tick1"
+          ],
+          "observation": {
+            "world_stage": 2,
+            "tick": 1,
+            "self": {
+              "id": "aster_citizen_00001",
+              "role": "citizen",
+              "occupation": "farmer",
+              "specialty": null,
+              "goal": "Work as a farmer, meet household needs, preserve savings and influence leadership according to your values.",
+              "traits": {
+                "risk_tolerance": 0.56,
+                "patience": 0.75,
+                "generosity": 0.38,
+                "trust": 0.07
+              },
+              "cash_minor": 2000,
+              "inventory": {
+                "food": 4,
+                "energy": 4,
+                "tools": 0,
+                "medicine": 0
+              },
+              "work_effort": 1,
+              "target_stock": 8,
+              "wellbeing": 100,
+              "supports_leadership": true,
+              "price_minor": 0,
+              "memories": []
+            },
+            "country": {
+              "id": "aster",
+              "government": "Market democracy",
+              "policy_delay": 3,
+              "public_ownership_percent": 0,
+              "tax_basis_points": 1500,
+              "welfare_minor": 0,
+              "service_budget_per_resident_minor": 10,
+              "approval": 1,
+              "population": 10,
+              "stocks": {
+                "food": 36,
+                "energy": 54,
+                "tools": 15,
+                "medicine": 12
+              },
+              "unmet_needs_last_cycle": 0,
+              "treasury_minor": 20000,
+              "productivity": 1,
+              "crisis_good": null,
+              "crisis_until_tick": 0,
+              "pending_policy": null,
+              "government_authority_available": true
+            },
+            "neighbors": [
+              {
+                "country_id": "jade",
+                "tension": 77,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              },
+              {
+                "country_id": "cinder",
+                "tension": 65,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              },
+              {
+                "country_id": "ionia",
+                "tension": 46,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              },
+              {
+                "country_id": "dune",
+                "tension": 29,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              }
+            ],
+            "import_offers": [],
+            "requested_loans": [],
+            "public_events": [],
+            "note": "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Extra work raises pay but costs wellbeing; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
+          },
+          "candidates": []
+        },
+        "result": {
+          "request_id": "05e64b97638b414384e8caab4e2d8f36",
+          "action": {
+            "action_type": "hold",
+            "params": {},
+            "reason": "Deterministic rule choice; no model inference.",
+            "evidence_ids": []
+          },
+          "source": "rule",
+          "model": "none",
+          "latency_ms": 0,
+          "error": null
+        },
+        "accepted": true,
+        "code": "OK"
+      }
+    },
+    "revision": 10,
+    "seq": 266,
+    "updated_at": "2026-10-10T14:31:14.403679+00:00",
+    "model_decision_age_seconds": null,
+    "last_decision": {
+      "job": {
+        "request_id": "05e64b97638b414384e8caab4e2d8f36",
+        "run_id": "world_20261010_143113_522d2b",
+        "agent_id": "aster_citizen_00001",
+        "observation_tick": 1,
+        "deadline": "2026-10-10T14:32:18.347533+00:00",
+        "dependencies": {
+          "aster_citizen_00001": 0
+        },
+        "evidence_ids": [
+          "country:aster:tick1"
+        ],
+        "observation": {
+          "world_stage": 2,
+          "tick": 1,
+          "self": {
+            "id": "aster_citizen_00001",
+            "role": "citizen",
+            "occupation": "farmer",
+            "specialty": null,
+            "goal": "Work as a farmer, meet household needs, preserve savings and influence leadership according to your values.",
+            "traits": {
+              "risk_tolerance": 0.56,
+              "patience": 0.75,
+              "generosity": 0.38,
+              "trust": 0.07
+            },
+            "cash_minor": 2000,
+            "inventory": {
+              "food": 4,
+              "energy": 4,
+              "tools": 0,
+              "medicine": 0
+            },
+            "work_effort": 1,
+            "target_stock": 8,
+            "wellbeing": 100,
+            "supports_leadership": true,
+            "price_minor": 0,
+            "memories": []
+          },
+          "country": {
+            "id": "aster",
+            "government": "Market democracy",
+            "policy_delay": 3,
+            "public_ownership_percent": 0,
+            "tax_basis_points": 1500,
+            "welfare_minor": 0,
+            "service_budget_per_resident_minor": 10,
+            "approval": 1,
+            "population": 10,
+            "stocks": {
+              "food": 36,
+              "energy": 54,
+              "tools": 15,
+              "medicine": 12
+            },
+            "unmet_needs_last_cycle": 0,
+            "treasury_minor": 20000,
+            "productivity": 1,
+            "crisis_good": null,
+            "crisis_until_tick": 0,
+            "pending_policy": null,
+            "government_authority_available": true
+          },
+          "neighbors": [
+            {
+              "country_id": "jade",
+              "tension": 77,
+              "trade_agreement": false,
+              "at_war": false,
+              "proposed_by": null,
+              "proposal_kind": null
+            },
+            {
+              "country_id": "cinder",
+              "tension": 65,
+              "trade_agreement": false,
+              "at_war": false,
+              "proposed_by": null,
+              "proposal_kind": null
+            },
+            {
+              "country_id": "ionia",
+              "tension": 46,
+              "trade_agreement": false,
+              "at_war": false,
+              "proposed_by": null,
+              "proposal_kind": null
+            },
+            {
+              "country_id": "dune",
+              "tension": 29,
+              "trade_agreement": false,
+              "at_war": false,
+              "proposed_by": null,
+              "proposal_kind": null
+            }
+          ],
+          "import_offers": [],
+          "requested_loans": [],
+          "public_events": [],
+          "note": "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Extra work raises pay but costs wellbeing; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
+        },
+        "candidates": []
+      },
+      "result": {
+        "request_id": "05e64b97638b414384e8caab4e2d8f36",
+        "action": {
+          "action_type": "hold",
+          "params": {},
+          "reason": "Deterministic rule choice; no model inference.",
+          "evidence_ids": []
+        },
+        "source": "rule",
+        "model": "none",
+        "latency_ms": 0,
+        "error": null
+      },
+      "accepted": true,
+      "code": "OK"
+    },
+    "decisions": [
+      {
+        "job": {
+          "request_id": "05e64b97638b414384e8caab4e2d8f36",
+          "run_id": "world_20261010_143113_522d2b",
+          "agent_id": "aster_citizen_00001",
+          "observation_tick": 1,
+          "deadline": "2026-10-10T14:32:18.347533+00:00",
+          "dependencies": {
+            "aster_citizen_00001": 0
+          },
+          "evidence_ids": [
+            "country:aster:tick1"
+          ],
+          "observation": {
+            "world_stage": 2,
+            "tick": 1,
+            "self": {
+              "id": "aster_citizen_00001",
+              "role": "citizen",
+              "occupation": "farmer",
+              "specialty": null,
+              "goal": "Work as a farmer, meet household needs, preserve savings and influence leadership according to your values.",
+              "traits": {
+                "risk_tolerance": 0.56,
+                "patience": 0.75,
+                "generosity": 0.38,
+                "trust": 0.07
+              },
+              "cash_minor": 2000,
+              "inventory": {
+                "food": 4,
+                "energy": 4,
+                "tools": 0,
+                "medicine": 0
+              },
+              "work_effort": 1,
+              "target_stock": 8,
+              "wellbeing": 100,
+              "supports_leadership": true,
+              "price_minor": 0,
+              "memories": []
+            },
+            "country": {
+              "id": "aster",
+              "government": "Market democracy",
+              "policy_delay": 3,
+              "public_ownership_percent": 0,
+              "tax_basis_points": 1500,
+              "welfare_minor": 0,
+              "service_budget_per_resident_minor": 10,
+              "approval": 1,
+              "population": 10,
+              "stocks": {
+                "food": 36,
+                "energy": 54,
+                "tools": 15,
+                "medicine": 12
+              },
+              "unmet_needs_last_cycle": 0,
+              "treasury_minor": 20000,
+              "productivity": 1,
+              "crisis_good": null,
+              "crisis_until_tick": 0,
+              "pending_policy": null,
+              "government_authority_available": true
+            },
+            "neighbors": [
+              {
+                "country_id": "jade",
+                "tension": 77,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              },
+              {
+                "country_id": "cinder",
+                "tension": 65,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              },
+              {
+                "country_id": "ionia",
+                "tension": 46,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              },
+              {
+                "country_id": "dune",
+                "tension": 29,
+                "trade_agreement": false,
+                "at_war": false,
+                "proposed_by": null,
+                "proposal_kind": null
+              }
+            ],
+            "import_offers": [],
+            "requested_loans": [],
+            "public_events": [],
+            "note": "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Extra work raises pay but costs wellbeing; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
+          },
+          "candidates": []
+        },
+        "result": {
+          "request_id": "05e64b97638b414384e8caab4e2d8f36",
+          "action": {
+            "action_type": "hold",
+            "params": {},
+            "reason": "Deterministic rule choice; no model inference.",
+            "evidence_ids": []
+          },
+          "source": "rule",
+          "model": "none",
+          "latency_ms": 0,
+          "error": null
+        },
+        "accepted": true,
+        "code": "OK"
+      }
+    ],
+    "observer_only": true
+  }
+}

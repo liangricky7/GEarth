@@ -3,7 +3,9 @@ using Faultline.Api;
 using Faultline.Core;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls("http://127.0.0.1:5080");
+var port = int.TryParse(Environment.GetEnvironmentVariable("FAULTLINE_PORT"), out var configuredPort)
+    && configuredPort is >= 1024 and <= 65535 ? configuredPort : 5080;
+builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 
@@ -86,8 +88,10 @@ app.MapGet("/api/runs/{id}/agents", async (string id, string? country, string? r
         total = matches.Length,
         offset = start,
         limit = count,
-        agents = matches.Skip(start).Take(count).Select(agent => new
-        { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions, agent.LastAttemptAt, agent.LastModelDecisionAt })
+        world.Revision,
+        world.Seq,
+        world.UpdatedAt,
+        agents = matches.Skip(start).Take(count).Select(agent => SocietyProjection.AgentSummary(world, agent))
     });
 });
 
@@ -101,6 +105,10 @@ app.MapGet("/api/runs/{id}/agents/{agentId}", async (string id, string agentId,
     return Results.Ok(new
     {
         agent,
+        world.Revision,
+        world.Seq,
+        world.UpdatedAt,
+        model_decision_age_seconds = SocietyProjection.ModelDecisionAgeSeconds(world, agent),
         last_decision = agent.LastDecision,
         decisions = world.Decisions.Values.Where(item => item.Job.AgentId == agentId).TakeLast(20),
         observer_only = true

@@ -455,8 +455,12 @@ function showWorld(snapshot) {
     return;
   }
   const compute = snapshot.compute[0];
+  const residents = compute.by_role?.find((group) => group.role === "citizen");
+  const age = residents?.model_decision_age_p95_seconds;
+  const scheduling = compute.oldest_eligible_wait_seconds === undefined ? "" :
+    ` · oldest eligible wait ${Math.round(compute.oldest_eligible_wait_seconds)}s · resident AI age p95 ${age == null ? "unavailable" : `${Math.round(age)}s`}`;
   element("compute").textContent =
-    `One Spark · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions every ${compute.institution_interval_seconds}s, residents every ${compute.resident_interval_seconds}s`;
+    `${snapshot.run.mode === "LIVE" ? "One Spark" : "Rule simulation"} · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions every ${compute.institution_interval_seconds}s, residents every ${compute.resident_interval_seconds}s${scheduling}`;
   element("route-plan").textContent =
     `${snapshot.shipments.filter((cargo) => cargo.status === "in_transit").length} shipments in transit · ${snapshot.metrics.delivered_shipments} delivered · ${snapshot.metrics.failed_shipments} failed`;
   const nations = element("nations");

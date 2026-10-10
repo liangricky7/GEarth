@@ -130,6 +130,7 @@ public sealed class SocietyState
     public int PendingDecisions { get; set; }
     public int DueAgents { get; set; }
     public int OldestWaitTicks { get; set; }
+    public Dictionary<string, int> PendingByRole { get; set; } = new();
     public int InstitutionCadenceTicks { get; set; } = 30;
     public int CitizenCadenceTicks { get; set; } = 300;
     public int TickIntervalMilliseconds { get; set; } = 2000;

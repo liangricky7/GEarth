@@ -45,6 +45,8 @@ dotnet test Faultline.sln
 .venv/bin/python docs/faultline/validate_design.py
 ```
 
+For observer changes, run `node ops/check_observer.cjs` with Node.js and Chrome or Edge installed. This checks desktop/mobile rendering, saved-run switching with delayed responses, agent filters and pagination against the API fixture, without Spark or Neon. Screenshots are saved under `artifacts/local/`.
+
 After a completed live world run is being served:
 
 ```bash

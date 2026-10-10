@@ -8,6 +8,37 @@ let agentOffset = 0;
 let agentTotal = 0;
 let followCurrent = true;
 let notesKey = "";
+let selectionVersion = 0;
+
+function resetRunView() {
+  selectionVersion++;
+  selectedAgent = null;
+  agentOffset = 0;
+  agentTotal = 0;
+  lastSequence = 0;
+  displayedEvents = [];
+  notesKey = "";
+  for (const id of [
+    "map", "events", "nations", "shipments", "relations", "agents", "run-notes",
+  ])
+    element(id).replaceChildren();
+  for (const id of [
+    "tick", "population", "coverage", "decisions", "failures", "mode",
+    "event-count", "shipping-count", "agent-page",
+  ])
+    element(id).textContent = "—";
+  for (const id of ["compute", "route-plan", "notes-status", "updated"])
+    element(id).textContent = "Loading selected run…";
+  element("connection").textContent = "Loading selected run";
+  element("message").textContent = "";
+  element("world-details").hidden = true;
+  element("notes-download").removeAttribute("href");
+  element("previous-page").disabled = true;
+  element("next-page").disabled = true;
+  element("profile").replaceChildren(
+    textNode("p", "Select an agent to inspect its profile.", "muted"),
+  );
+}
 
 async function getJson(path) {
   const response = await fetch(path);
@@ -172,7 +203,7 @@ function showEvents(snapshot) {
       ),
     );
     const action = event.payload.action;
-    const title = action
+    const title = action?.action_type
       ? `${event.entity_ids[0]} → ${action.action_type}`
       : event.event_type.replaceAll("_", " ");
     item.append(
@@ -185,7 +216,7 @@ function showEvents(snapshot) {
       ),
     );
     const detail =
-      action?.params.text ??
+      action?.params?.text ??
       action?.reason ??
       (event.event_type === "border_changed"
         ? `${event.payload.edge_id}: ${event.payload.open ? "open" : "closed"}`
@@ -225,10 +256,13 @@ function showAgents(agents) {
 
 async function showProfile() {
   if (!selectedAgent) return;
+  const version = selectionVersion;
+  const agentId = selectedAgent;
   try {
     const data = await getJson(
       `/api/runs/${encodeURIComponent(selectedRun)}/agents/${encodeURIComponent(selectedAgent)}`,
     );
+    if (version !== selectionVersion || agentId !== selectedAgent) return;
     const profile = element("profile");
     profile.replaceChildren(
       textNode("h3", data.agent.id),
@@ -241,14 +275,11 @@ async function showProfile() {
       ),
     );
     if (data.agent.last_model_decision_at) {
-      const age = Math.max(
-        0,
-        (Date.now() - new Date(data.agent.last_model_decision_at)) / 1000,
-      );
+      const age = data.model_decision_age_seconds;
       profile.append(
         textNode(
           "p",
-          `Accepted model turns: ${data.agent.model_decisions} · last turn ${Math.round(age)}s ago`,
+          `Accepted model turns: ${data.agent.model_decisions} · decision age at checkpoint ${age == null ? "unavailable" : `${Math.round(age)}s`}`,
         ),
       );
     }
@@ -302,26 +333,26 @@ async function showProfile() {
       profile.append(details);
     }
   } catch (error) {
-    element("message").textContent = error.message;
+    if (version === selectionVersion && agentId === selectedAgent)
+      element("message").textContent = error.message;
   }
 }
 
 async function refresh() {
   if (busy) return;
   busy = true;
+  let version = selectionVersion;
   try {
     const health = await getJson("/api/health");
     const runs = await getJson("/api/runs");
+    if (version !== selectionVersion) return;
     if (
       followCurrent &&
       runs.current_run_id &&
       selectedRun !== runs.current_run_id
     ) {
       selectedRun = runs.current_run_id;
-      lastSequence = 0;
-      displayedEvents = [];
-      selectedAgent = null;
-      agentOffset = 0;
+      resetRunView();
     }
     selectedRun ??= runs.current_run_id ?? runs.run_ids[0];
     element("runs").replaceChildren();
@@ -335,17 +366,21 @@ async function refresh() {
       element("connection").textContent = "Initializing world";
       return;
     }
+    version = selectionVersion;
+    const runId = selectedRun;
 
     const snapshot = await getJson(
-      `/api/runs/${encodeURIComponent(selectedRun)}/snapshot`,
+      `/api/runs/${encodeURIComponent(runId)}/snapshot`,
     );
+    if (version !== selectionVersion) return;
     if (lastSequence === 0 && snapshot.run.stage === 2)
       lastSequence = Math.max(0, snapshot.seq - 200);
     let events;
     do {
       events = await getJson(
-        `/api/runs/${encodeURIComponent(selectedRun)}/events?after_seq=${lastSequence}&limit=500`,
+        `/api/runs/${encodeURIComponent(runId)}/events?after_seq=${lastSequence}&limit=500`,
       );
+      if (version !== selectionVersion) return;
       displayedEvents.push(...events);
       if (events.length) lastSequence = events.at(-1).seq;
     } while (events.length === 500);
@@ -359,40 +394,40 @@ async function refresh() {
     element("failures").textContent =
       `${snapshot.metrics.fallback_decision_count} / ${snapshot.metrics.rejected_decision_count}`;
     element("mode").textContent =
-      `${snapshot.run.mode} · ${snapshot.run.status.toUpperCase()}`;
+      `${snapshot.run.status !== "running" || runId !== runs.current_run_id ? "SAVED · " : ""}${snapshot.run.mode} · ${snapshot.run.status.toUpperCase()}`;
+    const paused = health.run_id === runId && health.status === "paused";
     element("connection").textContent =
-      health.status === "paused" ? "Paused" : `Connected · ${health.storage}`;
+      paused ? "Paused" : `Connected · ${health.storage}`;
     element("updated").textContent =
       `Last commit ${new Date(snapshot.updated_at).toLocaleTimeString()}`;
     const plan = snapshot.shipments[0]?.plan;
     element("route-plan").textContent = plan
       ? `${plan.objective} plan · ${plan.travel_ticks} travel ticks · ${(plan.cost_minor / 100).toFixed(2)} WLD`
       : "No active medicine route plan.";
-    element("message").textContent = health.error ?? "";
+    element("message").textContent = paused ? health.error ?? "" : "";
     drawMap(snapshot);
     showEvents(snapshot);
     showWorld(snapshot);
     await showRunNotes(snapshot, health);
+    if (version !== selectionVersion) return;
     await refreshAgents(snapshot);
+    if (version !== selectionVersion) return;
     await showProfile();
   } catch (error) {
-    element("connection").textContent = "Connection interrupted";
-    element("message").textContent = error.message;
+    if (version === selectionVersion) {
+      element("connection").textContent = "Connection interrupted";
+      element("message").textContent = error.message;
+    }
   } finally {
     busy = false;
+    if (version !== selectionVersion) refresh();
   }
 }
 
 element("runs").addEventListener("change", () => {
   selectedRun = element("runs").value;
   followCurrent = false;
-  agentOffset = 0;
-  selectedAgent = null;
-  lastSequence = 0;
-  displayedEvents = [];
-  element("profile").replaceChildren(
-    textNode("p", "Select an agent to inspect its profile.", "muted"),
-  );
+  resetRunView();
   refresh();
 });
 
@@ -401,16 +436,19 @@ for (const id of ["country-filter", "role-filter", "agent-search"]) {
     id === "agent-search" ? "input" : "change",
     () => {
       agentOffset = 0;
+      selectionVersion++;
       refresh();
     },
   );
 }
 element("previous-page").addEventListener("click", () => {
   agentOffset = Math.max(0, agentOffset - 50);
+  selectionVersion++;
   refresh();
 });
 element("next-page").addEventListener("click", () => {
   if (agentOffset + 50 < agentTotal) agentOffset += 50;
+  selectionVersion++;
   refresh();
 });
 
@@ -418,6 +456,7 @@ refresh();
 setInterval(refresh, 1500);
 
 async function refreshAgents(snapshot) {
+  const version = selectionVersion;
   const countrySelect = element("country-filter");
   if (countrySelect.options.length !== snapshot.countries.length + 1) {
     countrySelect.replaceChildren(textNode("option", "All countries"));
@@ -436,8 +475,9 @@ async function refreshAgents(snapshot) {
     limit: 50,
   });
   const page = await getJson(
-    `/api/runs/${encodeURIComponent(selectedRun)}/agents?${query}`,
+    `/api/runs/${encodeURIComponent(snapshot.run.id)}/agents?${query}`,
   );
+  if (version !== selectionVersion) return;
   agentTotal = page.total;
   element("agent-page").textContent =
     `${page.total ? page.offset + 1 : 0}–${Math.min(page.offset + page.agents.length, page.total)} of ${page.total}`;
@@ -585,13 +625,15 @@ function showWorld(snapshot) {
 }
 
 async function showRunNotes(snapshot, health) {
+  const version = selectionVersion;
+  const runId = snapshot.run.id;
   element("notes-download").href =
-    `/api/runs/${encodeURIComponent(selectedRun)}/notes.md`;
+    `/api/runs/${encodeURIComponent(runId)}/notes.md`;
   const status =
-    health.run_id === selectedRun && health.status === "paused"
+    health.run_id === runId && health.status === "paused"
       ? "paused"
       : snapshot.run.status;
-  const key = `${selectedRun}:${snapshot.seq}:${status}`;
+  const key = `${runId}:${snapshot.seq}:${status}`;
   if (status === "running") {
     element("notes-status").textContent =
       "Simulation in progress. Notes are saved at completion or stop; download a checkpoint report at any time.";
@@ -601,8 +643,9 @@ async function showRunNotes(snapshot, health) {
   }
   if (notesKey === key) return;
   const report = await getJson(
-    `/api/runs/${encodeURIComponent(selectedRun)}/notes`,
+    `/api/runs/${encodeURIComponent(runId)}/notes`,
   );
+  if (version !== selectionVersion) return;
   element("notes-status").textContent =
     `${report.status.toUpperCase()} · notes through T${report.tick} / event ${report.through_sequence} · ${report.history_complete ? "complete recorded history" : "partial history"}`;
   const list = element("run-notes");

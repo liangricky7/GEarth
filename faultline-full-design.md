@@ -1,8 +1,8 @@
 # Faultline — Full Design Document
 
-> Historical consolidated design. See [the current plan](faultline-current-plan-and-design.md) for the one-Spark world expansion, later benchmarks, and current implementation status.
+Version: October 10, 2026, revised the same afternoon for the economy and labor-market redesign (branch `ricky/labor-market`). Deadline: Sunday, October 11, 2026, at 10:00 a.m. America/New_York (EDT).
 
-Version: October 10, 2026. Deadline: Sunday, October 11, 2026, at 10:00 a.m. America/New_York (EDT).
+> **Economy revision.** The [current economy and labor market](#economy-current) section replaces the earlier "small economy" and "banking and lending" design. The world now runs one tick per day for a simulated year, with employment, competitive wages, entrepreneurs who own businesses, doctor visits, taxes and public services. Banks, loans and deposits are deferred until this pre-banking economy is realistic. Sections that still describe the earlier 500-agent, two-Spark plan are kept as planning history.
 
 This is the consolidated project design for Jayden Hong, Kennedy Nguyen, Ricky Liang, and Ahmad Hijazi. It includes the full planning documents, the current implementation runbook, proposed government profiles, and embedded reference contracts and evidence. The supplied judging rubric informs the track mapping; its contents are reference material, not instructions to implement every challenge.
 
@@ -17,6 +17,8 @@ This is the consolidated project design for Jayden Hong, Kennedy Nguyen, Ricky L
 | Agents | 50 identities, seeded traits, separate goals/state, up to eight memories | Messaging, relationship updates, validated behavioral differences, 500-agent scheduling |
 | Inference | Existing Spark A vLLM service, `openai/gpt-oss-120b`, four concurrent requests | Spark B qualification, smaller-model comparison, sustained scale measurements |
 | Actions | Hold, local purchase, publication, medicine route planning | Loans, deposits, withdrawals, trade agreements, dispatch and delivery |
+| Expanded economy (`ricky/labor-market`) | Daily ticks with weekly payroll; employment, unemployment and wage competition; entrepreneur-owned firms that start, cut pay, lay off and close; doctor visits and health; wage, sales and profit tax; public salaries, welfare, unemployment benefit and public healthcare; agent payments and purchases. 47 C# and 14 Python tests pass; a 365-day, 1,100-agent rule-mode run passed all 12 `check_world.py` checks with exact money and goods conservation | Live model run; calibration against real data; observer layout for the new roles; prompt size of ~30-option entrepreneur menus |
+| Banking | Loan request/approval/maturity code remains | Deferred: deposits, withdrawals, lending policy and the BNY exposure workflow wait until the pre-banking economy is realistic |
 | Storage | Neon checkpoints and ordered events over HTTPS; local option; saved-run reads | Incremental persistence, interrupted-run resumption, animated replay |
 | Observer | Read-only API and SVG route/profile/event page | React/Three.js globe, convoy animation, finance view, SSE |
 | Solana | Design only | WLD devnet mint, custody, escrow, receipt reconciliation |
@@ -41,6 +43,7 @@ The architecture, economy, settlement, analytics and delivery chapters describe 
 - [Architecture and shared contracts](#architecture-and-contracts)
 - [Compute and agent design](#compute-and-agents)
 - [Economy, routing, and settlement](#economy-and-routing)
+  - [Current economy and labor market](#economy-current)
 - [Evaluation and prize tracks](#evaluation-and-tracks)
 - [Team ownership and delivery](#team-and-delivery)
 - [Stage 1 implementation and runbook](#stage1-runbook)
@@ -61,21 +64,25 @@ The architecture, economy, settlement, analytics and delivery chapters describe 
 <a id="government-profiles"></a>
 ## Government systems and leadership
 
-Status: proposed design extension; not implemented in Stage 1. The team is interested in comparing different leadership arrangements through their responses to common crises.
+Status: not in Stage 1; implemented in the expanded world (profiles, policy delays, authority rules, elections) and revised on October 10 for the economy redesign (table below). The team is interested in comparing different leadership arrangements through their responses to common crises.
 
 ### Separate political structure and economic policy
 
 Model political structure and economic policy as separate attributes. Democracy, dictatorship, and monarchy describe arrangements of political authority; socialism and communism also involve economic and ideological arrangements. These labels are not five mutually exclusive variables. Use fictional institutional profiles with explicit rules instead of treating a label as a personality or an outcome.
 
-| Country | Proposed profile | Institutional rules to implement | Economic policy to declare |
-| --- | --- | --- | --- |
-| Aster | Market democracy | Elections, public support, legislative approval for selected actions | Private businesses; declared tax and public-spending rules |
-| Beryl | Socialist democracy | Elections and legislative approval | Public ownership of specified essentials; funded redistribution |
-| Cinder | Single-party planned economy | Central executive and planning council; published approval rules | Production targets and explicit resource-allocation budgets |
-| Dune | Personal dictatorship | Central executive authority; modeled dependence on elite support | A declared mixed economy; ownership and taxes specified separately |
-| Ember | Absolute monarchy | Hereditary leadership, royal council, succession rules | A declared mixed economy; treasury and public spending specified separately |
+The expanded world implements five profiles across ten countries (rotation 0: aster and fjord, beryl and grove, cinder and haven, dune and ionia, ember and jade). Defaults below are starting values; governments change tax, welfare, benefit, healthcare and sales-tax policy through their own decisions, subject to the policy delay and authority rule.
 
-Cinder is a fictional communist-party-governed profile, not a claim to model every interpretation of communism. Ember is explicitly an absolute monarchy; a constitutional monarchy would be another configuration. No profile is assigned an automatic tendency to win, cooperate, attack, or become corrupt.
+| Profile | Countries | Authority rule | Policy delay | Wage tax | Weekly welfare | Weekly unemployment benefit | Ownership |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Market democracy | aster, fjord | Elected; acts while approval ≥ 45% | 3 days | 15% | 0 | 300 | Private, entrepreneur-owned firms |
+| Social democracy | beryl, grove | Elected; acts while approval ≥ 45% | 2 days | 30% | 100 | 400 | Private, entrepreneur-owned firms |
+| Single-party planned economy | cinder, haven | Central executive | 1 day | 25% | 150 | 0 (no unemployment) | State owns every firm |
+| Personal dictatorship | dune, ionia | Acts while bank cash ≥ 100 × population (elite-support proxy) | 0 days | 10% | 0 | 0 | Private, entrepreneur-owned firms |
+| Absolute monarchy | ember, jade | Acts while at least two businesses hold more than 1,000 | 1 day | 20% | 50 | 0 | Private, entrepreneur-owned firms |
+
+All countries start with a 5% sales tax, a 20% profit tax and a public healthcare budget of 50 minor units per resident per week. Amounts are minor units (100 = 1 WLD).
+
+"Socialist democracy" was relabeled **social democracy**: a market economy with high taxes, welfare and unemployment benefit. Only the **planned economy** has state control: the state owns every firm, sets wages on the public pay table, fixes prices at their base level, assigns every unemployed resident to a state firm, takes firm cash above four weeks of payroll, covers payroll shortfalls, and allows no private startups. Cinder and haven are fictional single-party profiles, not claims about every interpretation of communism. Ember and jade are absolute monarchies; a constitutional monarchy would be another configuration. No profile is assigned an automatic tendency to win, cooperate, attack, or become corrupt.
 
 ### Country institutions and individual leaders
 
@@ -178,15 +185,18 @@ Five fictional countries avoid implying that model behavior represents real popu
 
 ### What agents can decide
 
+Current expanded world (supersedes the table's earlier version): 1,100 agents in ten countries, each with a government, a bank, a media outlet, six firms (farm, power plant, workshop, pharma, clinic, freight) and 101 residents. In market countries six residents are entrepreneurs who own those firms; planned-economy firms are state-owned.
+
 | Role | Goals and available decisions |
 | --- | --- |
-| Government | Balance legitimacy and trade; open/close a border, propose/accept/reject an agreement, publish a statement |
-| Business | Produce and sell goods; choose a market order, request financing, select a route objective, dispatch reserved inventory |
-| Bank | Preserve liquidity while earning returns; approve/reject a loan offer, respond to repayment pressure |
-| Media | Build audience and credibility; publish a claim received through its information network |
-| Citizen | Meet needs and preserve wealth; buy goods, move deposits, express support/protest, migrate, or message a neighbor |
+| Citizen | Work, meet household needs and keep savings. Set household stock target, work effort (0 strike, 1 normal, 2 extra), doctor-visit health threshold (0/50/70/85), express support, migrate (arrive unemployed), pay a local resident, government or employer, buy extra food or energy at the quoted price, start a business in their trade where the market shows an opportunity |
+| Entrepreneur | Keep their one business profitable while meeting their own needs. Personal choices as a citizen, plus for the business: price ±10%, wage ±10% (applies to current staff too), headcount target −1/+1/+2, imports in three sizes |
+| Government | Meet public needs with a funded budget. Wage tax, sales tax (0/5/10%), weekly welfare (0/100/200), unemployment benefit (0/300/600), public healthcare budget (0/50/150 per resident), productivity investment, borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Observes last week's income and spending |
+| Business | Owned firms act only through their entrepreneur and get no model turns of their own. State-owned firms in the planned economy choose imports; their prices and wages are fixed by the state |
+| Bank | Approve requested loans (banking deferred; no deposits) |
+| Media | Publish an engine-generated country report |
 
-All actions are constrained by the engine. No agent can create currency, change loan terms after acceptance, invent routes, or read another agent's private state. A role's goal can conflict with its country's aggregate welfare.
+All actions are constrained by the engine. Agents choose from an engine-built numbered menu; no agent can create currency, invent prices or routes, or read another agent's private state. Routine life between model turns (shopping, consumption, production, hiring, payroll, price drift) follows standing policies and engine rules. A role's goal can conflict with its country's aggregate welfare.
 
 ### Screen composition
 
@@ -204,7 +214,7 @@ Accessibility: readable text, keyboard-accessible tabs and entity lists, icon/la
 
 Use [scenario.demo.json](#reference-scenario) as the authoritative initial configuration. A prepared medicine trade creates a useful demonstration even before autonomous agents generate new trades. It is labeled a seeded contract. All later responses to its disruption come from agents or declared engine rules.
 
-The world runs for 120 logical ticks, with a starting target of three wall-clock seconds per tick. A tick represents one abstract simulation period, not a minute of real-world economic time. The reference disruption closes a direct transport connection at tick 8. Prices, shortages, lending pressure, and information propagation continue whether an alternative shipment succeeds or fails.
+The world runs for 120 logical ticks, with a starting target of three wall-clock seconds per tick. A tick represents one abstract simulation period, not a minute of real-world economic time. *Revision:* the expanded world now treats **one tick as one day** and runs a simulated year (365 ticks); consumption and production are daily and payroll, hiring, taxes and price reviews weekly (see [current economy](#economy-current)). The reference disruption closes a direct transport connection at tick 8. Prices, shortages, lending pressure, and information propagation continue whether an alternative shipment succeeds or fails.
 
 The public view does not offer a “fix crisis” button. Preconfigured runs explore different responses automatically. The operator may start the chosen run before judging; repeatability comes from saved configurations and recorded event logs.
 
@@ -221,6 +231,8 @@ Prepare a captured run because live agent decisions can differ. Recorded runs re
 ### Scope boundaries
 
 Required: individual agents, memory, local messaging, resources, legitimacy/trust, autonomous trade and financing choices, meaningful route calculation, live viewer, persistent events, devnet settlement, and cross-scenario analytics. Add the ROCm worker when AMD credits and supported hardware are confirmed. Nuclear combat, elections with full constitutions, face detection, token speculation, audio, custom shaders, and reinforcement learning are later features. Represent conflict first through border closures, trade restrictions, and legitimacy changes; these already generate observable political consequences.
+
+*Revision:* the current priority is a realistic **pre-banking** economy: employment, wages, entrepreneurship, goods and services, taxes and public services. Banking (deposits, withdrawals, lending policy, the BNY exposure view) is deferred until that economy is realistic. War costs are a stretch goal; until then they still pay into banks. Product quality and owners' dividends beyond the single owner are out of scope for this update. Births, deaths and education are out of scope because a run covers one year; education is baked into starting pay and productivity.
 
 ### Product acceptance
 
@@ -438,29 +450,135 @@ Kennedy records launch/tunnel recovery instructions; Ahmad records model/prompt 
 <a id="economy-and-routing"></a>
 ## Economy, routing, and settlement
 
-### Small economy with explicit rules
+<a id="economy-current"></a>
+### Current economy and labor market
 
-Use three goods: food, energy, and medicine. Citizen needs, producer capacity, transportation, prices, and loan deadlines create constraints for agent decisions. All values are fictional and versioned in [scenario.demo.json](#reference-scenario). Tick duration has no claimed relationship to actual macroeconomic time.
+Status: implemented on branch `ricky/labor-market` (October 10, 2026) on top of `world-simulation-run-observations`. It supersedes the earlier "small economy" and "banking and lending" design, which remain summarized below as history. Source: `backend/Faultline.Core/SocietyLabor.cs` (sectors, pay table, labor market, firms) and `SocietyEconomy.cs` (daily and weekly economy).
 
-Seed 500 individual accounts and a fixed initial money supply. Currency uses integer minor units; 100 minor units equal one WLD. Consumption, production, account transfers, inventory reservations, and repayments run in code. Agents choose among offers and actions; they do not invent balances or prices.
+**Goal.** A realistic pre-banking economy: people work for wages, pay each other for goods and services, pay taxes, and receive public goods and services in return. Money is never created or destroyed. All amounts are integer minor units (100 = 1 WLD), and the engine asserts cash and goods conservation every day.
 
-Every five ticks, a business can produce its configured output if its required energy/input inventory exists. Citizens consume configured food/energy units every five ticks. If inventory is unavailable, accumulate unmet need; do not allow negative stock. Citizens choose purchases from posted offers, bounded by cash and inventory. Medicine is an institutional shipment good used to satisfy a city's configured need ledger.
+#### Time
 
-For the first build, update local posted prices every five ticks using a capped rule: `next_price = clamp(round(current_price * (1 + 0.1 * imbalance)), min_price, max_price)`, where `imbalance = clamp((unmet_demand - available_stock) / max(1, target_stock), -1, 1)`. Compute from a prior-period snapshot; trades within that period use the quoted price. This is a declared synthetic pricing rule, not model-generated market truth.
+One tick is one day; a run is one simulated year (365 ticks). Births, deaths and education are out of scope; education is baked into starting pay and productivity.
 
-Legitimacy and trust are bounded scores. Unmet need reduces government support by a configured amount; verified fulfilled promises increase directed trust, while violated agreements decrease it. Agents observe the relevant scores and choose reactions. Protests are individual actions, aggregated in the viewer. Migration changes location when an eligible path exists, after its modeled travel time; it is not an instantaneous teleport.
+| Every day | Every week (every 7th tick) |
+| --- | --- |
+| Firms produce; clinics restock supplies | Firm autopilot (headcount, wage offers), layoffs above target, job matching |
+| Each resident uses 1 food and 1 energy, bought from the cheapest local seller up to their stock target | Price review (market economies) |
+| Health wear, illness, extra-effort strain; automatic doctor visits below the resident's threshold | Payroll with pay cuts, layoffs and closures; profit tax; owner pay |
+| Unmet needs recorded | Public payroll, welfare, unemployment benefit, public healthcare |
+| | Discretionary household spending; metrics; `economy_cycle` and `labor_market` events |
 
-### Banking and lending
+#### Sectors, firms and jobs
 
-Citizens can place/withdraw deposits. A deposit transfers existing citizen cash into bank cash and creates an equal bank liability. A withdrawal reverses both, limited by available bank liquidity. Queue unfulfilled withdrawals; do not silently delete the liability.
+Each country starts with one firm per sector. In market economies each has an entrepreneur owner; in the planned economy the state owns them. Each firm employs one occupation.
 
-Banks lend existing cash from their own liquid pool. An accepted loan credits borrower cash, reduces bank cash, and creates a principal receivable. Interest is a contractual future amount, not newly minted money. Require borrower request plus bank acceptance of the exact amount, rate, maturity, and collateral/eligibility policy; an approval alone does not transfer funds. Offers expire after five ticks and reference entity versions.
+| Sector | Occupation | Output per full-strength worker per day | Base price | Inputs |
+| --- | --- | --- | --- | --- |
+| Farm (`food`) | farmer | 7.5 food | 40 | 1 energy per 10 units |
+| Power plant (`energy`) | energy worker | 22 energy | 25 | none |
+| Workshop (`tools`, household goods) | factory worker | 3 tools | 100 | 1 energy per 10 units |
+| Pharma (`medicine`) | researcher | 4.5 medicine | 120 | 1 energy and 1 tools per 10 units |
+| Clinic | doctor | 8 visits | 450 per visit | 1 medicine per visit |
+| Freight | dockworker | — | paid per shipment | — |
 
-Repayment transfers borrower cash to bank cash; reduce outstanding principal first, recognizing paid interest as income. An unpaid loan after its due tick is overdue; after a five-tick grace period, apply the configured loss/write-down and mark default. The introductory scenario uses unsecured loans and a declared recovery assumption. No dynamic credit model is required.
+Food and energy output are multiplied by each country's resource endowment (food 0.55–1.6, energy 0.55–1.6), so countries need to trade. Output scales with effort, health (25% at zero health, 100% when healthy), a milder wellbeing factor (75–100%), national productivity and the education factor. Stocks are capped at 30 days of demand for food and energy, 15 for tools and 10 for medicine. Teachers and soldiers work for the government.
 
-Required balances: `bank_assets = liquid_cash + loan_principal_receivable`; `bank_equity = bank_assets - deposit_liabilities`, adjusted for realized losses and paid interest. Cash is not total assets. Liquidity ratio is cash/deposits when deposits are nonzero; report N/A otherwise. Money conservation tracks liquid balances plus locked escrow, excluding receivables and deposit claims to prevent double counting.
+Weekly pay (education baked in; roughly real-world median ratios):
 
-The finance inspector links a bank's borrower exposure to shipment IDs, destinations, route disruption, repayment dates, and settlement status. The useful workflow is identifying which disrupted deliveries threaten repayment and whether liquidity is sufficient for queued withdrawals. This is the BNY contribution, not merely displaying a token balance.
+| Farmer | Factory worker | Soldier | Dockworker | Teacher | Energy worker | Researcher | Doctor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | 1,300 | 1,400 | 1,450 | 1,750 | 2,100 | 2,500 | 6,000 |
+
+Starting job shares per 100 workers: farmer 21, energy worker 8, factory worker 46, researcher 2, doctor 2, dockworker 3, teacher 8, soldier 5, unemployed 5 (none in the planned economy). One of each essential occupation is placed first so small test worlds still staff every sector. Residents start with two weeks of pay in savings, 4 food, 4 energy and health between 70 and 100 (staggered so doctor visits do not synchronize). Firms start with four weeks of payroll; treasuries with sixteen weeks of public spending.
+
+#### Labor market
+
+- **Salaries are fixed by agreement**, not by effort. A worker hired at a firm's wage offer keeps that salary until the employer changes wages. Effort 2 raises output for the employer (or the owner's own business) and costs 1 health and 1 wellbeing per day; effort 0 is a strike and forfeits that week's pay.
+- **Matching (weekly).** Firms with fewer staff than their headcount target hire, highest wage offer first. Unemployed residents in the occupation are hired first (longest unemployed first), then employed workers who would gain at least 10% more pay. After 14 days unemployed, unskilled workers (farmer, energy worker, factory worker, dockworker) take any unskilled opening; doctors and researchers can swap. Teachers and soldiers stay in the public sector.
+- **Firm autopilot between owner turns.** Goods firms add a worker when stock covers less than 7 days of sales and the firm is profitable, and drop one when stock exceeds 21 days. Clinics hire when patients are turned away and the clinic is profitable, and shrink when under 40% utilized. Freight shrinks when fees do not cover payroll. Wage offers rise 5% a week while openings stay unfilled and the firm is profitable (capped at 1.5× the pay table), and cool 5% a week toward the table when it is not.
+- **Payroll shortfall.** A market firm that cannot cover payroll first cuts all pay 10%, then lays off its most expensive workers until it can pay. Each such week counts as a distress week; four consecutive distress weeks (or four weeks with no revenue and almost no cash) close the business.
+- **Unemployment** pays nothing except the government's weekly benefit and any welfare. Migrants arrive unemployed.
+
+#### Entrepreneurs and businesses
+
+- **Ownership.** An entrepreneur owns exactly one business (1:1). They are residents with their own needs, and they also work in their business. Owners are paid from profit only: after profit tax, up to their former trade's weekly wage first, then half of the rest. A losing week pays them nothing, which keeps the business alive longer.
+- **Model decisions.** The entrepreneur, not the business, gets model turns. Price ±10%, wage ±10% (current staff too), headcount −1/+1/+2 and imports are their business choices; the engine runs the business daily between turns.
+- **Starting a business.** A citizen in a market economy can start a firm in their own trade (skilled workers also in the related trade) by investing eight weeks of their pay from savings. They must also see an opportunity:
+  - no incumbent;
+  - the cheapest incumbent priced at least 20% above base;
+  - stock below three days of national demand;
+  - or, for clinics, patients turned away.
+
+  The new firm launches 10% below the cheapest incumbent. That is its edge, and it keeps customers only while it stays cheaper because households buy from the cheapest seller with stock. Quality is deferred.
+- **Empty sectors.** If a market country has no firm left in a sector (other than freight), the richest resident able to run one and afford the investment opens one at the weekly review. Without this, one closure was permanent and cascaded.
+- **Closing.** Workers are laid off. A competitor in the same sector buys the remaining stock at half the base price; unsold stock goes to the owner. The firm's cash goes to the owner, who becomes a citizen in their former trade and starts looking for work. A state-owned firm's cash would return to the government.
+
+#### Prices
+
+Market prices move up or down 5% at the weekly review, within 0.5× and 3× of the base price:
+
+- Goods: up when stock covers under 3 days of sales, down when it covers over 21 days, otherwise up if the firm's costs exceed its revenue.
+- Clinics: up when more than a tenth of patients are turned away, down when under 60% utilized with nobody turned away, otherwise up if losing money.
+
+The planned economy fixes prices at base.
+
+#### Health and doctor visits
+
+Health falls 1 per day from wear, 30 with a 1% daily chance of illness, 1 more per day on extra effort and 1 per unmet need. A resident visits the cheapest clinic with a free doctor and supplies automatically when health is below their threshold (default 70). A visit restores 40 health and uses one medicine unit that the clinic bought from a pharma, so doctors have product costs. Public healthcare spends the weekly service budget on visits for residents below 60 health, sickest first.
+
+#### Household spending
+
+Food and energy are bought daily. Each week a resident also spends 60% of cash above a 1,000-unit savings buffer on household goods (tools), which are consumed. Agents can also choose `buy_goods` (4 extra units at the quoted price; a repriced seller invalidates the choice) and `pay` (100 for residents, 1,000 for institutions) to a recipient in their own country. Recipients remember payments. Government payments go through the policy delay.
+
+#### Taxes and public spending
+
+| Revenue | Spending |
+| --- | --- |
+| Wage tax on every salary (profile rate) | Public salaries on the fixed pay table; when short, every public employee gets the same fraction |
+| Sales tax inside household prices (default 5%; 0/5/10% by policy) | Weekly welfare per citizen |
+| 20% tax on positive weekly business profit | Weekly unemployment benefit per unemployed citizen |
+| 5% tariff on imports without a trade agreement; migration fees | Public healthcare visits; productivity investment (bought from a workshop) |
+
+Unpaid or sick teachers lower the education factor (0.7–1.0), which multiplies output. Governments observe `budget_last_week` (income, spending, net). In the planned economy the state also takes firm cash above four weeks of payroll and covers payroll shortfalls.
+
+#### Trade and freight
+
+Businesses import in three sizes (½×, 1× and 2× the national population), with up to two shipments in flight per good. Freight fees go to a domestic freight firm (dockworkers), or to the government when none exists. Shipping fees no longer pay into banks.
+
+#### Events and contracts
+
+New v2 event types: `business_started`, `business_closed`, `labor_market` (weekly hires, layoffs, job switches, pay cuts, unemployment, wage offers), `payment_sent` and `goods_purchased`. `economy_cycle` is now weekly and reports the week's wages, sales tax, profit tax, private and public doctor visits, education factor, unemployment, and government income and spending. Owned and closed businesses never get model turns, so model coverage is measured over **decision makers**; the snapshot reports `decision_makers` and `check_world.py --require-full-coverage` compares against it.
+
+#### Calibration evidence and limits
+
+A 365-day, 1,100-agent run with no agent decisions:
+
+- **Stable economy:** health about 82, treasuries and household cash flat after an early adjustment, budgets roughly balanced, no lasting collapse.
+- **Unemployment 13–18%,** which is high: workers produce more than households buy, so firms run lean.
+- **Clinics settle into owner-run practices** at about 225–270 per visit, so doctor-owners earn about a doctor's wage while salaried doctors mostly move to research or unemployment.
+- **No safety net, no food.** Monarchies and dictatorships pay no unemployment benefit, and their jobless residents go hungry.
+- **The planned economies do not change at all.** That reflects fixed prices and favorable endowments, not a finding that planning works better.
+
+Earlier versions collapsed for three reasons, each now fixed:
+
+- loss-making firms bid wages up;
+- clinic prices could only rise;
+- owners took a fixed salary.
+
+Every number here is a first estimate tuned against the simulator, not calibrated against real data. A live model run is still needed to see what model-chosen prices, hiring and startups produce.
+
+<a id="banking-deferred"></a>
+### Banking and lending (deferred)
+
+Deferred until the pre-banking economy is realistic. The engine still contains the draft loan path: a business requests a working-capital loan, the bank approves it, and it settles at maturity as repaid or defaulted. Loans did not occur in the observed live run. The earlier full design below remains the target when banking returns:
+
+- **Deposits and withdrawals** create and settle bank liabilities, limited by liquidity.
+- **Loans** need an exact borrower request and bank acceptance, accrue interest as a contractual amount rather than new money, and become overdue and then default after a grace period.
+- **Bank balance sheets** report assets, equity and a liquidity ratio.
+- **Finance inspector.** Links a bank's borrower exposure to disrupted shipments, repayment dates and settlement status. This is the BNY contribution.
+
+When banking returns, war costs and any remaining fees must stop paying into banks, so bank cash reflects lending liquidity only.
 
 ### Routes that affect outcomes
 
@@ -470,7 +588,7 @@ Use Dijkstra with nonnegative weights; these weighted shortest-path mechanics ar
 
 Exclude closed links and links lacking valid border permission before searching. Initially limit each edge to one new convoy departure per tick; FIFO queues handle conflicts. Convoys already inside an edge complete that leg when it closes; departures after closure cannot enter. At the next node, recompute using current permissions and the business's chosen objective. If no path exists, keep inventory in the shipment at its current node and emit `route_unavailable`.
 
-Origin stock is reserved exactly once before dispatch. Charge each leg's modeled transport cost when it begins, to a transport-sector account; a borrower without funds waits and can request financing. A crisis can invalidate the remaining route. Record previous/new edge IDs, objective, calculated time/cost/risk, and cause event. The viewer explains why the direct route was excluded and what the alternative costs.
+Origin stock is reserved exactly once before dispatch. Charge each leg's modeled transport cost when it begins, to a transport-sector account; a borrower without funds waits and can request financing. *Current implementation:* the whole route's freight fee is charged at dispatch and paid to a domestic freight firm employing dockworkers (or the government if none exists); imports come in three sizes with up to two shipments in flight per good. A crisis can invalidate the remaining route. Record previous/new edge IDs, objective, calculated time/cost/risk, and cause event. The viewer explains why the direct route was excluded and what the alternative costs.
 
 At destination, decrement shipment inventory and increment destination inventory once, producing a delivery event. Late delivery still physically arrives, but the trade contract determines whether it earns payment. Avoid a route cost claim that ignores queues or later financing delays; distinguish planned from realized arrival time.
 
@@ -559,8 +677,12 @@ At three wall-clock seconds per tick, 15 runs take about 90 minutes sequentially
 | Loan loss | Sum of actual principal write-downs; separate outstanding/overdue exposure |
 | Liquidity | Bank cash/deposits by tick, with N/A for zero deposits; count unsatisfied withdrawals |
 | Intervention cost | Actual reserve transfer or credit committed/used, with repaid principal reported separately |
-| AI coverage | Unique agents with valid model decisions / spawned agents; fallback rate shown separately |
+| AI coverage | Unique agents with valid model decisions / decision makers (spawned agents minus owned and closed businesses, which act through their entrepreneur); fallback rate shown separately |
 | Cooperation | Accepted and fulfilled agreements / eligible proposals; report both acceptance and fulfillment |
+| Unemployment rate | Unemployed citizens / citizens at the weekly review, by country |
+| Business churn | Businesses started (by agent decision vs. empty-sector rule) and closed, with owner investment and cash recovered |
+| Health access | Private and public doctor visits per week; residents below 60 health; patients turned away |
+| Fiscal balance | Government income vs. spending per week; treasury; share of public payroll actually paid |
 
 Plot all individual run results, scenario means and ranges, and sample counts. Do not fabricate percentage improvements in fixtures. The prototype should answer what worked within its modeled economy, which cases failed, and which financial institutions were exposed.
 
@@ -607,6 +729,8 @@ Use [run-manifest.template.json](#run-manifest) for actual evidence. Its null me
 ## Team ownership and delivery
 
 Current working context: Jayden is implementing the first integrated slice alone. The assignments below are the proposed four-person handoff, not a claim that every teammate has begun or completed a lane.
+
+*Update, October 10 afternoon:* while Jayden was unavailable, Ricky took over the engine side for the economy redesign (economy, labor market, factory, scheduler coverage, checker and observer role filter) on branch `ricky/labor-market`. Jayden and Ahmad should review it: it changes agent roles (entrepreneurs), adds and closes businesses mid-run, rescales time to days, and lengthens entrepreneur action menus to about 30 options.
 
 ### Deadline and access
 
@@ -757,7 +881,7 @@ An earlier live attempt paused after a transport failure. The completed run used
 
 ### Next stage
 
-Prioritize actual shipment movement, banking actions and ledger entries, then Solana devnet settlement. Add asynchronous scheduling and a second worker before increasing population. Add messaging and relationship state to make trust and generosity actionable. Evaluate trait effects under matched scenarios rather than claiming distinct behavior from profile fields alone.
+*Superseded:* the expanded world now moves shipments and runs the [current economy and labor market](#economy-current); banking is deferred until that economy is realistic. Original Stage 1 note: prioritize actual shipment movement, banking actions and ledger entries, then Solana devnet settlement. Add asynchronous scheduling and a second worker before increasing population. Add messaging and relationship state to make trust and generosity actionable. Evaluate trait effects under matched scenarios rather than claiming distinct behavior from profile fields alone.
 
 ---
 

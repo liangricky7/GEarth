@@ -197,6 +197,7 @@ public static class Engine
                 code,
                 action = result.Action,
                 result.Model,
+                result.Backend,
                 result.LatencyMs,
                 result.Error,
                 observation_tick = job.ObservationTick

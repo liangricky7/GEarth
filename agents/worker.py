@@ -12,17 +12,17 @@ import jsonschema
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from agents.providers import ProviderPool, load_providers
+
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_SCHEMA = json.loads(
     (ROOT / "docs/faultline/contracts/action.schema.json").read_text()
 )
 TOKEN = os.environ.get("WORKER_TOKEN", "")
-MODEL = os.environ.get("SPARK_A_MODEL", "openai/gpt-oss-120b")
-MODEL_BASE_URL = os.environ.get("SPARK_A_BASE_URL", "http://127.0.0.1:18001/v1").rstrip(
-    "/"
-)
 CAPACITY = int(os.environ.get("WORKER_CAPACITY", "4"))
 TIMEOUT_SECONDS = float(os.environ.get("WORKER_TIMEOUT_SECONDS", "13"))
+provider_pool = ProviderPool(load_providers(capacity=CAPACITY))
+MODEL = provider_pool.providers[0].model
 
 
 @asynccontextmanager
@@ -94,10 +94,10 @@ def validate_action(action: dict, job: DecisionJob) -> dict:
     return action
 
 
-def build_prompt(job: DecisionJob) -> dict:
+def build_prompt(job: DecisionJob, model=MODEL) -> dict:
     if job.observation.get("world_stage") == 2:
         return {
-            "model": MODEL,
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -123,7 +123,7 @@ def build_prompt(job: DecisionJob) -> dict:
             ],
             "temperature": 0,
             "max_tokens": 512,
-            "reasoning_effort": "low",
+            **({"reasoning_effort": "low"} if "gpt-oss" in model else {}),
             "response_format": {"type": "json_object"},
         }
     instructions = (
@@ -143,14 +143,14 @@ def build_prompt(job: DecisionJob) -> dict:
     }
 
     return {
-        "model": MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": instructions},
             {"role": "user", "content": json.dumps(observation, separators=(",", ":"))},
         ],
         "temperature": 0,
         "max_tokens": 512,
-        "reasoning_effort": "low",
+        **({"reasoning_effort": "low"} if "gpt-oss" in model else {}),
         "response_format": {"type": "json_object"},
     }
 
@@ -162,6 +162,7 @@ def health():
         "model": MODEL,
         "active_requests": active_requests,
         "capacity": CAPACITY,
+        "providers": provider_pool.snapshot(time.monotonic()),
     }
 
 
@@ -180,23 +181,33 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
     if active_requests >= CAPACITY:
         raise HTTPException(429, "Worker at capacity")
 
+    provider = provider_pool.acquire(time.monotonic())
+    if provider is None:
+        raise HTTPException(429, "No model provider has available capacity")
     active_requests += 1
+    failed = False
+    unavailable = False
+    cancelled = False
     started_at = time.perf_counter()
 
     try:
-        headers = {"Authorization": f"Bearer {os.environ.get('SPARK_A_API_KEY', '')}"}
+        headers = {"Authorization": f"Bearer {provider.api_key}"}
 
         async with asyncio.timeout(min(TIMEOUT_SECONDS, remaining_seconds)):
             response = await app.state.model_client.post(
-                f"{MODEL_BASE_URL}/chat/completions",
+                f"{provider.base_url}/chat/completions",
                 headers=headers,
-                json=build_prompt(job),
+                json=build_prompt(job, provider.model),
             )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
             action = validate_action(json.loads(content), job)
 
-        return decision_result(job, action, "model", started_at)
+        return decision_result(job, action, "model", started_at, provider=provider)
+
+    except asyncio.CancelledError:
+        cancelled = True
+        raise
 
     except (
         httpx.HTTPError,
@@ -207,6 +218,8 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         TypeError,
         jsonschema.ValidationError,
     ) as error:
+        failed = True
+        unavailable = isinstance(error, (httpx.HTTPError, TimeoutError))
         action = {
             "action_type": "hold",
             "params": {},
@@ -214,21 +227,30 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
             "evidence_ids": [],
         }
         return decision_result(
-            job, action, "rule_fallback", started_at, type(error).__name__
+            job, action, "rule_fallback", started_at, type(error).__name__, provider
         )
 
     finally:
         active_requests -= 1
+        provider_pool.release(
+            provider, time.monotonic(), failed, unavailable, cancelled
+        )
 
 
 def decision_result(
-    job: DecisionJob, action: dict, source: str, started_at: float, error=None
+    job: DecisionJob,
+    action: dict,
+    source: str,
+    started_at: float,
+    error=None,
+    provider=None,
 ):
     return {
         "request_id": job.request_id,
         "action": action,
         "source": source,
-        "model": MODEL,
+        "model": provider.model if provider else MODEL,
+        "backend": provider.name if provider else "spark_a",
         "latency_ms": round((time.perf_counter() - started_at) * 1000, 2),
         "error": error,
     }

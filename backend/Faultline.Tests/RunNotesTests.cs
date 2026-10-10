@@ -38,6 +38,27 @@ public sealed class RunNotesTests
     }
 
     [Fact]
+    public void NotesAttributeAcceptedModelChoicesToTheirBackend()
+    {
+        var world = Create();
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (agent, backend, model) in new[] {
+            ("aster_citizen_00001", "spark_a", "openai/gpt-oss-120b"),
+            ("beryl_citizen_00001", "amd", "Qwen/Qwen3-4B") })
+        {
+            var job = SocietyEngine.Observe(world, agent, now);
+            SocietyEngine.Apply(world, job, new(job.RequestId,
+                new("hold", new JsonObject(), "Wait.", []), "model", model, 1, Backend: backend), now);
+        }
+        var notes = RunAnalysis.Create(world, world.Events);
+        Assert.Contains(notes.Observations, item => item.Category == "compute"
+            && item.Text.Contains("amd running Qwen/Qwen3-4B supplied 1 accepted"));
+        Assert.Contains(notes.Observations, item => item.Category == "compute"
+            && item.Text.Contains("spark_a running openai/gpt-oss-120b supplied 1 accepted"));
+        Assert.Contains(notes.Limits, item => item.Contains("model assignment"));
+    }
+
+    [Fact]
     public void NotesDescribePhysicalConsequencesAndDoNotClaimGovernmentCausality()
     {
         var world = Create();

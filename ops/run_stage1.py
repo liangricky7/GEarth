@@ -14,6 +14,7 @@ from dotenv import dotenv_values
 from share_site import supervisor_running
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 API_URL = "http://127.0.0.1:5080"
 SPARK_TARGET = "hackathon@100.70.23.23"
 SSH_OPTIONS = [
@@ -85,6 +86,9 @@ def stop_process(process):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true")
+    parser.add_argument(
+        "--compute", choices=("auto", "spark", "amd", "hybrid"), default="auto"
+    )
     parser.add_argument("--storage", choices=("neon", "local"), default="neon")
     parser.add_argument("--world", action="store_true")
     parser.add_argument("--run-id")
@@ -140,10 +144,38 @@ def main():
     if options.storage == "neon" and not config.get("DATABASE_URL"):
         raise RuntimeError("Save DATABASE_URL in .env.local, or use --storage local.")
 
+    compute = options.compute
+    if compute == "auto":
+        compute = (
+            "hybrid"
+            if config.get("AMD_ENABLED", "false").lower() == "true"
+            else "spark"
+        )
+    use_spark = compute in {"spark", "hybrid"}
+    use_amd = compute in {"amd", "hybrid"}
+    live_capacity = options.capacity if options.world else 4
+    if options.live:
+        from agents.providers import load_providers
+
+        providers = load_providers(
+            {
+                **config,
+                "SPARK_A_ENABLED": str(use_spark).lower(),
+                "SPARK_A_BASE_URL": "http://127.0.0.1:18001/v1",
+                "SPARK_B_ENABLED": "false",
+                "AMD_ENABLED": str(use_amd).lower(),
+            },
+            live_capacity,
+        )
+        live_capacity = min(
+            live_capacity, sum(provider.capacity for provider in providers)
+        )
+
     ensure_port_available(5080)
     if options.live:
         ensure_port_available(8100)
-        ensure_port_available(18001)
+        if use_spark:
+            ensure_port_available(18001)
 
     subprocess.run(
         ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
@@ -173,43 +205,45 @@ def main():
 
     try:
         if options.live:
-            api_key = config.get("SPARK_A_API_KEY")
-            if not api_key:
-                result = subprocess.run(
-                    ["ssh", *SSH_OPTIONS, SPARK_TARGET, "python3 -"],
-                    input=REMOTE_KEY_READER,
-                    text=True,
-                    capture_output=True,
-                    timeout=15,
-                )
-                if result.returncode != 0 or not result.stdout.strip():
-                    raise RuntimeError(
-                        "Could not read the existing Spark API key over SSH. No server settings changed."
+            api_key = ""
+            if use_spark:
+                api_key = config.get("SPARK_A_API_KEY")
+                if not api_key:
+                    result = subprocess.run(
+                        ["ssh", *SSH_OPTIONS, SPARK_TARGET, "python3 -"],
+                        input=REMOTE_KEY_READER,
+                        text=True,
+                        capture_output=True,
+                        timeout=15,
                     )
-                api_key = result.stdout.strip()
+                    if result.returncode != 0 or not result.stdout.strip():
+                        raise RuntimeError(
+                            "Could not read the existing Spark API key over SSH. No server settings changed."
+                        )
+                    api_key = result.stdout.strip()
 
-            tunnel = start(
-                [
-                    "ssh",
-                    *SSH_OPTIONS,
-                    "-o",
-                    "ExitOnForwardFailure=yes",
-                    "-o",
-                    "ServerAliveInterval=30",
-                    "-o",
-                    "ServerAliveCountMax=3",
-                    "-N",
-                    "-L",
-                    "127.0.0.1:18001:127.0.0.1:8000",
-                    SPARK_TARGET,
-                ],
-                "tunnel.log",
-                os.environ.copy(),
-            )
+                tunnel = start(
+                    [
+                        "ssh",
+                        *SSH_OPTIONS,
+                        "-o",
+                        "ExitOnForwardFailure=yes",
+                        "-o",
+                        "ServerAliveInterval=30",
+                        "-o",
+                        "ServerAliveCountMax=3",
+                        "-N",
+                        "-L",
+                        "127.0.0.1:18001:127.0.0.1:8000",
+                        SPARK_TARGET,
+                    ],
+                    "tunnel.log",
+                    os.environ.copy(),
+                )
 
-            time.sleep(0.5)
-            if tunnel.poll() is not None:
-                raise RuntimeError("SSH tunnel failed. Check .logs/tunnel.log.")
+                time.sleep(0.5)
+                if tunnel.poll() is not None:
+                    raise RuntimeError("SSH tunnel failed. Check .logs/tunnel.log.")
 
             worker_environment = os.environ.copy()
             worker_environment.pop("DATABASE_URL", None)
@@ -217,9 +251,20 @@ def main():
             worker_environment.update(
                 {
                     "WORKER_TOKEN": token,
-                    "WORKER_CAPACITY": str(options.capacity if options.world else 4),
+                    "WORKER_CAPACITY": str(live_capacity),
                     "WORKER_TIMEOUT_SECONDS": str(60 if options.world else 13),
+                    "SPARK_A_ENABLED": str(use_spark).lower(),
+                    "SPARK_A_CAPACITY": config.get(
+                        "SPARK_A_CAPACITY",
+                        str(options.capacity if options.world else 4),
+                    ),
                     "SPARK_A_API_KEY": api_key,
+                    "SPARK_B_ENABLED": "false",
+                    "AMD_ENABLED": str(use_amd).lower(),
+                    "AMD_BASE_URL": config.get("AMD_BASE_URL", ""),
+                    "AMD_MODEL": config.get("AMD_MODEL", "Qwen/Qwen3-4B"),
+                    "AMD_API_KEY": config.get("AMD_API_KEY", ""),
+                    "AMD_CAPACITY": config.get("AMD_CAPACITY", "1"),
                     "SPARK_A_MODEL": config.get("SPARK_A_MODEL", "openai/gpt-oss-120b"),
                     "SPARK_A_BASE_URL": "http://127.0.0.1:18001/v1",
                 }
@@ -251,7 +296,9 @@ def main():
                 "FAULTLINE_WORLD": str(options.world).lower(),
                 "FAULTLINE_SAVED_RUN_ID": options.run_id or "",
                 "FAULTLINE_POPULATION": str(options.population),
-                "FAULTLINE_CAPACITY": str(options.capacity),
+                "FAULTLINE_CAPACITY": str(
+                    live_capacity if options.live else options.capacity
+                ),
                 "FAULTLINE_INSTITUTION_SECONDS": str(options.institution_seconds),
                 "FAULTLINE_RESIDENT_SECONDS": str(options.resident_seconds),
                 "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
@@ -278,13 +325,14 @@ def main():
             if not supervisor_running():
                 start(
                     [sys.executable, str(ROOT / "ops/share_site.py")],
-                    "share-supervisor.log", os.environ.copy(),
+                    "share-supervisor.log",
+                    os.environ.copy(),
                 )
             print(f"Share address: {config['FAULTLINE_SHARE_URL']}", flush=True)
         mode = (
             "SAVED (no new inference)"
             if options.run_id
-            else "LIVE Spark"
+            else f"LIVE {compute}"
             if options.live
             else "RULE (no inference)"
         )
@@ -336,6 +384,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("Stage 1 stopped.")
-    except (RuntimeError, subprocess.SubprocessError) as error:
+    except (ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(1)

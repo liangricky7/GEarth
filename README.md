@@ -8,13 +8,13 @@ The expanded world is implemented: ten fictional countries, five government prof
 
 A 1,100-agent rule-mode smoke test completed 120 ticks, delivered 11 shipments and verified cash, goods, ordered events, persistence and pagination. The first live run reached 977/1,100 model coverage and 82 delivered shipments, but a laptop sleep interrupted inference and invalidated its sustained-capacity measurement. The launcher now prevents idle sleep on macOS, the scheduler retries failed turns sooner. The repeat coverage test was stopped at the user’s request; it is not required for the next implementation stage. This population is a test target, not an absolute hardware maximum.
 
-The implementation passes 36 C# tests and 14 Python tests. Jayden's Stage 2 scheduling/API review adds explicit request admission, cancellable final draining, role-level coverage and decision ages. The observer now handles policy events and prevents stale responses from mixing selected runs; five offline DOM checks and one saved-run integration check pass. Browser layout inspection remains unverified.
+The implementation passes 37 C# tests and 27 Python tests. Jayden's Stage 2 scheduling/API review adds explicit request admission, cancellable final draining, role-level coverage and decision ages. The observer now handles policy events and prevents stale responses from mixing selected runs; five offline DOM checks and one saved-run integration check pass. Browser layout inspection remains unverified.
 
 The updated [full design](faultline-full-design.md), pulled from main at `0833da5`, describes Ricky's labor-market redesign. Its newer engine implementation has not been integrated into this branch; the state and recorded runs below describe the preceding economy.
 
 ## Start locally
 
-Requirements: .NET 10 SDK compatible with `global.json`, Python 3.12+, and Git. Spark access is only needed for live model decisions.
+Requirements: .NET 10 SDK compatible with `global.json`, Python 3.12+, and Git. Live model decisions require a configured Spark or AMD endpoint.
 
 ```bash
 python3.12 -m venv .venv
@@ -37,13 +37,15 @@ For Neon, put your connection string in the ignored `.env.local` file and use `-
 .venv/bin/python ops/run_stage1.py --world --live --storage neon --ticks 420
 ```
 
+For a second AMD inference source, follow the [AMD setup guide](docs/faultline/12-amd-compute.md). The launcher accepts `--compute spark`, `--compute amd`, and `--compute hybrid`; AMD remains disabled until its endpoint is verified.
+
 The launcher connects to the existing model service. It does not modify Spark networking or Netplan. Real credentials, virtual environments, runtime state, downloaded tools, and logs are excluded from Git.
 
 ## Verify
 
 ```bash
 dotnet test Faultline.sln
-.venv/bin/python -m pytest agents/test_worker.py -q
+.venv/bin/python -m pytest agents ops/test_amd_model_server.py -q
 .venv/bin/python docs/faultline/validate_design.py
 ```
 
@@ -88,6 +90,7 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 - [World runbook](docs/faultline/08-world-runbook.md): launch, inspect and verify the expanded world.
 - [Jayden's Stage 2 review](docs/faultline/10-stage2-jayden.md): scheduling guarantees, website data, API examples and saved evidence.
 - [Stage 2 observer consistency](docs/faultline/11-stage2-observer-consistency.md): event rendering, run selection, cancellation and verification.
+- [AMD compute setup](docs/faultline/12-amd-compute.md): hybrid routing, cloud notebook, verification, and current connection status.
 - [Stage 1 runbook](docs/faultline/07-stage1-runbook.md): operation and verification of the working demo.
 - [Updated full design](faultline-full-design.md): revised economy and labor-market design from main, with historical contracts and scenarios.
 - [Recorded evidence](docs/faultline/evidence): Stage 1, expanded world results and one-Spark load sweeps.
@@ -103,6 +106,6 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 
 ## Scope and team
 
-The current one-Spark test target is 1,100 agents, subject to sustained integrated coverage and cadence measurements. Solana, Databricks, and AMD integrations remain planned or conditional. Currency and expanded escrow are currently simulated internally.
+The current one-Spark test target is 1,100 agents, subject to sustained integrated coverage and cadence measurements. Solana and Databricks integrations remain planned or conditional. The AMD adapter is implemented; live cloud setup and verification are pending. Currency and expanded escrow are currently simulated internally.
 
 Jayden Hong: engine and integration. Kennedy Nguyen: visualization and Spark operations. Ahmad Hijazi: inference and evaluation. Ricky Liang: persistence and finance. Jayden and Kennedy have Spark SSH access.

@@ -37,6 +37,11 @@ public static class RunAnalysis
         var modelCount = world.Society?.ModelDecisionCount ?? model.Length;
         observations.Add(new("coverage", $"{coverage}/{world.Agents.Count} agents had accepted model turns; {modelCount} model decisions were accepted. Routine economic activity followed engine rules between turns.", Evidence(model)));
 
+        foreach (var backend in model.GroupBy(item => (
+            Name: item.Payload["backend"]?.GetValue<string>() ?? "unrecorded",
+            Model: item.Payload["model"]?.GetValue<string>() ?? "unknown")))
+            observations.Add(new("compute", $"{backend.Key.Name} running {backend.Key.Model} supplied {backend.Count()} accepted model decisions in the retrieved history.", Evidence(backend)));
+
         foreach (var role in behaviors.Select(item => item.Role).Distinct())
         {
             var leader = behaviors.First(item => item.Role == role);
@@ -111,6 +116,7 @@ public static class RunAnalysis
             "Government profiles share an economic engine; geography, resources, personality, timing and migration also affect outcomes.",
             "Model explanations are attributed statements, not proof of private motives or factual accuracy.",
             "Fallbacks and rule choices are separated from accepted model behavior. Wall duration may include host or network interruptions.",
+            "When multiple models supply decisions, model assignment can affect behavior and is an additional comparison confound.",
             complete ? "Complete ordered event history was used through the stated sequence." : "Event history is incomplete; behavior counts describe only the retrieved events."
         ];
         var notes = new RunNotes(world.Id, status ?? world.Status, world.Mode, world.Seed, world.Tick, world.Seq,

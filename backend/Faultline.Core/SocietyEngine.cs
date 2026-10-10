@@ -101,7 +101,7 @@ public static class SocietyEngine
             result.Source is "model" or "rule" or "rule_fallback" ? result.Source : "rule",
             [job.AgentId], new
             {
-                decision_id = job.RequestId, code, action = result.Action, result.Model,
+                decision_id = job.RequestId, code, action = result.Action, result.Model, result.Backend,
                 result.LatencyMs, result.Error, observation_tick = job.ObservationTick
             });
         if (!accepted)

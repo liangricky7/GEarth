@@ -36,6 +36,26 @@ def inspect(name):
     return json.loads(result.stdout)[0]
 
 
+def original_workload_running():
+    probe = (
+        "import os\n"
+        "from pathlib import Path\n"
+        "for path in Path('/proc').glob('[0-9]*/cmdline'):\n"
+        "    if int(path.parent.name) == os.getpid():\n"
+        "        continue\n"
+        "    try:\n"
+        "        command = path.read_bytes()\n"
+        "    except (OSError, UnicodeError):\n"
+        "        continue\n"
+        "    if b'serve\\x00openai/gpt-oss-120b\\x00' in command:\n"
+        "        print('yes')\n"
+        "        break\n"
+        "else:\n"
+        "    print('no')\n"
+    )
+    return docker("exec", ORIGINAL, "python3", "-c", probe) == "yes"
+
+
 def private_write(path, text, owner):
     path.write_text(text)
     path.chmod(0o600)
@@ -259,8 +279,7 @@ def rollback(state):
     if original_id is not None:
         if not original["State"]["Running"]:
             docker("start", ORIGINAL)
-        processes = docker("top", ORIGINAL, "-eo", "args")
-        if "vllm serve openai/gpt-oss-120b" not in processes:
+        if not original_workload_running():
             docker("exec", "-d", ORIGINAL, "bash", RESTORE_SCRIPT)
     (state / "connection.env").unlink(missing_ok=True)
     print(
@@ -286,9 +305,7 @@ def launch(state, owner, fresh=False, provider="SPARK_A"):
     else:
         if original is None or not original["State"]["Running"]:
             raise RuntimeError("Expected running GPT-OSS container was not found")
-        if "vllm serve openai/gpt-oss-120b" not in docker(
-            "top", ORIGINAL, "-eo", "args"
-        ):
+        if not original_workload_running():
             raise RuntimeError(
                 "The original container is not the expected GPT-OSS workload"
             )

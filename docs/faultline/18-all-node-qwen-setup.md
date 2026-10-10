@@ -55,6 +55,14 @@ That image must pass the same Qwen3 compatibility checks. The old GPT-OSS quanti
 
 Success prints `Both models verified` and creates private `~/faultline-qwen/connection.env`. The new model ports are loopback 8000 for 8B and 8001 for 4B. The laptop launcher manages forwards to 18001 and 18003. Download and merge the generated provider settings into ignored `.env.local`, preserving database and website credentials. Do not print or commit the connection file.
 
+Jayden's preparation completed, but launch stopped with `Docker top failed (exit 1)` before replacing the original server. The patched installer checks the original workload inside its container and returns only a boolean, keeping process arguments private. It has been copied to Spark A. Resume the prepared deployment without repeating downloads:
+
+```bash
+sudo python3 ~/faultline-qwen-setup.py launch
+```
+
+This is still a pending launch, not a verified deployment. Eleven focused installer tests pass, including the process-probe and rollback checks.
+
 ## Spark B: fresh installation for Ken
 
 Unzip the shared bundle locally. Copy both files to Spark B, substituting its actual SSH target:

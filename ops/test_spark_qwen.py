@@ -1,11 +1,48 @@
 import json
+import io
 import os
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from ops import spark_qwen
+
+
+@pytest.mark.parametrize("running", [True, False])
+def test_original_probe_ignores_itself_and_keeps_process_arguments_private(
+    monkeypatch, running
+):
+    command = (
+        b"vllm\x00serve\x00openai/gpt-oss-120b\x00--api-key\x00private-test-key\x00"
+    )
+
+    def inaccessible():
+        raise OSError("Process exited")
+
+    entries = [
+        SimpleNamespace(
+            parent=SimpleNamespace(name=str(os.getpid())), read_bytes=lambda: command
+        ),
+        SimpleNamespace(parent=SimpleNamespace(name="1"), read_bytes=inaccessible),
+        SimpleNamespace(
+            parent=SimpleNamespace(name=str(os.getpid() + 1)),
+            read_bytes=lambda: command if running else b"sleep\x00infinity\x00",
+        ),
+    ]
+    monkeypatch.setattr(Path, "glob", lambda path, pattern: entries)
+    output = io.StringIO()
+
+    def docker(*arguments):
+        assert arguments[:4] == ("exec", "vllm_node", "python3", "-c")
+        with redirect_stdout(output):
+            exec(compile(arguments[4], "container_probe", "exec"), {})
+        return output.getvalue().strip()
+
+    monkeypatch.setattr(spark_qwen, "docker", docker)
+    assert spark_qwen.original_workload_running() is running
+    assert output.getvalue() == ("yes\n" if running else "no\n")
 
 
 def test_prepare_checks_runtime_and_downloads_before_replacing_any_workload(
@@ -116,6 +153,7 @@ def test_rollback_restores_original_launch_and_removes_stale_connection(
         return ""
 
     monkeypatch.setattr(spark_qwen, "docker", docker)
+    monkeypatch.setattr(spark_qwen, "original_workload_running", lambda: False)
     spark_qwen.rollback(tmp_path)
     assert ("start", "vllm_node") in calls
     assert ("exec", "-d", "vllm_node", "bash", "/workspace/exec-script.sh") in calls
@@ -152,13 +190,14 @@ def test_launch_failure_restores_original_server(tmp_path, monkeypatch):
 
     def docker(*arguments):
         calls.append(arguments)
-        return "vllm serve openai/gpt-oss-120b" if arguments[0] == "top" else ""
+        return ""
 
     def unavailable(*args):
         raise RuntimeError("Model startup failed")
 
     restored = []
     monkeypatch.setattr(spark_qwen, "docker", docker)
+    monkeypatch.setattr(spark_qwen, "original_workload_running", lambda: True)
     monkeypatch.setattr(spark_qwen, "wait_ready", unavailable)
     monkeypatch.setattr(spark_qwen, "rollback", lambda state: restored.append(state))
     with pytest.raises(RuntimeError, match="startup failed"):

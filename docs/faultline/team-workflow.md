@@ -17,7 +17,9 @@ Codex updates the matching cards and GitHub records while working on tasks in th
 
 ## Branches and merge order
 
-`main` is the shared integrated version. Use one short descriptive branch per new task, created when work starts. For Codex-managed Ahmad work, use `codex/ahmad/<task-name>`, for example `codex/ahmad/evaluation-design`. Human contributors can use `<first-name>/<task-name>`.
+`main` is the shared integrated version. Use one short descriptive branch per new task, created when work starts: `feat/<description>` for features, `fix/<description>` for bug fixes, `test/<description>` for test coverage, `docs/<description>` for documentation, or `chore/<description>` for maintenance. Use lowercase words separated by hyphens, for example `test/worker-failure-checks` or `docs/evaluation-design`. Branch names describe the work and must not use a `codex/` prefix.
+
+Use PR titles in the form `<type>: <short description>`, with the same types above. Describe the resulting change, for example `test: verify worker failure recovery and fallback counts` or `fix: prevent stale panels when switching saved runs`. Keep the owner and Trello link in the description. PRs retain their dependency base, relevant check results, and review requirements.
 
 Read the latest branch head before updating it. Preserve unrelated changes. A breaking shared contract change needs the engine, worker, storage and website owners to coordinate their adapters and fixtures in the same reviewed change.
 
@@ -50,8 +52,8 @@ The branch README reports 30 C# and 14 Python tests. Workflow setup inspected so
 
 ## Ahmad's cards
 
-- [Connect the Python worker to the expanded simulation](https://trello.com/c/Vkps1ook) — stage 2, review existing work.
-- [Check bad model responses, timeouts, and fallback behavior](https://trello.com/c/qn0TEGCa) — stage 2, review existing work.
+- [Connect the Python worker to the expanded simulation](https://trello.com/c/Vkps1ook) — stage 2, implemented; awaiting review and integration.
+- [Check bad model responses, timeouts, and fallback behavior](https://trello.com/c/qn0TEGCa) — stage 2, checks passed; awaiting review and integration.
 - [Record model speed, errors, and accepted decisions](https://trello.com/c/lswO2Gu9) — stage 2, review existing work.
 - [Measure Spark speed using real world prompts](https://trello.com/c/lLhey8gB) — stage 3, later.
 - [Test a longer run and check every agent gets turns](https://trello.com/c/KCCLSC9M) — stage 3, later.
@@ -64,6 +66,6 @@ For a completed task, record: Trello URL, branch, PR (if applicable), exact revi
 
 ## GitHub publishing status
 
-GitHub MCP access was verified on October 10, 2026. The connector lists `liangricky7`'s installation with `dia-rockets`; branch and draft PR creation succeeded. The workflow setup is on `codex/kanban-github-workflow`. Existing expanded-world work is in [draft PR #1](https://github.com/liangricky7/dia-rockets/pull/1). No application code was changed or merged by this setup.
+GitHub MCP access was verified on October 10, 2026. The connector lists `liangricky7`'s installation with `dia-rockets`; branch and draft PR creation succeeded. The workflow setup is on `docs/team-workflow`. Existing expanded-world work is in [draft PR #1](https://github.com/liangricky7/dia-rockets/pull/1). No application code was changed or merged by this setup.
 
-Application implementation remains on hold under Ahmad's instruction.
+Ahmad's authorized worker failure checks are implemented on `test/worker-failure-checks`: 21 Python tests and 44 C# tests passed, with no runtime changes needed. Review and integration remain pending.

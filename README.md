@@ -91,6 +91,7 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 - [Jayden's Stage 2 review](docs/faultline/10-stage2-jayden.md): scheduling guarantees, website data, API examples and saved evidence.
 - [Stage 2 observer consistency](docs/faultline/11-stage2-observer-consistency.md): event rendering, run selection, cancellation and verification.
 - [AMD compute setup](docs/faultline/12-amd-compute.md): hybrid routing, cloud notebook, verification, and current connection status.
+- [Teammate AMD connection guide](docs/faultline/13-amd-teammate-connection.md): private configuration, AMD-only testing, and instructions for teammates' coding agents.
 - [Stage 1 runbook](docs/faultline/07-stage1-runbook.md): operation and verification of the working demo.
 - [Updated full design](faultline-full-design.md): revised economy and labor-market design from main, with historical contracts and scenarios.
 - [Recorded evidence](docs/faultline/evidence): Stage 1, expanded world results and one-Spark load sweeps.

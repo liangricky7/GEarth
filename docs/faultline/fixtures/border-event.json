@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "event_id": "fixture_event_0002",
+  "run_id": "fixture_run_001",
+  "tick": 8,
+  "seq": 2,
+  "event_type": "border_changed",
+  "source": "scenario",
+  "entity_ids": [
+    "r_direct",
+    "beryl"
+  ],
+  "cause_ids": [
+    "fixture_event_0001"
+  ],
+  "payload": {
+    "edge_id": "r_direct",
+    "open": false,
+    "expires_tick": 60
+  }
+}

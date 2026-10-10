@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:faultline:event:v1",
+  "title": "Faultline event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "run_id",
+    "tick",
+    "seq",
+    "event_type",
+    "source",
+    "entity_ids",
+    "cause_ids",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event_type": {
+      "enum": [
+        "world_initialized",
+        "border_changed",
+        "action_accepted",
+        "action_rejected",
+        "message_delivered",
+        "agreement_proposed",
+        "agreement_accepted",
+        "agreement_rejected",
+        "agreement_expired",
+        "loan_requested",
+        "loan_offered",
+        "loan_funded",
+        "loan_repaid",
+        "loan_overdue",
+        "loan_defaulted",
+        "withdrawal_queued",
+        "inventory_changed",
+        "money_transferred",
+        "shipment_dispatched",
+        "route_changed",
+        "route_unavailable",
+        "shipment_delivered",
+        "settlement_pending",
+        "settlement_confirmed",
+        "settlement_failed",
+        "support_changed",
+        "agent_migrated",
+        "metrics_updated",
+        "run_completed"
+      ]
+    },
+    "source": {
+      "enum": [
+        "scenario",
+        "model",
+        "rule",
+        "rule_fallback",
+        "external_receipt"
+      ]
+    },
+    "entity_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "cause_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

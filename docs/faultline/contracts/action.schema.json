@@ -1,0 +1,504 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:faultline:action:v1",
+  "title": "Faultline model-generated action proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action_type",
+    "params",
+    "reason",
+    "evidence_ids"
+  ],
+  "properties": {
+    "action_type": {
+      "enum": [
+        "hold",
+        "purchase",
+        "message",
+        "publish",
+        "set_border",
+        "propose_agreement",
+        "respond_agreement",
+        "request_loan",
+        "respond_loan",
+        "accept_loan",
+        "choose_route",
+        "dispatch",
+        "deposit",
+        "withdraw",
+        "express_support",
+        "migrate",
+        "repay"
+      ]
+    },
+    "params": {
+      "type": "object"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "evidence_ids": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "action_type": {
+          "const": "hold"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "purchase"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "offer_id",
+            "quantity"
+          ],
+          "properties": {
+            "offer_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "quantity": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "message"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recipient_id",
+            "text"
+          ],
+          "properties": {
+            "recipient_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 280
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "publish"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "claim_event_id"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 280
+            },
+            "claim_event_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "set_border"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_id",
+            "open",
+            "expires_tick"
+          ],
+          "properties": {
+            "edge_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "open": {
+              "type": "boolean"
+            },
+            "expires_tick": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "propose_agreement"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "counterparty_id",
+            "kind",
+            "target_id",
+            "expires_tick"
+          ],
+          "properties": {
+            "counterparty_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "kind": {
+              "enum": [
+                "passage",
+                "trade"
+              ]
+            },
+            "target_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "expires_tick": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "respond_agreement"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "agreement_id",
+            "accept"
+          ],
+          "properties": {
+            "agreement_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "accept": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "request_loan"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bank_id",
+            "amount_minor",
+            "trade_id",
+            "repayment_tick"
+          ],
+          "properties": {
+            "bank_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "amount_minor": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "trade_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "repayment_tick": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "respond_loan"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "loan_request_id",
+            "approve"
+          ],
+          "properties": {
+            "loan_request_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "approve": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "accept_loan"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "loan_offer_id"
+          ],
+          "properties": {
+            "loan_offer_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "choose_route"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "shipment_id",
+            "objective"
+          ],
+          "properties": {
+            "shipment_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "objective": {
+              "enum": [
+                "fastest",
+                "cheapest",
+                "cautious"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "dispatch"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "shipment_id"
+          ],
+          "properties": {
+            "shipment_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "deposit"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bank_id",
+            "amount_minor"
+          ],
+          "properties": {
+            "bank_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "amount_minor": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "withdraw"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bank_id",
+            "amount_minor"
+          ],
+          "properties": {
+            "bank_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "amount_minor": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "express_support"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "country_id",
+            "stance"
+          ],
+          "properties": {
+            "country_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "stance": {
+              "enum": [
+                "support",
+                "protest"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "migrate"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "destination_id"
+          ],
+          "properties": {
+            "destination_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "action_type": {
+          "const": "repay"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "loan_id",
+            "amount_minor"
+          ],
+          "properties": {
+            "loan_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "amount_minor": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

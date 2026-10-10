@@ -1,0 +1,11 @@
+{
+  "action_type": "choose_route",
+  "params": {
+    "shipment_id": "shipment_medicine_001",
+    "objective": "cheapest"
+  },
+  "reason": "The direct corridor is closed and this route uses less cash.",
+  "evidence_ids": [
+    "fixture_event_0002"
+  ]
+}

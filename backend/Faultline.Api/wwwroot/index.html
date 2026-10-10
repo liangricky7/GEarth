@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Faultline · Society observer</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/observer.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">Autonomous society · Stage 1</p>
+        <h1>FAULTLINE<span> / </span><small>world observer</small></h1>
+      </div>
+      <div class="status">
+        <span id="connection">Connecting</span
+        ><select id="runs" aria-label="Recorded run"></select>
+      </div>
+    </header>
+    <main>
+      <section class="metrics" aria-label="Simulation metrics">
+        <article><span>World tick</span><strong id="tick">—</strong></article>
+        <article>
+          <span>Agents spawned</span><strong id="population">—</strong>
+        </article>
+        <article>
+          <span>Model coverage</span><strong id="coverage">—</strong>
+        </article>
+        <article>
+          <span>Accepted model decisions</span><strong id="decisions">—</strong>
+        </article>
+        <article>
+          <span>Fallback / rejected</span><strong id="failures">—</strong>
+        </article>
+      </section>
+      <div class="columns">
+        <section class="panel geography">
+          <div class="panel-heading">
+            <h2>Trade corridors</h2>
+            <span id="mode" class="badge">Waiting</span>
+          </div>
+          <svg
+            id="map"
+            viewBox="0 0 900 470"
+            role="img"
+            aria-label="Schematic country locations and trade routes"
+          ></svg>
+          <div class="legend">
+            <span class="open">Open corridor</span
+            ><span class="closed">Closed border</span
+            ><span class="planned">Medicine route plan</span>
+          </div>
+          <div id="route-plan" class="route-plan">
+            Waiting for a route decision.
+          </div>
+          <p class="scope">
+            Local purchases and route planning are active. Shipments, loans, and
+            blockchain settlement are pending implementation.
+          </p>
+        </section>
+        <section class="panel timeline">
+          <div class="panel-heading">
+            <h2>World events</h2>
+            <span id="event-count" class="muted">0 events</span>
+          </div>
+          <ol id="events" aria-live="polite"></ol>
+        </section>
+      </div>
+      <section class="panel agents-panel">
+        <div class="panel-heading">
+          <h2>Agents</h2>
+          <span class="muted"
+            >Select an agent to inspect its profile and decisions</span
+          >
+        </div>
+        <div class="agent-columns">
+          <div id="agents"></div>
+          <div id="profile">
+            <p class="muted">
+              Individual goals, traits, observations, and memories appear here.
+            </p>
+          </div>
+        </div>
+      </section>
+      <p id="message" role="status"></p>
+    </main>
+    <footer>
+      <span>Read-only observer · Synthetic world · Simulated WLD</span
+      ><span id="updated">Waiting for committed state</span>
+    </footer>
+  </body>
+</html>

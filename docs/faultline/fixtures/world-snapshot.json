@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "seq": 2,
+  "tick": 8,
+  "run": {
+    "id": "fixture_run_001",
+    "scenario_id": "medicine-corridor-v1",
+    "mode": "FIXTURE",
+    "status": "synthetic",
+    "variant": "baseline",
+    "seed": 20261010,
+    "population": 500
+  },
+  "countries": [
+    {
+      "id": "aster",
+      "name": "Aster",
+      "lat": 35,
+      "lon": -75,
+      "legitimacy": 70
+    },
+    {
+      "id": "beryl",
+      "name": "Beryl",
+      "lat": 32,
+      "lon": -20,
+      "legitimacy": 70
+    },
+    {
+      "id": "cinder",
+      "name": "Cinder",
+      "lat": 10,
+      "lon": -42,
+      "legitimacy": 70
+    },
+    {
+      "id": "dune",
+      "name": "Dune",
+      "lat": 46,
+      "lon": -50,
+      "legitimacy": 70
+    },
+    {
+      "id": "ember",
+      "name": "Ember",
+      "lat": -20,
+      "lon": 20,
+      "legitimacy": 70
+    }
+  ],
+  "locations": [
+    {
+      "id": "aster_farm",
+      "country_id": "aster",
+      "name": "Aster Warehouse",
+      "lat": 35,
+      "lon": -78
+    },
+    {
+      "id": "aster_port",
+      "country_id": "aster",
+      "name": "Aster Port",
+      "lat": 35,
+      "lon": -70
+    },
+    {
+      "id": "aster_city",
+      "country_id": "aster",
+      "name": "Aster City",
+      "lat": 38,
+      "lon": -74
+    },
+    {
+      "id": "beryl_port",
+      "country_id": "beryl",
+      "name": "Beryl Port",
+      "lat": 32,
+      "lon": -25
+    },
+    {
+      "id": "beryl_hospital",
+      "country_id": "beryl",
+      "name": "Beryl Hospital",
+      "lat": 32,
+      "lon": -18
+    },
+    {
+      "id": "beryl_city",
+      "country_id": "beryl",
+      "name": "Beryl City",
+      "lat": 35,
+      "lon": -20
+    },
+    {
+      "id": "cinder_port",
+      "country_id": "cinder",
+      "name": "Cinder Port",
+      "lat": 10,
+      "lon": -42
+    },
+    {
+      "id": "cinder_city",
+      "country_id": "cinder",
+      "name": "Cinder City",
+      "lat": 12,
+      "lon": -40
+    },
+    {
+      "id": "cinder_warehouse",
+      "country_id": "cinder",
+      "name": "Cinder Warehouse",
+      "lat": 9,
+      "lon": -39
+    },
+    {
+      "id": "dune_pass",
+      "country_id": "dune",
+      "name": "Dune Crossing",
+      "lat": 46,
+      "lon": -50
+    },
+    {
+      "id": "dune_city",
+      "country_id": "dune",
+      "name": "Dune City",
+      "lat": 48,
+      "lon": -48
+    },
+    {
+      "id": "dune_warehouse",
+      "country_id": "dune",
+      "name": "Dune Warehouse",
+      "lat": 44,
+      "lon": -46
+    },
+    {
+      "id": "ember_port",
+      "country_id": "ember",
+      "name": "Ember Port",
+      "lat": -20,
+      "lon": 20
+    },
+    {
+      "id": "ember_city",
+      "country_id": "ember",
+      "name": "Ember City",
+      "lat": -18,
+      "lon": 23
+    },
+    {
+      "id": "ember_warehouse",
+      "country_id": "ember",
+      "name": "Ember Warehouse",
+      "lat": -21,
+      "lon": 25
+    }
+  ],
+  "routes": [
+    {
+      "id": "r_farm_port",
+      "from": "aster_farm",
+      "to": "aster_port",
+      "travel_ticks": 3,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "aster",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_direct",
+      "from": "aster_port",
+      "to": "beryl_port",
+      "travel_ticks": 3,
+      "cost_minor": 300,
+      "risk_score": 0.1,
+      "open": false,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_sea_a",
+      "from": "aster_port",
+      "to": "cinder_port",
+      "travel_ticks": 3,
+      "cost_minor": 700,
+      "risk_score": 0.05,
+      "open": true,
+      "controller_country_id": "cinder",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_sea_b",
+      "from": "cinder_port",
+      "to": "beryl_port",
+      "travel_ticks": 4,
+      "cost_minor": 800,
+      "risk_score": 0.05,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_land_a",
+      "from": "aster_port",
+      "to": "dune_pass",
+      "travel_ticks": 4,
+      "cost_minor": 200,
+      "risk_score": 0.2,
+      "open": true,
+      "controller_country_id": "dune",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_land_b",
+      "from": "dune_pass",
+      "to": "beryl_port",
+      "travel_ticks": 5,
+      "cost_minor": 200,
+      "risk_score": 0.2,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_hospital",
+      "from": "beryl_port",
+      "to": "beryl_hospital",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_aster_city",
+      "from": "aster_port",
+      "to": "aster_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "aster",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_beryl_city",
+      "from": "beryl_port",
+      "to": "beryl_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_cinder_city",
+      "from": "cinder_port",
+      "to": "cinder_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "cinder",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_cinder_warehouse",
+      "from": "cinder_city",
+      "to": "cinder_warehouse",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "cinder",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_dune_city",
+      "from": "dune_pass",
+      "to": "dune_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "dune",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_dune_warehouse",
+      "from": "dune_city",
+      "to": "dune_warehouse",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "dune",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_ember_city",
+      "from": "ember_port",
+      "to": "ember_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "ember",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_ember_warehouse",
+      "from": "ember_city",
+      "to": "ember_warehouse",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "ember",
+      "departures_per_tick": 1
+    }
+  ],
+  "agents_summary": {
+    "spawned": 500,
+    "by_role": {
+      "government": 5,
+      "business": 10,
+      "bank": 5,
+      "media": 5,
+      "citizen": 475
+    },
+    "unique_model_deciding": 0,
+    "coverage_fraction": 0
+  },
+  "shipments": [
+    {
+      "id": "shipment_medicine_001",
+      "trade_id": "trade_medicine_001",
+      "good": "medicine",
+      "quantity": 50,
+      "current_node": "aster_port",
+      "edge_ids": [
+        "r_direct",
+        "r_hospital"
+      ],
+      "status": "waiting_for_route",
+      "route_objective": "fastest",
+      "logical_deadline_tick": 18,
+      "settlement_state": "synthetic_funded",
+      "tx_signature": null
+    }
+  ],
+  "banks": [
+    {
+      "id": "beryl_bank",
+      "cash_minor": 90500,
+      "deposits_minor": 500,
+      "principal_receivable_minor": 10000,
+      "assets_minor": 100500,
+      "equity_minor": 100000,
+      "loan_ids": [
+        "loan_seeded_001"
+      ],
+      "settlement_state": "synthetic"
+    }
+  ],
+  "metrics": {
+    "on_time_delivered_quantity": 0,
+    "scheduled_quantity": 50,
+    "loan_default_count": 0,
+    "model_decision_count": 0,
+    "fallback_decision_count": 0,
+    "unmet_medicine_unit_ticks": 0
+  },
+  "compute": [
+    {
+      "id": "spark_a",
+      "status": "unverified",
+      "accepted_model_decisions": 0
+    },
+    {
+      "id": "spark_b",
+      "status": "unverified",
+      "accepted_model_decisions": 0
+    },
+    {
+      "id": "amd",
+      "status": "allocation_pending",
+      "accepted_model_decisions": 0
+    }
+  ]
+}

@@ -1,0 +1,251 @@
+{
+  "date": "2026-10-10",
+  "model": "openai/gpt-oss-120b",
+  "kind": "small_synthetic_agent_probe",
+  "sampling": {
+    "temperature": 0,
+    "reasoning_effort": "low",
+    "max_tokens": 256
+  },
+  "limitations": [
+    "Only four synthetic cases, repeated in two batches.",
+    "No complete simulation, full role coverage, sustained load, or 500-agent coverage.",
+    "No schema-constrained decoding; the model followed the prompt.",
+    "The second batch may benefit from cache warming; cache state and other workloads are uncontrolled.",
+    "Schema validation uses the controlled reference-schema subset, not a production validator."
+  ],
+  "batches": [
+    {
+      "concurrency": 1,
+      "requests": 4,
+      "valid_decisions": 4,
+      "expected_choices": 4,
+      "elapsed_seconds": 7.329,
+      "valid_decisions_per_second": 0.546,
+      "max_latency_seconds": 2.484,
+      "records": [
+        {
+          "case": "citizen_affordable_food",
+          "latency_seconds": 1.865,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "purchase",
+            "params": {
+              "offer_id": "probe_food_offer_001",
+              "quantity": 1
+            },
+            "reason": "Buy one food unit to meet urgent need, costing 20 minor units, leaving 10 cash for tomorrow.",
+            "evidence_ids": [
+              "probe_food_offer"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 611,
+            "total_tokens": 713,
+            "completion_tokens": 102,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        },
+        {
+          "case": "citizen_unaffordable_food",
+          "latency_seconds": 1.374,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "hold",
+            "params": {},
+            "reason": "I lack sufficient cash (10 minor units) to buy the food unit priced at 20, so I must wait.",
+            "evidence_ids": [
+              "probe_food_offer"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 586,
+            "total_tokens": 661,
+            "completion_tokens": 75,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        },
+        {
+          "case": "business_affordable_detour",
+          "latency_seconds": 1.604,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "choose_route",
+            "params": {
+              "shipment_id": "probe_shipment_001",
+              "objective": "cheapest"
+            },
+            "reason": "Cheapest route costs 600, within 1500 cash, ensuring delivery before deadline.",
+            "evidence_ids": [
+              "probe_border_closed"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 644,
+            "total_tokens": 733,
+            "completion_tokens": 89,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        },
+        {
+          "case": "business_urgent_delivery",
+          "latency_seconds": 2.484,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "choose_route",
+            "params": {
+              "shipment_id": "probe_shipment_002",
+              "objective": "fastest"
+            },
+            "reason": "Fastest route meets deadline (9 ticks) and cost 1700 is within cash; cheaper route would miss the delivery deadline.",
+            "evidence_ids": [
+              "probe_border_closed"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 673,
+            "total_tokens": 817,
+            "completion_tokens": 144,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        }
+      ]
+    },
+    {
+      "concurrency": 4,
+      "requests": 4,
+      "valid_decisions": 4,
+      "expected_choices": 4,
+      "elapsed_seconds": 3.54,
+      "valid_decisions_per_second": 1.13,
+      "max_latency_seconds": 3.539,
+      "records": [
+        {
+          "case": "citizen_affordable_food",
+          "latency_seconds": 2.836,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "purchase",
+            "params": {
+              "offer_id": "probe_food_offer_001",
+              "quantity": 1
+            },
+            "reason": "Buy one food unit now; I have enough cash (30) and need food urgently.",
+            "evidence_ids": [
+              "probe_food_offer"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 611,
+            "total_tokens": 691,
+            "completion_tokens": 80,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        },
+        {
+          "case": "citizen_unaffordable_food",
+          "latency_seconds": 2.725,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "hold",
+            "params": {},
+            "reason": "I lack sufficient cash (10 minor units) to purchase the food unit priced at 20 minor units, so I must wait.",
+            "evidence_ids": [
+              "probe_food_offer"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 586,
+            "total_tokens": 663,
+            "completion_tokens": 77,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        },
+        {
+          "case": "business_affordable_detour",
+          "latency_seconds": 3.539,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "choose_route",
+            "params": {
+              "shipment_id": "probe_shipment_001",
+              "objective": "cheapest"
+            },
+            "reason": "Cheapest route costs 600 minor, within cash 1500 and meets deadline, while direct corridor is closed.",
+            "evidence_ids": [
+              "probe_border_closed"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 644,
+            "total_tokens": 758,
+            "completion_tokens": 114,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        },
+        {
+          "case": "business_urgent_delivery",
+          "latency_seconds": 3.279,
+          "finish_reason": "stop",
+          "schema_valid": true,
+          "legal_candidate": true,
+          "known_evidence": true,
+          "expected_choice": true,
+          "proposal": {
+            "action_type": "choose_route",
+            "params": {
+              "shipment_id": "probe_shipment_002",
+              "objective": "fastest"
+            },
+            "reason": "Fastest route meets deadline (9 ticks) and is affordable with cash 2000.",
+            "evidence_ids": [
+              "probe_border_closed"
+            ]
+          },
+          "usage": {
+            "prompt_tokens": 673,
+            "total_tokens": 771,
+            "completion_tokens": 98,
+            "prompt_tokens_details": null
+          },
+          "valid_decision": true
+        }
+      ]
+    }
+  ]
+}

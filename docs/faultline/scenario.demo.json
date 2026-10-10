@@ -1,0 +1,464 @@
+{
+  "schema_version": 1,
+  "scenario_id": "medicine-corridor-v1",
+  "description": "Synthetic initial world. Seeded contract and disruption; agent responses are not pre-scripted.",
+  "deadline_local": "2026-10-11T10:00:00-04:00",
+  "seed": 20261010,
+  "duration_ticks": 120,
+  "target_wall_seconds_per_tick": 3,
+  "population": {
+    "government": 5,
+    "business": 10,
+    "bank": 5,
+    "media": 5,
+    "citizen": 475
+  },
+  "agent_id_rule": "Each country has {country}_government, {country}_business_1/2, {country}_bank, {country}_media, and {country}_citizen_001..095.",
+  "scheduling": {
+    "institution_interval_ticks": 5,
+    "citizen_interval_ticks": 60,
+    "event_cooldown_ticks": 10,
+    "ordinary_citizen_slot_floor": 0.3,
+    "max_outstanding_per_agent": 1,
+    "request_deadline_wall_seconds": 15,
+    "proposal_max_age_ticks": 5
+  },
+  "currency": {
+    "symbol": "WLD",
+    "decimals": 2,
+    "network": "devnet",
+    "initial_cash_minor_per_role": {
+      "government": 100000,
+      "business": 20000,
+      "bank": 100000,
+      "media": 1000,
+      "citizen": 2000
+    },
+    "initial_cash_overrides": {
+      "beryl_business_1": 2000
+    },
+    "reserve_budget_minor_per_variant": 10000
+  },
+  "goods": {
+    "food": {
+      "base_price_minor": 50,
+      "min_price_minor": 10,
+      "max_price_minor": 200,
+      "target_stock_per_business": 100,
+      "citizen_consumption_units_per_5_ticks": 1,
+      "production_units_per_business_per_5_ticks": 120,
+      "energy_input_units_per_production": 10
+    },
+    "energy": {
+      "base_price_minor": 20,
+      "min_price_minor": 5,
+      "max_price_minor": 100,
+      "target_stock_per_business": 100,
+      "citizen_consumption_units_per_5_ticks": 1,
+      "production_units_per_business_per_5_ticks": 120,
+      "energy_input_units_per_production": 0
+    },
+    "medicine": {
+      "base_price_minor": 200,
+      "min_price_minor": 100,
+      "max_price_minor": 400,
+      "target_stock_per_business": 50,
+      "citizen_consumption_units_per_5_ticks": 0,
+      "production_units_per_business_per_5_ticks": 0,
+      "energy_input_units_per_production": 0
+    }
+  },
+  "production_rule": "business_1 produces food; business_2 produces energy. Seed each business with food=100, energy=100; aster_business_2 additionally owns medicine=50 at aster_farm.",
+  "loan_policy": {
+    "interest_bps": 500,
+    "default_grace_ticks": 5,
+    "recovery_fraction": 0,
+    "minimum_liquid_cash_to_deposits_ratio": 0.2,
+    "max_new_loan_minor": 10000
+  },
+  "social": {
+    "neighbors_per_citizen": 4,
+    "max_prompt_memories": 8,
+    "max_prompt_messages": 6,
+    "delivery_delay_ticks": 1
+  },
+  "legitimacy": {
+    "initial_score": 70,
+    "min": 0,
+    "max": 100,
+    "loss_per_unmet_consumption_period": 1,
+    "gain_per_fulfilled_country_agreement": 2
+  },
+  "trust": {
+    "initial_score": 50,
+    "min": 0,
+    "max": 100,
+    "gain_per_fulfilled_agreement": 5,
+    "loss_per_broken_agreement": 10
+  },
+  "countries": [
+    {
+      "id": "aster",
+      "name": "Aster",
+      "lat": 35,
+      "lon": -75
+    },
+    {
+      "id": "beryl",
+      "name": "Beryl",
+      "lat": 32,
+      "lon": -20
+    },
+    {
+      "id": "cinder",
+      "name": "Cinder",
+      "lat": 10,
+      "lon": -42
+    },
+    {
+      "id": "dune",
+      "name": "Dune",
+      "lat": 46,
+      "lon": -50
+    },
+    {
+      "id": "ember",
+      "name": "Ember",
+      "lat": -20,
+      "lon": 20
+    }
+  ],
+  "locations": [
+    {
+      "id": "aster_farm",
+      "country_id": "aster",
+      "name": "Aster Warehouse",
+      "lat": 35,
+      "lon": -78
+    },
+    {
+      "id": "aster_port",
+      "country_id": "aster",
+      "name": "Aster Port",
+      "lat": 35,
+      "lon": -70
+    },
+    {
+      "id": "aster_city",
+      "country_id": "aster",
+      "name": "Aster City",
+      "lat": 38,
+      "lon": -74
+    },
+    {
+      "id": "beryl_port",
+      "country_id": "beryl",
+      "name": "Beryl Port",
+      "lat": 32,
+      "lon": -25
+    },
+    {
+      "id": "beryl_hospital",
+      "country_id": "beryl",
+      "name": "Beryl Hospital",
+      "lat": 32,
+      "lon": -18
+    },
+    {
+      "id": "beryl_city",
+      "country_id": "beryl",
+      "name": "Beryl City",
+      "lat": 35,
+      "lon": -20
+    },
+    {
+      "id": "cinder_port",
+      "country_id": "cinder",
+      "name": "Cinder Port",
+      "lat": 10,
+      "lon": -42
+    },
+    {
+      "id": "cinder_city",
+      "country_id": "cinder",
+      "name": "Cinder City",
+      "lat": 12,
+      "lon": -40
+    },
+    {
+      "id": "cinder_warehouse",
+      "country_id": "cinder",
+      "name": "Cinder Warehouse",
+      "lat": 9,
+      "lon": -39
+    },
+    {
+      "id": "dune_pass",
+      "country_id": "dune",
+      "name": "Dune Crossing",
+      "lat": 46,
+      "lon": -50
+    },
+    {
+      "id": "dune_city",
+      "country_id": "dune",
+      "name": "Dune City",
+      "lat": 48,
+      "lon": -48
+    },
+    {
+      "id": "dune_warehouse",
+      "country_id": "dune",
+      "name": "Dune Warehouse",
+      "lat": 44,
+      "lon": -46
+    },
+    {
+      "id": "ember_port",
+      "country_id": "ember",
+      "name": "Ember Port",
+      "lat": -20,
+      "lon": 20
+    },
+    {
+      "id": "ember_city",
+      "country_id": "ember",
+      "name": "Ember City",
+      "lat": -18,
+      "lon": 23
+    },
+    {
+      "id": "ember_warehouse",
+      "country_id": "ember",
+      "name": "Ember Warehouse",
+      "lat": -21,
+      "lon": 25
+    }
+  ],
+  "routes": [
+    {
+      "id": "r_farm_port",
+      "from": "aster_farm",
+      "to": "aster_port",
+      "travel_ticks": 3,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "aster",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_direct",
+      "from": "aster_port",
+      "to": "beryl_port",
+      "travel_ticks": 3,
+      "cost_minor": 300,
+      "risk_score": 0.1,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_sea_a",
+      "from": "aster_port",
+      "to": "cinder_port",
+      "travel_ticks": 3,
+      "cost_minor": 700,
+      "risk_score": 0.05,
+      "open": true,
+      "controller_country_id": "cinder",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_sea_b",
+      "from": "cinder_port",
+      "to": "beryl_port",
+      "travel_ticks": 4,
+      "cost_minor": 800,
+      "risk_score": 0.05,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_land_a",
+      "from": "aster_port",
+      "to": "dune_pass",
+      "travel_ticks": 4,
+      "cost_minor": 200,
+      "risk_score": 0.2,
+      "open": true,
+      "controller_country_id": "dune",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_land_b",
+      "from": "dune_pass",
+      "to": "beryl_port",
+      "travel_ticks": 5,
+      "cost_minor": 200,
+      "risk_score": 0.2,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_hospital",
+      "from": "beryl_port",
+      "to": "beryl_hospital",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_aster_city",
+      "from": "aster_port",
+      "to": "aster_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "aster",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_beryl_city",
+      "from": "beryl_port",
+      "to": "beryl_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "beryl",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_cinder_city",
+      "from": "cinder_port",
+      "to": "cinder_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "cinder",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_cinder_warehouse",
+      "from": "cinder_city",
+      "to": "cinder_warehouse",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "cinder",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_dune_city",
+      "from": "dune_pass",
+      "to": "dune_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "dune",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_dune_warehouse",
+      "from": "dune_city",
+      "to": "dune_warehouse",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "dune",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_ember_city",
+      "from": "ember_port",
+      "to": "ember_city",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "ember",
+      "departures_per_tick": 1
+    },
+    {
+      "id": "r_ember_warehouse",
+      "from": "ember_city",
+      "to": "ember_warehouse",
+      "travel_ticks": 2,
+      "cost_minor": 100,
+      "risk_score": 0,
+      "open": true,
+      "controller_country_id": "ember",
+      "departures_per_tick": 1
+    }
+  ],
+  "seeded_contract": {
+    "trade_id": "trade_medicine_001",
+    "shipment_id": "shipment_medicine_001",
+    "seller_id": "aster_business_2",
+    "buyer_id": "beryl_business_1",
+    "bank_id": "beryl_bank",
+    "origin": "aster_farm",
+    "destination": "beryl_hospital",
+    "good": "medicine",
+    "quantity": 50,
+    "unit_price_minor": 200,
+    "escrow_amount_minor": 10000,
+    "logical_delivery_deadline_tick": 18,
+    "loan_principal_minor": 10000,
+    "loan_due_tick": 30,
+    "initial_deposit_minor": 500,
+    "earliest_dispatch_tick": 5,
+    "default_route_objective": "fastest",
+    "on_chain_deadline_wall_seconds_after_funding": 1800,
+    "bootstrap_rule": "Allocate initial balances, deposit 500 from buyer to bank, fund seeded bank loan of 10000 to buyer, fund buyer escrow of 10000, reserve 50 medicine units from seller. All are labeled seeded; chain funding must confirm before start. Dispatch becomes a business decision at tick 5."
+  },
+  "city_demand": {
+    "location_id": "beryl_hospital",
+    "medicine_quantity": 50,
+    "need_deadline_tick": 18,
+    "local_purchase_price_minor": 240,
+    "payer_id": "beryl_government",
+    "purchase_rule": "After physical delivery, government buys delivered medicine from importer once using existing treasury cash. If delivery is late, unmet need remains recorded for elapsed ticks."
+  },
+  "external_events": [
+    {
+      "tick": 8,
+      "event_type": "border_changed",
+      "edge_id": "r_direct",
+      "open": false,
+      "expires_tick": 60,
+      "source": "scenario"
+    }
+  ],
+  "variants": [
+    {
+      "id": "baseline",
+      "budget_minor": 10000,
+      "rule": "Emergency funds stay in the existing beryl_government treasury; ordinary lending policy."
+    },
+    {
+      "id": "route_financing",
+      "budget_minor": 10000,
+      "rule": "Allow up to 10000 minor units of existing bank cash for route-related loans subject to solvency; keep reserve in government treasury; banks still choose whether to approve."
+    },
+    {
+      "id": "liquidity_support",
+      "budget_minor": 10000,
+      "rule": "At tick 8 transfer 10000 minor units from beryl_government cash to beryl_bank equity; then ordinary lending policy."
+    }
+  ],
+  "simulation_mode": "observable",
+  "operator_control": "CLI/scripts only; public API is read-only.",
+  "amd_enabled_by_default": false
+}

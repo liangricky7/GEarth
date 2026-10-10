@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "status": "template_not_measured",
+  "run_id": null,
+  "scenario_id": "medicine-corridor-v1",
+  "scenario_sha256": null,
+  "seed": null,
+  "variant": null,
+  "population_target": 500,
+  "population_actual": null,
+  "start_time_utc": null,
+  "end_time_utc": null,
+  "model_workers": [
+    {
+      "worker_id": "spark_a",
+      "model_id": null,
+      "revision": null,
+      "container_digest": null,
+      "precision": null,
+      "accepted_decisions": null
+    },
+    {
+      "worker_id": "spark_b",
+      "model_id": null,
+      "revision": null,
+      "container_digest": null,
+      "precision": null,
+      "accepted_decisions": null
+    },
+    {
+      "worker_id": "amd",
+      "enabled": false,
+      "allocation_confirmed": false,
+      "model_id": null,
+      "revision": null,
+      "accepted_decisions": null
+    }
+  ],
+  "prompt_sha256": null,
+  "schema_version_used": 1,
+  "decision_cadence": null,
+  "metrics": {
+    "unique_model_deciding_agents": null,
+    "coverage_fraction": null,
+    "fallback_fraction": null,
+    "valid_decisions_per_second": null,
+    "institution_p95_wall_seconds": null,
+    "max_queue_age_wall_seconds": null
+  },
+  "integrations": {
+    "neon_verified": false,
+    "solana_network": "devnet",
+    "mint": null,
+    "program_id": null,
+    "funding_signature": null,
+    "release_signature": null,
+    "refund_signature": null,
+    "databricks_workspace_verified": false,
+    "databricks_report_artifact": null
+  },
+  "acceptance_evidence": [],
+  "failures": [],
+  "replay_path": null
+}

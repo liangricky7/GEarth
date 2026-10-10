@@ -1,0 +1,11 @@
+{
+  "action_type": "request_loan",
+  "params": {
+    "bank_id": "beryl_bank",
+    "amount_minor": -200,
+    "trade_id": "trade_medicine_001",
+    "repayment_tick": 30
+  },
+  "reason": "Deliberately invalid negative loan fixture.",
+  "evidence_ids": []
+}

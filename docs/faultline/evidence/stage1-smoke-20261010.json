@@ -1,0 +1,67 @@
+{
+  "run_id": "stage1_20261010_114011_c648d2",
+  "mode": "LIVE",
+  "ticks": 16,
+  "population": {
+    "spawned": 50,
+    "by_role": {
+      "government": 5,
+      "business": 10,
+      "bank": 5,
+      "media": 5,
+      "citizen": 25
+    },
+    "unique_model_deciding": 49
+  },
+  "metrics": {
+    "model_decision_count": 63,
+    "fallback_decision_count": 0,
+    "rejected_decision_count": 1,
+    "cash_minor": 1237000,
+    "initial_cash_minor": 1237000,
+    "unmet_needs": 108
+  },
+  "decision_attempts": 64,
+  "actions": {
+    "choose_route": 4,
+    "hold": 25,
+    "purchase": 25,
+    "publish": 10
+  },
+  "rejection_codes": {
+    "STALE_DEPENDENCY": 1
+  },
+  "latency_ms_median": 6201.35,
+  "latency_ms_p95": 8027.46,
+  "event_count": 123,
+  "persistence": "Neon checkpoint and event table verified",
+  "route_plan": {
+    "edge_ids": [
+      "r_farm_port",
+      "r_sea_a",
+      "r_sea_b",
+      "r_hospital"
+    ],
+    "travel_ticks": 12,
+    "cost_minor": 1700,
+    "objective": "fastest"
+  },
+  "checks": [
+    "event_schema",
+    "ordered_sequences",
+    "cause_references",
+    "cash_conservation",
+    "nonnegative_resources",
+    "read_only_api",
+    "persisted_run_read",
+    "static_assets"
+  ],
+  "visual_inspection": "unverified: browser permission denied",
+  "limitations": [
+    "single Spark",
+    "synchronous batches of four",
+    "route planning only",
+    "no Solana or loans",
+    "no scale benchmark or behavioral validation"
+  ]
+}

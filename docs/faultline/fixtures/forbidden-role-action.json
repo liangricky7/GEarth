@@ -1,0 +1,16 @@
+{
+  "agent_id": "beryl_citizen_001",
+  "proposal": {
+    "action_type": "set_border",
+    "params": {
+      "edge_id": "r_direct",
+      "open": true,
+      "expires_tick": 60
+    },
+    "reason": "Schema-valid fixture requiring semantic rejection for citizen authority.",
+    "evidence_ids": [
+      "fixture_event_0002"
+    ]
+  },
+  "expected_rejection": "ROLE_FORBIDDEN"
+}

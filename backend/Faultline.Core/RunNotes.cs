@@ -87,6 +87,14 @@ public static class RunAnalysis
             var losses = settled.Sum(item => item.Payload["loss_minor"]!.GetValue<long>());
             observations.Add(new("credit", $"{requested} loans were requested, {funded.Length} funded and {settled.Length} settled; {defaults} settled in default with {Money(losses)} WLD unpaid. Unmatured loans are not counted as defaults.", Evidence(funded.Concat(settled))));
         }
+        if (world.Society is { } banking)
+        {
+            var deposits = world.Agents.Values.Sum(agent => agent.DepositMinor);
+            var withdrawals = events.Where(item => item.EventType == "savings_withdrawn").ToArray();
+            var failures = events.Where(item => item.EventType == "bank_failed").ToArray();
+            var insured = banking.Nations.Values.Sum(nation => nation.DepositInsurancePaidMinor);
+            observations.Add(new("banking", $"Deposits stood at {Money(deposits)} WLD at the last tick. residents chose to take their savings out of the bank {withdrawals.Length} times; deposit insurance paid {Money(insured)} WLD; {failures.Length} banks failed and were taken over by the state.", Evidence(withdrawals.Concat(failures))));
+        }
         var payments = events.Where(item => item.EventType == "payment_sent").ToArray();
         var purchases = events.Where(item => item.EventType == "goods_purchased").ToArray();
         if (payments.Length > 0 || purchases.Length > 0)

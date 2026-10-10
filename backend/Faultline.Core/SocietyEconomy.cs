@@ -1,8 +1,9 @@
 namespace Faultline.Core;
 
 // One tick is one day. Daily: production, health, doctor visits and household shopping at the
-// cheapest local seller. Weekly: labor market and payroll (SocietyLabor), public payroll, welfare,
-// unemployment benefit, public healthcare, discretionary spending and metrics.
+// cheapest local seller. Weekly: banking (SocietyBank), labor market and payroll (SocietyLabor), public
+// payroll, welfare, unemployment benefit, public healthcare, discretionary spending, the savings sweep
+// and metrics.
 public static class SocietyEconomy
 {
     // ponytail: fixed economic constants; move to scenario config if experiments need to vary them
@@ -22,10 +23,10 @@ public static class SocietyEconomy
     // Sick people still do some work; output and pay scale from 25% at zero health to 100% when healthy.
     public static double Capacity(Agent citizen) => 0.25 + 0.75 * citizen.Health / 100.0;
 
-    private static double WeeklyPay(Agent resident) =>
+    public static double WeeklyPay(Agent resident) =>
         SocietyLabor.TableWage.GetValueOrDefault(resident.FormerOccupation ?? resident.Occupation, 1000);
 
-    // Savings in weeks of one's own pay, with log utility: the first weeks of savings matter most.
+    // Savings (cash and deposits) in weeks of one's own pay, with log utility: the first weeks matter most.
     private static double SavingsSecurity(Agent resident, double cash) =>
         Math.Min(1, Math.Log(1 + Math.Max(0, cash) / WeeklyPay(resident)) / Math.Log(1 + SecurityWeeksOfPay));
 
@@ -41,7 +42,7 @@ public static class SocietyEconomy
     public static int QualityOfLife(Agent resident, int needsMet, bool overtime) => (int)Math.Round(100 * (
         NeedsWeight * needsMet / 2.0 + HealthWeight * resident.Health / 100.0
         + ComfortWeight * Comfort(resident.GoodsBoughtLastWeek, resident.ServicesBoughtLastWeek)
-        + SecurityWeight * Security(resident, resident.CashMinor) + LeisureWeight * (overtime ? 0.5 : 1)));
+        + SecurityWeight * Security(resident, SocietyBank.Savings(resident)) + LeisureWeight * (overtime ? 0.5 : 1)));
 
     public static void Day(World world)
     {
@@ -118,8 +119,9 @@ public static class SocietyEconomy
             long Since(string key, long total) => total - nation.WeekStartTotals.GetValueOrDefault(key);
 
             // Planned economies own every firm: the state takes surplus above four weeks of payroll and covers shortfalls.
+            // The state bank is left alone: its cash is depositors' reserves.
             if (SocietyLabor.IsPlanned(nation))
-                foreach (var firm in agents.Where(agent => agent.Role == "business"))
+                foreach (var firm in agents.Where(agent => agent.Role == "business" && !SocietyBank.IsBank(agent)))
                 {
                     var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
                     if (firm.CashMinor > payroll * 4)
@@ -128,6 +130,7 @@ public static class SocietyEconomy
                         Transfer(government, firm, Math.Min(government.CashMinor, payroll - firm.CashMinor));
                 }
 
+            SocietyBank.Week(world, nation);
             SocietyLabor.Week(world, nation, government, residents);
             var teachers = PublicPayroll(nation, government,
                 residents.Where(resident => resident.EmployerId == government.Id).ToArray());
@@ -173,6 +176,7 @@ public static class SocietyEconomy
                     resident.SupportsLeadership = true;
                 resident.LastWeekWellbeing = resident.Wellbeing;
             }
+            SocietyBank.Sweep(world, nation, residents);
 
             var tensions = society.Relations.Values.Where(relation => relation.AtWar
                 && (relation.First == nation.Id || relation.Second == nation.Id)).ToArray();
@@ -202,7 +206,6 @@ public static class SocietyEconomy
                 ["public_visits"] = nation.PublicDoctorVisits
             };
         }
-        SettleCredit(world);
         UpdateMetrics(world);
         foreach (var nation in society.Nations.Values)
         {
@@ -239,10 +242,10 @@ public static class SocietyEconomy
             double Net(int have, long price) =>
                 ComfortWeight * 0.5 * (ComfortOf(have + 1) - ComfortOf(have))
                 - SavingsHorizonWeeks * SecurityWeight * 0.5
-                * (SavingsSecurity(resident, resident.CashMinor) - SavingsSecurity(resident, resident.CashMinor - price));
+                * (SavingsSecurity(resident, SocietyBank.Savings(resident)) - SavingsSecurity(resident, SocietyBank.Savings(resident) - price));
             for (var round = 0; round < 2 * ComfortUnitsAtFull; round++)
             {
-                var spendable = resident.CashMinor - essentials;
+                var spendable = SocietyBank.Liquid(world, resident) - essentials; // savings in the bank can be spent too
                 var shop = PickSeller(shops.Where(seller => seller.Inventory["tools"] > 0 && seller.PriceMinor <= spendable).ToArray(),
                     world.Seed, $"{resident.Id}:{world.Tick}:tools:{round}");
                 var venue = PickSeller(venues.Where(seller => seats[seller.Id] > 0 && seller.PriceMinor <= spendable).ToArray(),
@@ -255,14 +258,16 @@ public static class SocietyEconomy
                     break;
                 if (goodsGain >= serviceGain)
                 {
-                    Sell(world, resident, shop!, shop!.PriceMinor, true, 1);
+                    SocietyBank.Draw(world, resident, shop!.PriceMinor);
+                    Sell(world, resident, shop, shop.PriceMinor, true, 1);
                     shop.Inventory["tools"]--;
                     society.ConsumedGoods["tools"]++;
                     goods++;
                 }
                 else
                 {
-                    Sell(world, resident, venue!, venue!.PriceMinor, true, 1);
+                    SocietyBank.Draw(world, resident, venue!.PriceMinor);
+                    Sell(world, resident, venue, venue.PriceMinor, true, 1);
                     seats[venue.Id]--;
                     services++;
                 }
@@ -454,25 +459,6 @@ public static class SocietyEconomy
         world.Emit("conflict_costs", "rule", [nation.Id], new { conflicts, nation.LostUnits });
     }
 
-    private static void SettleCredit(World world)
-    {
-        foreach (var credit in world.Society!.Credit.Where(credit => credit.Status == "active" && credit.DueTick <= world.Tick))
-        {
-            var borrower = world.Agents[credit.BorrowerId];
-            var bank = world.Agents[credit.BankId];
-            var paid = Math.Min(borrower.CashMinor, credit.DueMinor);
-            Transfer(borrower, bank, paid);
-            credit.Status = paid == credit.DueMinor ? "repaid" : "defaulted";
-            if (credit.Status == "defaulted")
-                world.Society.Nations[borrower.CountryId].DefaultedLoans++;
-            world.Emit("loan_settled", "rule", [credit.Id, borrower.Id, bank.Id], new
-            {
-                credit.Status, paid_minor = paid, loss_minor = credit.DueMinor - paid,
-                settlement = "simulated internal ledger"
-            });
-        }
-    }
-
     public static void UpdateMetrics(World world)
     {
         var groups = world.Agents.Values.GroupBy(agent => agent.CountryId)
@@ -484,7 +470,7 @@ public static class SocietyEconomy
             var support = citizens.Length == 0 ? 0 : citizens.Count(citizen => citizen.SupportsLeadership) / (double)citizens.Length;
             var wellbeing = citizens.Length == 0 ? 0 : citizens.Average(citizen => citizen.Wellbeing) / 100;
             nation.Approval = Math.Round(support * 0.5 + wellbeing * 0.5, 3);
-            nation.GiniCash = Math.Round(Gini(citizens.Select(citizen => citizen.CashMinor).ToArray()), 4);
+            nation.GiniCash = Math.Round(Gini(citizens.Select(SocietyBank.Savings).ToArray()), 4);
             nation.Stocks = SocietyFactory.Goods.ToDictionary(good => good,
                 good => agents.Where(agent => agent.Role == "business").Sum(agent => agent.Inventory[good]));
             var totalNeeds = nation.FulfilledNeedsLastCycle + nation.UnmetNeedsLastCycle;

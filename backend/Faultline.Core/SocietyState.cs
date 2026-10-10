@@ -2,17 +2,22 @@ namespace Faultline.Core;
 
 public sealed record GovernmentProfile(string Id, string Name, int PolicyDelay, bool Elected,
     int MinimumApprovalPercent, int PublicOwnershipPercent, int DefaultTaxBasisPoints,
-    int DefaultWelfareMinor);
+    int DefaultWelfareMinor, long DepositInsuranceMinor);
 
 public static class Governments
 {
+    public const long FullDepositInsurance = long.MaxValue;
+
+    // Deposit insurance per depositor: democracies insure most household savings (a capped scheme in the
+    // market democracy, a blanket guarantee in the social democracy), the planned state guarantees its own
+    // bank, the monarchy offers a small scheme and the dictatorship none.
     public static readonly GovernmentProfile[] Profiles =
     [
-        new("market_democracy", "Market democracy", 3, true, 45, 0, 1500, 0),
-        new("social_democracy", "Social democracy", 2, true, 45, 0, 3000, 100),
-        new("planned_republic", "Single-party planned economy", 1, false, 0, 100, 2500, 150),
-        new("dictatorship", "Personal dictatorship", 0, false, 0, 0, 1000, 0),
-        new("monarchy", "Absolute monarchy", 1, false, 0, 0, 2000, 50)
+        new("market_democracy", "Market democracy", 3, true, 45, 0, 1500, 0, 50000),
+        new("social_democracy", "Social democracy", 2, true, 45, 0, 3000, 100, FullDepositInsurance),
+        new("planned_republic", "Single-party planned economy", 1, false, 0, 100, 2500, 150, FullDepositInsurance),
+        new("dictatorship", "Personal dictatorship", 0, false, 0, 0, 1000, 0, 0),
+        new("monarchy", "Absolute monarchy", 1, false, 0, 0, 2000, 50, 10000)
     ];
 
     public static GovernmentProfile Get(string id) => Profiles.Single(profile => profile.Id == id);
@@ -39,6 +44,8 @@ public sealed class Nation
     public long ProducedUnits { get; set; }
     public long LostUnits { get; set; }
     public int DefaultedLoans { get; set; }
+    public long DepositInsurancePaidMinor { get; set; }
+    public int BankFailures { get; set; }
     public double Approval { get; set; } = 0.75;
     public double GiniCash { get; set; }
     public double FoodMultiplier { get; set; } = 1;
@@ -113,14 +120,23 @@ public sealed class Cargo
     public string CauseId { get; set; } = "";
 }
 
+// A bank loan: requested, then active (repaid in weekly installments of principal plus flat interest),
+// then repaid or defaulted; a request can also be rejected. Startup loans name the sector to open.
 public sealed class Credit
 {
     public string Id { get; set; } = "";
     public string BankId { get; set; } = "";
     public string BorrowerId { get; set; } = "";
     public long PrincipalMinor { get; set; }
-    public long DueMinor { get; set; }
-    public int DueTick { get; set; }
+    public long PrincipalLeftMinor { get; set; }
+    public long WeeklyPrincipalMinor { get; set; }
+    public long WeeklyInterestMinor { get; set; }
+    public int RatePct { get; set; }
+    public int MissedPayments { get; set; }
+    public string? Sector { get; set; }
+    public int LaunchPriceMinor { get; set; }
+    public int RequestedTick { get; set; }
+    public string RequestEventId { get; set; } = "";
     public string Status { get; set; } = "requested";
 }
 

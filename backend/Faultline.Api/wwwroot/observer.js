@@ -575,7 +575,7 @@ function showWorld(snapshot) {
     relations.append(
       textNode(
         "p",
-        `${loan.bank_id} → ${loan.borrower_id} · ${(loan.principal_minor / 100).toFixed(2)} WLD · ${loan.status} · due T${loan.due_tick}`,
+        `${loan.bank_id} → ${loan.borrower_id} · ${(loan.principal_minor / 100).toFixed(2)} WLD · ${loan.status}${loan.status === "active" ? ` · ${(loan.principal_left_minor / 100).toFixed(2)} left` : ""}`,
       ),
     );
 }

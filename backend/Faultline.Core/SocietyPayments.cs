@@ -91,8 +91,7 @@ public static class SocietyPayments
         Agent?[] picks = payer.Role switch
         {
             "citizen" or "entrepreneur" => [neediest, government, payer.EmployerId is null ? null : world.Agents.GetValueOrDefault(payer.EmployerId)],
-            "government" => [neediest, poorestBusiness, locals.FirstOrDefault(agent => agent.Role == "bank")],
-            "bank" => [poorestBusiness, government],
+            "government" => [neediest, poorestBusiness, locals.FirstOrDefault(SocietyBank.IsBank)],
             _ => [neediest, government]
         };
         return picks.OfType<Agent>().Where(agent => agent.Id != payer.Id && agent.CountryId == payer.CountryId)

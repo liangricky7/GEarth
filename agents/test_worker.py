@@ -72,6 +72,147 @@ def test_unauthorized_request_never_reaches_model(monkeypatch):
     asyncio.run(request())
 
 
+async def check_failure_then_recovery(
+    monkeypatch, fail, expected_error, timeout=1, deadline=None
+):
+    monkeypatch.setattr(worker, "TOKEN", "test-token")
+    monkeypatch.setattr(worker, "CAPACITY", 1)
+    monkeypatch.setattr(worker, "TIMEOUT_SECONDS", timeout)
+    monkeypatch.setattr(worker, "active_requests", 0)
+    calls = []
+
+    async def model_response(request):
+        calls.append(request)
+        assert worker.active_requests == 1
+        if len(calls) == 1:
+            return await fail(request)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"choice":1,"reason":"Work."}'}}]},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(model_response)
+    ) as model_client:
+        monkeypatch.setattr(worker.app.state, "model_client", model_client, raising=False)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=worker.app), base_url="http://test"
+        ) as client:
+            job = make_job()
+            job.observation = {"world_stage": 2}
+            job.candidates.append({"action_type": "work", "params": {"effort": 2}})
+            if deadline is not None:
+                job.deadline = deadline
+
+            async def submit():
+                return await asyncio.wait_for(
+                    client.post(
+                        "/decide",
+                        json=job.model_dump(mode="json"),
+                        headers={"Authorization": "Bearer test-token"},
+                    ),
+                    timeout=2,
+                )
+
+            failed = await submit()
+            assert failed.status_code == 200
+            result = failed.json()
+            assert result["request_id"] == job.request_id
+            assert result["source"] == "rule_fallback"
+            assert result["error"] == expected_error
+            assert result["action"]["action_type"] == "hold"
+            assert result["action"]["params"] == {}
+            assert result["action"]["evidence_ids"] == []
+            assert result["action"]["reason"].strip()
+            assert result["latency_ms"] >= 0
+            assert worker.active_requests == 0
+
+            # A second request must use the slot released by the failed request.
+            job.request_id = "request_after_failure"
+            job.deadline = datetime.now(timezone.utc) + timedelta(seconds=15)
+            recovered = await submit()
+            assert recovered.status_code == 200
+            result = recovered.json()
+            assert result["request_id"] == job.request_id
+            assert result["source"] == "model"
+            assert result["error"] is None
+            assert result["action"]["action_type"] == "work"
+            assert result["action"]["params"] == {"effort": 2}
+            assert worker.active_requests == 0
+            assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "payload,error",
+    [
+        pytest.param(
+            {"choices": [{"message": {"content": '{"choice":'}}]},
+            "JSONDecodeError",
+            id="broken-model-json",
+        ),
+        pytest.param({}, "KeyError", id="missing-choices"),
+        pytest.param({"choices": []}, "IndexError", id="empty-choices"),
+        pytest.param(
+            {"choices": [{"message": {"content": None}}]},
+            "TypeError",
+            id="null-model-content",
+        ),
+    ],
+)
+def test_malformed_model_response_falls_back_and_next_request_succeeds(
+    monkeypatch, payload, error
+):
+    async def fail(request):
+        return httpx.Response(200, json=payload)
+
+    asyncio.run(check_failure_then_recovery(monkeypatch, fail, error))
+
+
+def test_model_http_timeout_falls_back_and_next_request_succeeds(monkeypatch):
+    async def fail(request):
+        raise httpx.ReadTimeout("Model did not answer", request=request)
+
+    asyncio.run(check_failure_then_recovery(monkeypatch, fail, "ReadTimeout"))
+
+
+@pytest.mark.parametrize("limit", ["worker_timeout", "job_deadline"])
+def test_hanging_model_is_canceled_and_next_request_succeeds(monkeypatch, limit):
+    canceled = []
+    deadline = None
+
+    async def fail(request):
+        try:
+            await asyncio.Future()
+        finally:
+            canceled.append(True)
+
+    if limit == "job_deadline":
+        # Freeze only the admission clock so a short job deadline cannot expire
+        # before /decide begins under a slow test runner.
+        fixed_now = datetime.now(timezone.utc)
+
+        class AdmissionClock:
+            @staticmethod
+            def now(tz):
+                return fixed_now
+
+        monkeypatch.setattr(worker, "datetime", AdmissionClock)
+        deadline = fixed_now + timedelta(milliseconds=20)
+
+    asyncio.run(
+        check_failure_then_recovery(
+            monkeypatch,
+            fail,
+            "TimeoutError",
+            # The worker limit exceeds submit's two-second guard here, so
+            # ignoring the shorter job deadline fails instead of passing late.
+            timeout=5 if limit == "job_deadline" else 0.02,
+            deadline=deadline,
+        )
+    )
+    assert canceled == [True]
+
+
 def test_saturated_worker_rejects_more_jobs(monkeypatch):
     monkeypatch.setattr(worker, "TOKEN", "test-token")
     monkeypatch.setattr(worker, "active_requests", 4)

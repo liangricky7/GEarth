@@ -214,7 +214,7 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
             "evidence_ids": [],
         }
         return decision_result(
-            job, action, "rule_fallback", started_at, type(error).__name__
+            job, action, "rule_fallback", started_at, error
         )
 
     finally:
@@ -224,11 +224,25 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
 def decision_result(
     job: DecisionJob, action: dict, source: str, started_at: float, error=None
 ):
+    category = None
+    status = None
+    if error is not None:
+        if isinstance(error, (TimeoutError, httpx.TimeoutException)):
+            category = "model_timeout"
+        elif isinstance(error, httpx.HTTPStatusError):
+            category = "model_http_error"
+            status = error.response.status_code
+        elif isinstance(error, httpx.HTTPError):
+            category = "model_transport_error"
+        else:
+            category = "model_invalid_response"
     return {
         "request_id": job.request_id,
         "action": action,
         "source": source,
         "model": MODEL,
         "latency_ms": round((time.perf_counter() - started_at) * 1000, 2),
-        "error": error,
+        "error": type(error).__name__ if error is not None else None,
+        "error_category": category,
+        "error_http_status": status,
     }

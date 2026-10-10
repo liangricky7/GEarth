@@ -157,3 +157,44 @@ def test_world_request_uses_model_and_releases_capacity(monkeypatch, content, so
                 assert len(calls) == 1
 
     asyncio.run(request())
+
+
+@pytest.mark.parametrize(
+    "fault,category,status",
+    [
+        ("timeout", "model_timeout", None),
+        ("bad_json", "model_invalid_response", None),
+        ("http", "model_http_error", 503),
+        ("transport", "model_transport_error", None),
+    ],
+)
+def test_model_failure_metadata_preserves_origin_and_status(monkeypatch, fault, category, status):
+    monkeypatch.setattr(worker, "TOKEN", "test-token")
+    monkeypatch.setattr(worker, "active_requests", 0)
+    job = make_job()
+    job.observation = {"world_stage": 2}
+
+    def respond(request):
+        if fault == "timeout":
+            raise httpx.ReadTimeout("Model timed out", request=request)
+        if fault == "transport":
+            raise httpx.RemoteProtocolError("Model disconnected", request=request)
+        if fault == "http":
+            return httpx.Response(503, text="private model response")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{broken"}}]})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as model:
+            monkeypatch.setattr(worker.app.state, "model_client", model, raising=False)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=worker.app), base_url="http://test") as client:
+                result = (await client.post("/decide", json=job.model_dump(mode="json"),
+                    headers={"Authorization": "Bearer test-token"})).json()
+                assert result["source"] == "rule_fallback"
+                assert result["request_id"] == job.request_id
+                assert result["error_category"] == category
+                assert result["error_http_status"] == status
+                assert result["latency_ms"] >= 0
+                assert "private" not in result["error"]
+                assert worker.active_requests == 0
+
+    asyncio.run(run())

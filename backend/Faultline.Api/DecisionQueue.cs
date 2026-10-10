@@ -37,6 +37,9 @@ public sealed class DecisionQueue(int capacity, CancellationToken cancellationTo
     }
 
     public async Task<int> CancelAndDrain()
+        => (await CancelAndDrainRequests()).Length;
+
+    public async Task<DecisionJob[]> CancelAndDrainRequests()
     {
         requests.Cancel();
         var abandoned = pending.Values.ToArray();
@@ -48,7 +51,7 @@ public sealed class DecisionQueue(int capacity, CancellationToken cancellationTo
         {
         }
         pending.Clear();
-        return abandoned.Length;
+        return abandoned.Select(request => request.Job).ToArray();
     }
 
     public async ValueTask DisposeAsync()

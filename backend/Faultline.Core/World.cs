@@ -32,6 +32,8 @@ public sealed class Agent
     public int WorkEffort { get; set; } = 1;
     public int TargetStock { get; set; } = 8;
     public int Wellbeing { get; set; } = 100;
+    public int Health { get; set; } = 100;
+    public int HealthThreshold { get; set; } = 50;
     public bool SupportsLeadership { get; set; } = true;
     public int LastAttemptTick { get; set; } = -1;
     public int LastDecisionTick { get; set; } = -1;

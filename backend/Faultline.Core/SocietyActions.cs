@@ -16,6 +16,8 @@ public static class SocietyActions
                 foreach (var effort in new[] { 0, 1, 2 }.Where(effort => effort != agent.WorkEffort))
                     options.Add(Make("work", new { effort }));
                 options.Add(Make("express_support", new { support = !agent.SupportsLeadership }));
+                foreach (var threshold in new[] { 0, 30, 50, 70 }.Where(threshold => threshold != agent.HealthThreshold))
+                    options.Add(Make("health_policy", new { visit_doctor_below_health = threshold }));
                 if (agent.CashMinor >= 100)
                     foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.Id != agent.CountryId)
                         .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
@@ -81,6 +83,8 @@ public static class SocietyActions
             options.Add(Make("set_tax", new { tax_basis_points = tax }));
         foreach (var welfare in new[] { 0, 40, 80 }.Where(welfare => welfare != nation.WelfareMinor))
             options.Add(Make("set_welfare", new { amount_minor = welfare }));
+        foreach (var salesTax in new[] { 0, 500, 1000 }.Where(salesTax => salesTax != nation.SalesTaxBasisPoints))
+            options.Add(Make("set_sales_tax", new { sales_tax_basis_points = salesTax }));
         foreach (var services in new[] { 0, 10, 30 }.Where(services => services != nation.ServiceBudgetPerResidentMinor))
             options.Add(Make("fund_services", new { amount_minor = services }));
         if (agent.CashMinor >= 1500 && nation.Productivity < 2)

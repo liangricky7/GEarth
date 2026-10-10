@@ -46,7 +46,7 @@ public static class SocietyEngine
             self = new
             {
                 agent.Id, agent.Role, agent.Occupation, agent.Specialty, agent.Goal, agent.Traits,
-                agent.CashMinor, agent.Inventory, agent.WorkEffort, agent.TargetStock, agent.Wellbeing,
+                agent.CashMinor, agent.Inventory, agent.WorkEffort, agent.TargetStock, agent.Wellbeing, agent.Health, agent.HealthThreshold,
                 agent.SupportsLeadership, agent.PriceMinor, agent.Memories
             },
             country = new
@@ -55,7 +55,9 @@ public static class SocietyEngine
                 nation.TaxBasisPoints, nation.WelfareMinor, nation.ServiceBudgetPerResidentMinor,
                 nation.Approval, nation.Population, nation.Stocks, nation.UnmetNeedsLastCycle,
                 treasury_minor = world.Agents[nation.Id + "_government"].CashMinor,
-                nation.Productivity, nation.CrisisGood, nation.CrisisUntilTick,
+                nation.Productivity, nation.EducationFactor, nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints,
+                doctor_visit_price_minor = world.Agents[nation.Id + "_medicine"].PriceMinor,
+                nation.CrisisGood, nation.CrisisUntilTick,
                 pending_policy = world.Society.Policies.FirstOrDefault(policy => policy.CountryId == nation.Id)?.ActionType,
                 government_authority_available = SocietyDiplomacy.HasAuthority(world, nation)
             },
@@ -63,7 +65,7 @@ public static class SocietyEngine
             requested_loans = world.Society.Credit.Where(credit => credit.Status == "requested"
                 && (credit.BankId == agent.Id || credit.BorrowerId == agent.Id)).Take(4),
             public_events = observedEvents.Select(item => new { item.EventType, item.Payload }),
-            note = "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Extra work raises pay but costs wellbeing; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
+            note = "Routine consumption, purchases, wages and production follow standing policies every 5 ticks. Businesses pay workers 80% of last cycle's sales, split by effort and health, then pay profit tax. Public employees get a fixed salary the treasury may only partly cover; unpaid teachers lower productivity. Health falls with illness, extra work and unmet needs; below 30 you cannot work and pay scales with health. A doctor visit costs the clinic's medicine price, restores 40 health and happens automatically below your health policy threshold; public healthcare funds visits for the sickest. Household prices include sales tax. Extra work raises pay but costs wellbeing and health; striking stops wages and production. Imports use simulated escrow and physical transit. Welfare and services only spend available treasury. Migration costs 100 minor units. Conflict costs 5000 upfront plus 1000/cycle, destroys stock and blocks trade."
         });
         return new DecisionJob(Guid.NewGuid().ToString("N"), world.Id, agent.Id, world.Tick,
             now.AddSeconds(65), new Dictionary<string, int> { [agent.Id] = agent.Version }, evidence, observation, actions);
@@ -174,6 +176,9 @@ public static class SocietyEngine
         {
             case "household_policy":
                 agent.TargetStock = parameters["target_stock"]!.GetValue<int>();
+                break;
+            case "health_policy":
+                agent.HealthThreshold = parameters["visit_doctor_below_health"]!.GetValue<int>();
                 break;
             case "work":
                 agent.WorkEffort = parameters["effort"]!.GetValue<int>();

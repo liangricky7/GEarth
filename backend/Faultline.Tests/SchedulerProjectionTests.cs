@@ -5,6 +5,33 @@ namespace Faultline.Tests;
 public sealed class SchedulerProjectionTests
 {
     [Fact]
+    public void ScopedAdmissionKeepsCitizenCapacityAvailableWhenInstitutionsAreFull()
+    {
+        var world = SocietyFactory.Create("role_capacity", true, 100);
+        world.Society!.ComputeProviders = [
+            new("leaders", "Qwen/Qwen3-8B", 2, "institution"),
+            new("residents", "Qwen/Qwen3-4B", 4, "citizen")];
+        var first = SocietyScheduler.Select(world, new HashSet<string>(), 10, world.Society.StartedAt);
+        Assert.Equal(2, first.Count(agent => agent.Role != "citizen"));
+        Assert.Equal(4, first.Count(agent => agent.Role == "citizen"));
+        var pending = first.Where(agent => agent.Role != "citizen").Select(agent => agent.Id).ToHashSet();
+        var next = SocietyScheduler.Select(world, pending, 8, world.Society.StartedAt);
+        Assert.Equal(4, next.Length);
+        Assert.All(next, agent => Assert.Equal("citizen", agent.Role));
+    }
+
+    [Fact]
+    public void SharedProviderSlotsAreCountedOnceAcrossBothGroups()
+    {
+        var world = SocietyFactory.Create("shared_capacity", true, 100);
+        world.Society!.ComputeProviders = [new("legacy", "shared", 3)];
+        var selected = SocietyScheduler.Select(world, new HashSet<string>(), 10, world.Society.StartedAt);
+        Assert.Equal(3, selected.Length);
+        var next = SocietyScheduler.Select(world, selected.Select(agent => agent.Id).ToHashSet(), 10, world.Society.StartedAt);
+        Assert.Empty(next);
+    }
+
+    [Fact]
     public void ResidentTurnsCoverEveryResidentDespiteRepeatedInstitutionBacklog()
     {
         var world = SocietyFactory.Create("fair_turns", true, 100);

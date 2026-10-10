@@ -116,7 +116,7 @@ public sealed class Credit
     public string Status { get; set; } = "requested";
 }
 
-public sealed record ComputeProvider(string Name, string Model, int Capacity);
+public sealed record ComputeProvider(string Name, string Model, int Capacity, string DecisionGroup = "all");
 
 public sealed class SocietyState
 {

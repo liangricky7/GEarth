@@ -10,8 +10,18 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 MODEL = os.environ.get("AMD_MODEL", "Qwen/Qwen3-4B")
+DUAL_MODELS = os.environ.get("AMD_DUAL_MODELS", "false").lower() == "true"
+MODEL_MANIFEST = Path(
+    os.environ.get(
+        "AMD_MODEL_MANIFEST", str(Path(__file__).with_name("qwen-models.json"))
+    )
+)
 KEY_FILE = Path(os.environ.get("AMD_KEY_FILE", "/workspace/faultline-amd/api-key"))
-state = {"ready": False, "active": False}
+state = {"ready": False, "active": False, "active_models": set()}
+
+
+def model_ids():
+    return list(state.get("models", {})) or [MODEL]
 
 
 def load_model():
@@ -20,13 +30,34 @@ def load_model():
 
     if not torch.cuda.is_available() or not torch.version.hip:
         raise RuntimeError("An AMD ROCm GPU is required")
-    state["tokenizer"] = AutoTokenizer.from_pretrained(MODEL)
-    state["model"] = AutoModelForCausalLM.from_pretrained(
-        MODEL,
-        torch_dtype=torch.bfloat16,
-        device_map="cuda:0",
-        attn_implementation="sdpa",
-    ).eval()
+    catalog = (
+        json.loads(MODEL_MANIFEST.read_text())
+        if DUAL_MODELS
+        else {"all": {"model": MODEL}}
+    )
+    if DUAL_MODELS and torch.cuda.mem_get_info()[0] < 28 * 1024**3:
+        raise RuntimeError(
+            "The two BF16 models require at least 28 GiB free GPU memory before loading"
+        )
+    loaded = {}
+    for group, entry in catalog.items():
+        model_id = entry["model"]
+        revision = entry.get("revision")
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            revision=revision,
+            torch_dtype=torch.bfloat16,
+            device_map="cuda:0",
+            attn_implementation="sdpa",
+        ).eval()
+        loaded[model_id] = {
+            "tokenizer": tokenizer,
+            "model": model,
+            "revision": revision,
+            "decision_group": group,
+        }
+    state["models"] = loaded
     state["gpu"] = torch.cuda.get_device_name(0)
     state["rocm"] = torch.version.hip
     state["ready"] = True
@@ -72,8 +103,17 @@ def health():
         "model": MODEL,
         "gpu": state.get("gpu"),
         "rocm": state.get("rocm"),
-        "active_requests": int(state["active"]),
-        "capacity": 1,
+        "active_requests": len(state["active_models"]),
+        "capacity": len(model_ids()),
+        "models": [
+            {
+                "id": model_id,
+                "revision": state.get("models", {}).get(model_id, {}).get("revision"),
+                "active_requests": int(model_id in state["active_models"]),
+                "capacity": 1,
+            }
+            for model_id in model_ids()
+        ],
     }
 
 
@@ -81,15 +121,19 @@ def health():
 def models():
     return {
         "object": "list",
-        "data": [{"id": MODEL, "object": "model", "owned_by": "faultline-amd"}],
+        "data": [
+            {"id": model_id, "object": "model", "owned_by": "faultline-amd"}
+            for model_id in model_ids()
+        ],
     }
 
 
 def generate(request):
     import torch
 
-    tokenizer = state["tokenizer"]
-    model = state["model"]
+    selected = state["models"][request.model]
+    tokenizer = selected["tokenizer"]
+    model = selected["model"]
     prompt = tokenizer.apply_chat_template(
         [message.model_dump() for message in request.messages],
         tokenize=False,
@@ -98,8 +142,8 @@ def generate(request):
     )
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     input_tokens = inputs.input_ids.shape[1]
-    if input_tokens > 8192:
-        raise HTTPException(413, "Prompt exceeds 8192 tokens")
+    if input_tokens + request.max_tokens > 8192:
+        raise HTTPException(413, "Prompt and output exceed 8192 tokens")
     with torch.inference_mode():
         output = model.generate(
             **inputs,
@@ -121,7 +165,7 @@ def generate(request):
         "id": f"amd-{secrets.token_hex(8)}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": MODEL,
+        "model": request.model,
         "choices": [
             {
                 "index": 0,
@@ -141,17 +185,21 @@ def generate(request):
 
 @app.post("/v1/chat/completions", dependencies=[Depends(authorize)])
 async def completions(request: CompletionRequest):
-    if request.model != MODEL or request.stream:
+    if request.model not in model_ids() or request.stream:
         raise HTTPException(400, "Unsupported model or streaming request")
-    if state["active"]:
+    if request.model in state["active_models"] or (not DUAL_MODELS and state["active"]):
         raise HTTPException(429, "AMD server at capacity")
     state["active"] = True
+    state["active_models"].add(request.model)
     task = asyncio.create_task(asyncio.to_thread(generate, request))
-    task.add_done_callback(finish_generation)
+    task.add_done_callback(
+        lambda completed: finish_generation(completed, request.model)
+    )
     return await asyncio.shield(task)
 
 
-def finish_generation(task):
-    state["active"] = False
+def finish_generation(task, model):
+    state["active_models"].discard(model)
+    state["active"] = bool(state["active_models"])
     if not task.cancelled():
         task.exception()

@@ -151,8 +151,9 @@ def main():
     provider_environment = {}
     providers = []
     managed_spark_tunnel = False
+    managed_forwards = []
     if options.live:
-        from ops.compute_config import compute_environment
+        from ops.compute_config import compute_environment, spark_a_forwards
 
         compute, provider_environment, providers, live_capacity = compute_environment(
             config, compute, options.capacity, options.world
@@ -162,12 +163,13 @@ def main():
             and provider.base_url == "http://127.0.0.1:18001/v1"
             for provider in providers
         )
+        managed_forwards = spark_a_forwards(providers)
 
     ensure_port_available(5080)
     if options.live:
         ensure_port_available(8100)
-        if managed_spark_tunnel:
-            ensure_port_available(18001)
+        for local_port, _ in managed_forwards:
+            ensure_port_available(local_port)
 
     subprocess.run(
         ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
@@ -214,6 +216,15 @@ def main():
                         )
                     api_key = result.stdout.strip()
 
+            if managed_forwards:
+                forwarding_arguments = [
+                    argument
+                    for local_port, remote_port in managed_forwards
+                    for argument in (
+                        "-L",
+                        f"127.0.0.1:{local_port}:127.0.0.1:{remote_port}",
+                    )
+                ]
                 tunnel = start(
                     [
                         "ssh",
@@ -225,8 +236,7 @@ def main():
                         "-o",
                         "ServerAliveCountMax=3",
                         "-N",
-                        "-L",
-                        "127.0.0.1:18001:127.0.0.1:8000",
+                        *forwarding_arguments,
                         SPARK_TARGET,
                     ],
                     "tunnel.log",
@@ -284,6 +294,7 @@ def main():
                             "name": provider.name,
                             "model": provider.model,
                             "capacity": provider.capacity,
+                            "decision_group": provider.decision_group,
                         }
                         for provider in providers
                     ]

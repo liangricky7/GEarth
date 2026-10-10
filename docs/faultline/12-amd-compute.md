@@ -1,5 +1,7 @@
 # AMD compute integration
 
+The [all-node Qwen setup](18-all-node-qwen-setup.md) adds a notebook that loads both pinned Qwen3-8B and Qwen3-4B models. Use that guide for the planned matching deployment across AMD and both Sparks. The live measurements below describe the existing 4B-only server, which remains unchanged until the new notebook is run.
+
 ## Current status
 
 The project supports Spark-only, AMD-only, and hybrid inference. Live AMD inference was verified from Jayden's laptop on October 10, 2026, and is enabled in the ignored local configuration. The existing observer continues to serve its saved run; future live launches select hybrid mode automatically.

@@ -14,6 +14,46 @@ def provider(name, capacity=1):
     )
 
 
+@pytest.mark.parametrize("stage", [1, 2])
+@pytest.mark.parametrize(
+    "model,settings",
+    [
+        (
+            "nvidia/Qwen3.8-27B-NVFP4",
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        ),
+        (
+            "Qwen/Qwen3-8B",
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        ),
+        ("openai/gpt-oss-120b", {"reasoning_effort": "low"}),
+        ("other/model", {}),
+    ],
+)
+def test_prompt_uses_backend_specific_thinking_settings(stage, model, settings):
+    job = worker.DecisionJob(
+        request_id="thinking-mode",
+        run_id="probe",
+        agent_id="resident",
+        observation_tick=0,
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=30),
+        dependencies={},
+        evidence_ids=[],
+        observation={"world_stage": stage},
+        candidates=[{"action_type": "hold", "params": {}}],
+    )
+    payload = worker.build_prompt(job, model)
+    assert payload["model"] == model
+    actual = {
+        key: payload[key]
+        for key in ("chat_template_kwargs", "reasoning_effort")
+        if key in payload
+    }
+    assert actual == settings
+    assert payload["response_format"] == {"type": "json_object"}
+    assert payload["max_tokens"] == 512
+
+
 def test_round_robin_and_independent_capacity():
     pool = ProviderPool([provider("spark", 2), provider("amd")])
     assert [pool.acquire(0).name for _ in range(3)] == ["spark", "amd", "spark"]
@@ -21,6 +61,200 @@ def test_round_robin_and_independent_capacity():
     pool.release(pool.providers[0], 1)
     assert pool.acquire(1).name == "spark"
     assert pool.active == {"spark": 2, "amd": 1}
+
+
+def test_role_routing_does_not_spill_across_models_or_cooldowns():
+    institution = ModelProvider(
+        "leaders", "Qwen/Qwen3-8B", "https://leaders/v1", 1, "key", "institution"
+    )
+    citizen = ModelProvider(
+        "residents", "Qwen/Qwen3-4B", "https://residents/v1", 1, "key", "citizen"
+    )
+    pool = ProviderPool([institution, citizen])
+    assert pool.acquire(0, "citizen") == citizen
+    assert pool.acquire(0, "citizen") is None
+    assert pool.acquire(0, "institution") == institution
+    pool.release(citizen, 1, failed=True, unavailable=True)
+    pool.release(institution, 1)
+    assert pool.acquire(2, "citizen") is None
+    assert pool.acquire(2, "institution") == institution
+    assert pool.acquire(31, "citizen") == citizen
+
+
+@pytest.mark.parametrize("group", ["citizen", "institution"])
+def test_unrestricted_provider_preserves_legacy_routing(group):
+    pool = ProviderPool([provider("legacy")])
+    assert pool.acquire(0, group).name == "legacy"
+
+
+def test_dedicated_provider_preserves_shared_capacity_for_other_group():
+    shared = ModelProvider("shared", "legacy", "https://shared/v1", 1, "key")
+    citizen = ModelProvider(
+        "citizen", "Qwen/Qwen3-4B", "https://citizen/v1", 2, "key", "citizen"
+    )
+    pool = ProviderPool([shared, citizen])
+    assert pool.acquire(0, "citizen") == citizen
+    assert pool.acquire(0, "institution") == shared
+    assert pool.acquire(0, "citizen") == citizen
+    assert pool.acquire(0, "institution") is None
+
+
+def test_citizen_provider_requires_explicit_enablement_and_credentials():
+    assert [item.name for item in load_providers({})] == ["spark_a"]
+    config = {"SPARK_A_CITIZEN_ENABLED": "true"}
+    with pytest.raises(ValueError, match="SPARK_A_CITIZEN_API_KEY"):
+        load_providers(config)
+    providers = load_providers({**config, "SPARK_A_CITIZEN_API_KEY": "private"})
+    assert providers[1].decision_group == "citizen"
+    assert providers[1].model == "Qwen/Qwen3-4B"
+
+
+def test_invalid_decision_group_is_rejected():
+    with pytest.raises(ValueError, match="SPARK_A_DECISION_GROUP"):
+        load_providers({"SPARK_A_DECISION_GROUP": "government"})
+
+
+@pytest.mark.parametrize(
+    "observation,group",
+    [
+        (
+            {"world_stage": 2, "self": {"role": "citizen", "occupation": "doctor"}},
+            "citizen",
+        ),
+        ({"world_stage": 2, "self": {"role": "government"}}, "institution"),
+        ({"agent": {"role": "citizen"}}, "citizen"),
+        ({"agent": {"role": "business"}}, "institution"),
+        ({"role": "resident"}, "citizen"),
+        ({}, "all"),
+        ({"self": "invalid"}, "all"),
+    ],
+)
+def test_role_comes_from_observation_not_occupation_or_agent_name(observation, group):
+    job = worker.DecisionJob(
+        request_id="role",
+        run_id="probe",
+        agent_id="government_1",
+        observation_tick=0,
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=30),
+        dependencies={},
+        evidence_ids=[],
+        observation=observation,
+        candidates=[],
+    )
+    assert worker.decision_group(job) == group
+
+
+@pytest.mark.parametrize(
+    "role,model",
+    [
+        ("citizen", "Qwen/Qwen3-4B"),
+        ("government", "Qwen/Qwen3-8B"),
+        ("business", "Qwen/Qwen3-8B"),
+    ],
+)
+def test_worker_routes_roles_to_their_assigned_model(monkeypatch, role, model):
+    pool = ProviderPool(
+        [
+            ModelProvider(
+                "leaders",
+                "Qwen/Qwen3-8B",
+                "https://leaders/v1",
+                1,
+                "key",
+                "institution",
+            ),
+            ModelProvider(
+                "residents",
+                "Qwen/Qwen3-4B",
+                "https://residents/v1",
+                1,
+                "key",
+                "citizen",
+            ),
+        ]
+    )
+    monkeypatch.setattr(worker, "provider_pool", pool)
+    monkeypatch.setattr(worker, "TOKEN", "worker-secret")
+    calls = []
+
+    def model_response(request):
+        import json
+
+        payload = json.loads(request.content)
+        calls.append(payload)
+        assert payload["model"] == model
+        assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"choice":0,"reason":"Wait."}'}}]
+            },
+        )
+
+    async def request():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(model_response)
+        ) as model_client:
+            monkeypatch.setattr(
+                worker.app.state, "model_client", model_client, raising=False
+            )
+            job = worker.DecisionJob(
+                request_id="routed",
+                run_id="probe",
+                agent_id="resident",
+                observation_tick=0,
+                deadline=datetime.now(timezone.utc) + timedelta(seconds=30),
+                dependencies={},
+                evidence_ids=[],
+                observation={"world_stage": 2, "self": {"role": role}},
+                candidates=[{"action_type": "hold", "params": {}}],
+            )
+            result = await worker.decide(job, "Bearer worker-secret")
+            assert result["model"] == model
+            assert result["source"] == "model"
+            assert sum(pool.active.values()) == 0
+
+    asyncio.run(request())
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "observation,status", [({}, 422), ({"self": {"role": "government"}}, 503)]
+)
+def test_scoped_pool_rejects_missing_roles_or_unconfigured_groups(
+    monkeypatch, observation, status
+):
+    from fastapi import HTTPException
+
+    pool = ProviderPool(
+        [
+            ModelProvider(
+                "residents",
+                "Qwen/Qwen3-4B",
+                "https://residents/v1",
+                1,
+                "key",
+                "citizen",
+            )
+        ]
+    )
+    monkeypatch.setattr(worker, "provider_pool", pool)
+    monkeypatch.setattr(worker, "TOKEN", "worker-secret")
+    job = worker.DecisionJob(
+        request_id="unroutable",
+        run_id="probe",
+        agent_id="resident",
+        observation_tick=0,
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=30),
+        dependencies={},
+        evidence_ids=[],
+        observation=observation,
+        candidates=[],
+    )
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(worker.decide(job, "Bearer worker-secret"))
+    assert error.value.status_code == status
+    assert sum(pool.active.values()) == 0
 
 
 def test_unavailable_backend_recovers_after_cooldown():

@@ -1,5 +1,7 @@
 # Ken's Spark B model server and Tailscale relay
 
+The selected deployment has since changed to Qwen3-8B for institutions and Qwen3-4B for citizens. Follow the [two-model deployment plan](16-qwen-model-migration.md) for new servers. The GPT-OSS command below remains a historical record of Spark A's inspected launch, not the current target for Spark B.
+
 Spark A's live process arguments were inspected read-only on October 10, 2026. Spark A was already running when this project began; Faultline did not originally launch that server.
 
 ## Confirmed Spark A setup

@@ -22,7 +22,10 @@ async def check(output):
         **dotenv_values(ROOT / ".env.local"),
         "SPARK_A_ENABLED": "false",
         "SPARK_B_ENABLED": "false",
+        "SPARK_A_CITIZEN_ENABLED": "false",
+        "SPARK_B_CITIZEN_ENABLED": "false",
         "AMD_ENABLED": "true",
+        "AMD_CITIZEN_ENABLED": "false",
     }
     providers = load_providers(configuration, capacity=1)
     provider = providers[0]
@@ -31,7 +34,9 @@ async def check(output):
     worker.TOKEN = secrets.token_urlsafe(32)
     worker.TIMEOUT_SECONDS = 60
     started_at = time.perf_counter()
-    async with httpx.AsyncClient(timeout=60, follow_redirects=False) as model_client:
+    async with httpx.AsyncClient(
+        timeout=60, follow_redirects=False, trust_env=False
+    ) as model_client:
         models = await model_client.get(f"{provider.base_url}/models", headers=headers)
         models.raise_for_status()
         if provider.model not in [entry["id"] for entry in models.json()["data"]]:
@@ -50,14 +55,18 @@ async def check(output):
             evidence_ids=[],
             observation={
                 "world_stage": 2,
-                "role": "resident",
+                "role": "government"
+                if provider.decision_group == "institution"
+                else "resident",
                 "goal": "Save money for tomorrow",
                 "cash_minor": 100,
             },
-            candidates=[
-                {"action_type": "hold", "params": {}},
-                {"action_type": "work", "params": {"effort": 1}},
-            ],
+            candidates=[{"action_type": "hold", "params": {}}]
+            + (
+                []
+                if provider.decision_group == "institution"
+                else [{"action_type": "work", "params": {"effort": 1}}]
+            ),
         )
         result = await worker.decide(job, f"Bearer {worker.TOKEN}")
         if result["source"] != "model":
@@ -72,7 +81,7 @@ async def check(output):
         "elapsed_seconds": round(time.perf_counter() - started_at, 2),
         "observations": [
             "The configured endpoint listed its model and rejected unauthenticated access.",
-            "One fictional resident decision passed the existing action validator.",
+            "One fictional agent decision passed the existing action validator.",
             "This is a connection smoke check, not a simulation or a capacity benchmark.",
         ],
     }

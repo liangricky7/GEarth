@@ -42,6 +42,9 @@ public static class RunAnalysis
             Model: item.Payload["model"]?.GetValue<string>() ?? "unknown")))
             observations.Add(new("compute", $"{backend.Key.Name} running {backend.Key.Model} supplied {backend.Count()} accepted model decisions in the retrieved history.", Evidence(backend)));
 
+        foreach (var provider in world.Society?.ComputeProviders ?? [])
+            observations.Add(new("configuration", $"{provider.Name} was configured to serve {provider.DecisionGroup} decisions with {provider.Model} and {provider.Capacity} request slots. Configured slots are not a measured throughput result.", []));
+
         foreach (var role in behaviors.Select(item => item.Role).Distinct())
         {
             var leader = behaviors.First(item => item.Role == role);

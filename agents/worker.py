@@ -95,6 +95,24 @@ def validate_action(action: dict, job: DecisionJob) -> dict:
     return action
 
 
+def model_request_settings(model: str) -> dict:
+    name = model.rsplit("/", 1)[-1].lower()
+    if "gpt-oss" in name:
+        return {"reasoning_effort": "low"}
+    if name.startswith("qwen3"):
+        return {"chat_template_kwargs": {"enable_thinking": False}}
+    return {}
+
+
+def decision_group(job: DecisionJob) -> str:
+    subject = job.observation.get("self") or job.observation.get("agent") or {}
+    role = subject.get("role") if isinstance(subject, dict) else None
+    role = role or job.observation.get("role")
+    if not isinstance(role, str) or not role.strip():
+        return "all"
+    return "citizen" if role.lower() in {"citizen", "resident"} else "institution"
+
+
 def build_prompt(job: DecisionJob, model=MODEL) -> dict:
     if job.observation.get("world_stage") == 2:
         return {
@@ -128,7 +146,7 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
             ],
             "temperature": 0,
             "max_tokens": 512,
-            **({"reasoning_effort": "low"} if "gpt-oss" in model else {}),
+            **model_request_settings(model),
             "response_format": {"type": "json_object"},
         }
     instructions = (
@@ -155,7 +173,7 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
         ],
         "temperature": 0,
         "max_tokens": 512,
-        **({"reasoning_effort": "low"} if "gpt-oss" in model else {}),
+        **model_request_settings(model),
         "response_format": {"type": "json_object"},
     }
 
@@ -186,7 +204,16 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
     if active_requests >= CAPACITY:
         raise HTTPException(429, "Worker at capacity")
 
-    provider = provider_pool.acquire(time.monotonic())
+    group = decision_group(job)
+    if not any(provider.serves(group) for provider in provider_pool.providers):
+        if group == "all":
+            raise HTTPException(
+                422, "Agent role is required for role-based model routing"
+            )
+        raise HTTPException(
+            503, f"No model provider is configured for {group} decisions"
+        )
+    provider = provider_pool.acquire(time.monotonic(), group)
     if provider is None:
         raise HTTPException(429, "No model provider has available capacity")
     active_requests += 1

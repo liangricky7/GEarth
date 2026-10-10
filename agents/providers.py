@@ -11,6 +11,10 @@ class ModelProvider:
     base_url: str
     capacity: int
     api_key: str = field(repr=False)
+    decision_group: str = "all"
+
+    def serves(self, decision_group):
+        return self.decision_group in {"all", decision_group}
 
 
 def tailscale_http_allowed(address, environment, prefix):
@@ -35,7 +39,16 @@ def load_providers(environment=None, capacity=4):
             capacity,
         ),
         ("spark_b", "SPARK_B", "openai/gpt-oss-120b", "", capacity),
+        (
+            "spark_a_citizen",
+            "SPARK_A_CITIZEN",
+            "Qwen/Qwen3-4B",
+            "http://127.0.0.1:18003/v1",
+            capacity,
+        ),
+        ("spark_b_citizen", "SPARK_B_CITIZEN", "Qwen/Qwen3-4B", "", capacity),
         ("amd", "AMD", "Qwen/Qwen3-4B", "", 1),
+        ("amd_citizen", "AMD_CITIZEN", "Qwen/Qwen3-4B", "", 1),
     ):
         if (
             environment.get(
@@ -71,6 +84,14 @@ def load_providers(environment=None, capacity=4):
         limit = int(environment.get(f"{prefix}_CAPACITY", default_capacity))
         if not 1 <= limit <= 128:
             raise ValueError(f"{prefix}_CAPACITY must be between 1 and 128")
+        decision_group = environment.get(
+            f"{prefix}_DECISION_GROUP",
+            "citizen" if name.endswith("_citizen") else "all",
+        )
+        if decision_group not in {"all", "citizen", "institution"}:
+            raise ValueError(
+                f"{prefix}_DECISION_GROUP must be all, citizen or institution"
+            )
         providers.append(
             ModelProvider(
                 name,
@@ -78,6 +99,7 @@ def load_providers(environment=None, capacity=4):
                 base_url,
                 min(limit, capacity),
                 api_key,
+                decision_group,
             )
         )
     if not providers:
@@ -95,15 +117,21 @@ class ProviderPool:
         self.unavailable_until = {provider.name: 0.0 for provider in providers}
         self.cursor = 0
 
-    def acquire(self, now):
+    def acquire(self, now, decision_group="all"):
         candidates = [
             (index, provider)
             for index, provider in enumerate(self.providers)
             if self.active[provider.name] < provider.capacity
             and self.unavailable_until[provider.name] <= now
+            and provider.serves(decision_group)
         ]
         if not candidates:
             return None
+        scoped = [
+            item for item in candidates if item[1].decision_group == decision_group
+        ]
+        if scoped:
+            candidates = scoped
         index, provider = min(
             candidates,
             key=lambda item: (
@@ -130,6 +158,7 @@ class ProviderPool:
                 "name": provider.name,
                 "model": provider.model,
                 "capacity": provider.capacity,
+                "decision_group": provider.decision_group,
                 "active_requests": self.active[provider.name],
                 "completed_requests": self.completed[provider.name],
                 "failed_requests": self.failures[provider.name],

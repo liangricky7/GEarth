@@ -1,5 +1,7 @@
 # Faultline — compute and individual agents
 
+The selected deployment now uses the same pinned Hugging Face Qwen3-8B institution model and Qwen3-4B citizen model on both Sparks and AMD. Use the [all-node setup guide](18-all-node-qwen-setup.md) for current installation and routing. The early prototype measurements below remain historical evidence; the paired deployment has not yet completed live qualification.
+
 ## Actual resource boundary
 
 | Resource | Evidence and use |

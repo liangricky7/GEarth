@@ -59,6 +59,26 @@ public sealed class RunNotesTests
     }
 
     [Fact]
+    public void SavedProviderMetadataPreservesRoleAssignmentAndReadsLegacyRecords()
+    {
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider>(
+            "{\"name\":\"spark_a\",\"model\":\"old\",\"capacity\":4}", Wire.Json)!;
+        Assert.Equal("all", legacy.DecisionGroup);
+        var world = Create();
+        world.Society!.ComputeProviders = [
+            new("spark_a", "Qwen/Qwen3-8B", 4, "institution"),
+            new("spark_a_citizen", "Qwen/Qwen3-4B", 8, "citizen")];
+        var restored = System.Text.Json.JsonSerializer.Deserialize<World>(
+            System.Text.Json.JsonSerializer.Serialize(world, Wire.Json), Wire.Json)!;
+        Assert.Equal("citizen", restored.Society!.ComputeProviders[1].DecisionGroup);
+        var notes = RunAnalysis.Create(restored, restored.Events);
+        Assert.Contains(notes.Observations, item => item.Category == "configuration"
+            && item.Text.Contains("citizen decisions with Qwen/Qwen3-4B"));
+        Assert.Contains(notes.Observations, item => item.Category == "configuration"
+            && item.Text.Contains("institution decisions with Qwen/Qwen3-8B"));
+    }
+
+    [Fact]
     public void NotesDescribePhysicalConsequencesAndDoNotClaimGovernmentCausality()
     {
         var world = Create();

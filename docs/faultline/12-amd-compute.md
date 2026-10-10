@@ -2,9 +2,11 @@
 
 ## Current status
 
-The project now supports Spark-only, AMD-only, and hybrid inference. The AMD adapter is implemented and tested locally; live AMD inference has not yet been verified or enabled. The existing observer continues to serve its saved run.
+The project supports Spark-only, AMD-only, and hybrid inference. Live AMD inference was verified from Jayden's laptop on October 10, 2026, and is enabled in the ignored local configuration. The existing observer continues to serve its saved run; future live launches select hybrid mode automatically.
 
-The open instance is `rgapi-hackathon-22895-c1f396c5`, using the Radeon Cloud ROCm PyTorch image. Its notebook reported an AMD Radeon Pro W7900D with 48 GiB VRAM, PyTorch `2.13.0+rocm10.0.0`, and HIP `7.15.26333`. It had no vLLM or Transformers installation when inspected. The notebook dependency installation completed successfully with exit code `0`. A Qwen3-4B weight download was started in a background process; completion has not yet been verified. No SSH connection is available for this instance. Native browser automation was unreliable for subsequent notebook actions and file uploads. The connected browser profile returned HTTP 403 for the same notebook URL; it lacks the signed-in AMD session. The remaining cloud setup needs the prepared notebook to run in an authenticated session.
+The instance is `rgapi-hackathon-22895-c1f396c5`, using the Radeon Cloud ROCm PyTorch image. Its notebook reported an AMD Radeon Pro W7900D with 48 GiB VRAM, PyTorch `2.13.0+rocm10.0.0`, and HIP `7.15.26333`. Qwen3-4B is loaded and serving authenticated requests on loopback port `8180`, reached through AMD's approved public HTTPS tunnel. No SSH connection is available for this instance.
+
+The live connection check listed the configured model, received HTTP `401` without an API key, and accepted a fictional resident's `work` decision through the existing worker validator. The decision took `3212.01 ms`; the complete check took `4.23 seconds`. This single request verifies connectivity and response validity, rather than sustained throughput or a population limit. Its observations are saved locally in `.data/amd-connection.json` and `.data/amd-connection.md`.
 
 ## Architecture
 
@@ -34,6 +36,12 @@ python -m uvicorn amd_model_server:app --host 127.0.0.1 --port 8180 --no-access-
 
 Rerun the health cell if the cloud process exits. Do not start duplicate model-server processes. The instance and tunnel need to remain running for future AMD requests.
 
+### Tunnel proxy troubleshooting
+
+The first tunnel process inherited an HTTP proxy and repeatedly reported `DialTcpByHttpProxy error, StatusCode [403]`. The broker consequently had no active tunnel, and the public address returned a routing `404`. Restarting only `rc-tunnel` without inherited `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` variables fixed the connection. The setup notebook now supplies that environment to the tunnel command while retaining the notebook's normal environment for package downloads.
+
+Inspect failures with `rc-tunnel status` and `rc-tunnel logs --lines 20`. If a tunnel needs restarting, stop its old process and expose port `8180` again with the filtered environment. A restart can assign a new AMD address; update `AMD_BASE_URL` in `.env.local` and verify it before use. The private connection file created before a restart contains the previous address. This does not change the observer website's permanent sharing link.
+
 ## Laptop configuration and verification
 
 The new variables in `.env.example` are `AMD_ENABLED`, `AMD_BASE_URL`, `AMD_MODEL`, `AMD_API_KEY`, and `AMD_CAPACITY`. Keep AMD disabled until this check passes:
@@ -42,7 +50,7 @@ The new variables in `.env.example` are `AMD_ENABLED`, `AMD_BASE_URL`, `AMD_MODE
 .venv/bin/python ops/check_amd.py
 ```
 
-It checks the model catalog, verifies that unauthenticated access is rejected, and sends one fictional resident decision through the actual worker validator. It writes observations to `.data/amd-connection.json` and `.data/amd-connection.md`. It does not start a simulation or run a coverage test. This check has not yet been run against the cloud instance.
+It checks the model catalog, verifies that unauthenticated access is rejected, and sends one fictional resident decision through the actual worker validator. It writes observations to `.data/amd-connection.json` and `.data/amd-connection.md`. It does not start a simulation or run a coverage test. The check passed against the cloud instance.
 
 After verification, set `AMD_ENABLED=true`. The launcher then selects hybrid mode automatically. Explicit selection is also available:
 
@@ -60,7 +68,7 @@ The provider module also accepts `SPARK_B_*` settings for a future worker deploy
 
 - 27 Python checks passed, including provider routing, independent capacity, cooldown recovery, credential validation, cancellation, and cloud-route authentication.
 - 37 C# checks passed, including backend attribution in run observations.
-- All prepared notebook code cells compile locally. GPU loading and generation are pending cloud verification.
+- All prepared notebook code cells compile locally. GPU loading, HTTPS access, authentication, and one validated model decision passed live verification.
 - No new simulation, coverage test, Spark server change, or Netplan change was made.
 
 ## Primary references

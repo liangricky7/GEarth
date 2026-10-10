@@ -37,7 +37,7 @@ For Neon, put your connection string in the ignored `.env.local` file and use `-
 .venv/bin/python ops/run_stage1.py --world --live --storage neon --ticks 420
 ```
 
-For a second AMD inference source, follow the [AMD setup guide](docs/faultline/12-amd-compute.md). The launcher accepts `--compute spark`, `--compute amd`, and `--compute hybrid`; AMD remains disabled until its endpoint is verified.
+For a second AMD inference source, follow the [AMD setup guide](docs/faultline/12-amd-compute.md). The launcher accepts `--compute spark`, `--compute amd`, and `--compute hybrid`. Jayden's local AMD endpoint is verified and enabled; other installations keep it disabled until their own endpoint passes verification.
 
 The launcher connects to the existing model service. It does not modify Spark networking or Netplan. Real credentials, virtual environments, runtime state, downloaded tools, and logs are excluded from Git.
 
@@ -106,6 +106,6 @@ The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes`
 
 ## Scope and team
 
-The current one-Spark test target is 1,100 agents, subject to sustained integrated coverage and cadence measurements. Solana and Databricks integrations remain planned or conditional. The AMD adapter is implemented; live cloud setup and verification are pending. Currency and expanded escrow are currently simulated internally.
+The current one-Spark test target is 1,100 agents, subject to sustained integrated coverage and cadence measurements. Solana and Databricks integrations remain planned or conditional. AMD cloud inference is connected and passed one validated decision check, with an initial concurrency limit of one. Currency and expanded escrow are currently simulated internally.
 
 Jayden Hong: engine and integration. Kennedy Nguyen: visualization and Spark operations. Ahmad Hijazi: inference and evaluation. Ricky Liang: persistence and finance. Jayden and Kennedy have Spark SSH access.

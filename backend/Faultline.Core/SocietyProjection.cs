@@ -17,7 +17,9 @@ public static class SocietyProjection
         agent.LastAttemptAt,
         agent.LastModelDecisionAt,
         model_decision_age_seconds = ModelDecisionAgeSeconds(world, agent),
-        next_attempt_due_at = world.Society is null ? (DateTimeOffset?)null : SocietyScheduler.DueAt(world, agent)
+        decision_maker = SocietyLabor.DecidesForItself(agent),
+        next_attempt_due_tick = world.Society is null || world.ScenarioId != "earthlike_society_v3_daily"
+            ? (int?)null : SocietyScheduler.NextTurnTick(world, agent)
     };
 
     private static object[] RoleMetrics(World world) => world.Agents.Values.GroupBy(agent => agent.Role)
@@ -33,7 +35,7 @@ public static class SocietyProjection
                 unique_model_deciding = group.Count(agent => agent.ModelDecisions > 0),
                 model_decision_count = group.Sum(agent => agent.ModelDecisions),
                 never_attempted = group.Count(agent => agent.LastAttemptAt is null),
-                eligible_agents = group.Count(agent => SocietyScheduler.IsDue(world, agent, world.UpdatedAt)),
+                eligible_agents = group.Count(agent => society.QueuedAgentIds.Contains(agent.Id)),
                 pending_decisions = society.PendingByRole.Values.Sum() == society.PendingDecisions
                     ? (int?)society.PendingByRole.GetValueOrDefault(group.Key) : null,
                 model_decision_age_p95_seconds = ages.Length == 0 ? (double?)null
@@ -77,7 +79,8 @@ public static class SocietyProjection
                 spawned = world.Agents.Count,
                 by_role = world.Agents.Values.GroupBy(agent => agent.Role)
                     .ToDictionary(group => group.Key, group => group.Count()),
-                unique_model_deciding = world.Agents.Values.Count(agent => agent.ModelDecisions > 0)
+                unique_model_deciding = world.Agents.Values.Count(agent => agent.ModelDecisions > 0),
+                decision_makers = world.Agents.Values.Count(SocietyLabor.DecidesForItself)
             },
             agents = world.Agents.Values.Where(agent => agent.Role != "citizen")
                 .Select(agent => AgentSummary(world, agent)),
@@ -116,16 +119,12 @@ public static class SocietyProjection
                     society.PendingDecisions,
                     society.DueAgents,
                     society.OldestWaitTicks,
-                    oldest_eligible_wait_seconds = world.Agents.Values
-                        .Where(agent => SocietyScheduler.IsDue(world, agent, world.UpdatedAt))
-                        .Select(agent => Math.Max(0, (world.UpdatedAt - SocietyScheduler.DueAt(world, agent)).TotalSeconds))
-                        .DefaultIfEmpty(0).Max(),
                     society.PendingByRole,
                     by_role = RoleMetrics(world),
                     average_model_decisions_per_second = society.RecentModelDecisionsPerSecond,
                     society.MaxPendingObserved,
-                    society.InstitutionIntervalSeconds,
-                    society.ResidentIntervalSeconds,
+                    scheduling_mode = world.ScenarioId == "earthlike_society_v3_daily" ? "weekly" : "legacy_wall_clock",
+                    citizen_rotation_weeks = world.ScenarioId == "earthlike_society_v3_daily" ? (int?)SocietyScheduler.CitizenRotationWeeks : null,
                     society.TickIntervalMilliseconds
                 }
             }

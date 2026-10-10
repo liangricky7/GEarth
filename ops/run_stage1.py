@@ -83,6 +83,10 @@ def stop_process(process):
         process.wait(timeout=5)
 
 
+def handle_stop(signum, frame):
+    raise KeyboardInterrupt
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true")
@@ -94,14 +98,13 @@ def main():
     parser.add_argument("--run-id")
     parser.add_argument("--population", type=int, default=1100)
     parser.add_argument("--capacity", type=int)
-    parser.add_argument("--institution-seconds", type=int, default=120)
-    parser.add_argument("--resident-seconds", type=int, default=600)
     parser.add_argument("--government-rotation", type=int, default=0)
     parser.add_argument("--seed", type=int, default=20261010)
     parser.add_argument("--ticks", type=int)
     parser.add_argument("--interval", type=float)
     parser.add_argument("--exit-on-complete", action="store_true")
     options = parser.parse_args()
+    signal.signal(signal.SIGTERM, handle_stop)
 
     options.ticks = (
         options.ticks if options.ticks is not None else (360 if options.world else 16)
@@ -116,15 +119,13 @@ def main():
         or not 0 <= options.interval <= 30
     ):
         parser.error("Invalid tick count or interval; interval must be 0-30 seconds.")
-    if not 100 <= options.population <= 100000 or (
+    minimum_population = 160 if options.world else 100
+    if not minimum_population <= options.population <= 100000 or (
         options.capacity is not None and not 1 <= options.capacity <= 384
     ):
-        parser.error("Use 100-100000 population and 1-384 concurrent requests.")
-    if (
-        not 10 <= options.institution_seconds <= 3600
-        or not 10 <= options.resident_seconds <= 7200
-    ):
-        parser.error("Invalid decision cadence.")
+        parser.error(
+            f"Use {minimum_population}-100000 population and 1-384 concurrent requests."
+        )
     if not 0 <= options.government_rotation <= 4 or options.seed < 1:
         parser.error("Use rotation 0-4 and a positive seed.")
 
@@ -299,8 +300,6 @@ def main():
                         for provider in providers
                     ]
                 ),
-                "FAULTLINE_INSTITUTION_SECONDS": str(options.institution_seconds),
-                "FAULTLINE_RESIDENT_SECONDS": str(options.resident_seconds),
                 "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
                 "FAULTLINE_SEED": str(options.seed),
                 "FAULTLINE_TICKS": str(options.ticks),

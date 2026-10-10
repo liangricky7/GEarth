@@ -1,5 +1,7 @@
 # Faultline — Full Design Document
 
+Current specification: [faultline-current-plan-and-design.md](faultline-current-plan-and-design.md). This compiled document preserves historical designs, fixtures and benchmark evidence. Older one-Spark, wall-clock cadence and economy descriptions are superseded by the maintained specification.
+
 Version: October 10, 2026, revised the same afternoon for the economy and labor-market redesign (branch `ricky/labor-market`). Deadline: Sunday, October 11, 2026, at 10:00 a.m. America/New_York (EDT).
 
 > **Economy revision.** The [current economy and labor market](#economy-current) section replaces the earlier "small economy" and "banking and lending" design. The world now runs one tick per day for a simulated year, with employment, competitive wages, entrepreneurs who own businesses, doctor visits, taxes and public services. Banks, loans and deposits are deferred until this pre-banking economy is realistic. Sections that still describe the earlier 500-agent, two-Spark plan are kept as planning history.
@@ -453,122 +455,10 @@ Kennedy records launch/tunnel recovery instructions; Ahmad records model/prompt 
 <a id="economy-current"></a>
 ### Current economy and labor market
 
-Status: implemented on branch `ricky/labor-market` (October 10, 2026) on top of `world-simulation-run-observations`. It supersedes the earlier "small economy" and "banking and lending" design, which remain summarized below as history. Source: `backend/Faultline.Core/SocietyLabor.cs` (sectors, pay table, labor market, firms) and `SocietyEconomy.cs` (daily and weekly economy).
+The maintained [economy specification](faultline-current-plan-and-design.md#4-current-economy-and-labor-market) now combines the labor-market engine from main with resident endowments and shared compute. It covers twelve firms in seven sectors per country, daily production and health, weekly fixed-salary payroll, entrepreneurs, quality-of-life spending, proportional prices, weighted seller choice and overtime by consent. The earlier one-firm, 5% price-step and fixed discretionary-spending descriptions were removed to avoid keeping two conflicting economy specifications.
 
-**Goal.** A realistic pre-banking economy: people work for wages, pay each other for goods and services, pay taxes, and receive public goods and services in return. Money is never created or destroyed. All amounts are integer minor units (100 = 1 WLD), and the engine asserts cash and goods conservation every day.
+The [scheduler and compute specification](faultline-current-plan-and-design.md#5-weekly-scheduling-and-shared-compute) describes weekly cohorts and role-aware Spark/AMD admission. Historical load sweeps below do not qualify the integrated system. [Integration verification](docs/faultline/evidence/main-integration.json) records tests and the unchanged calibration limitation. Banking remains deferred as described below.
 
-#### Time
-
-One tick is one day; a run is one simulated year (365 ticks). Births, deaths and education are out of scope; education is baked into starting pay and productivity.
-
-| Every day | Every week (every 7th tick) |
-| --- | --- |
-| Firms produce; clinics restock supplies | Firm autopilot (headcount, wage offers), layoffs above target, job matching |
-| Each resident uses 1 food and 1 energy, bought from the cheapest local seller up to their stock target | Price review (market economies) |
-| Health wear, illness, extra-effort strain; automatic doctor visits below the resident's threshold | Payroll with pay cuts, layoffs and closures; profit tax; owner pay |
-| Unmet needs recorded | Public payroll, welfare, unemployment benefit, public healthcare |
-| | Discretionary household spending; metrics; `economy_cycle` and `labor_market` events |
-
-#### Sectors, firms and jobs
-
-Each country starts with one firm per sector. In market economies each has an entrepreneur owner; in the planned economy the state owns them. Each firm employs one occupation.
-
-| Sector | Occupation | Output per full-strength worker per day | Base price | Inputs |
-| --- | --- | --- | --- | --- |
-| Farm (`food`) | farmer | 7.5 food | 40 | 1 energy per 10 units |
-| Power plant (`energy`) | energy worker | 22 energy | 25 | none |
-| Workshop (`tools`, household goods) | factory worker | 3 tools | 100 | 1 energy per 10 units |
-| Pharma (`medicine`) | researcher | 4.5 medicine | 120 | 1 energy and 1 tools per 10 units |
-| Clinic | doctor | 8 visits | 450 per visit | 1 medicine per visit |
-| Freight | dockworker | — | paid per shipment | — |
-
-Food and energy output are multiplied by each country's resource endowment (food 0.55–1.6, energy 0.55–1.6), so countries need to trade. Output scales with effort, health (25% at zero health, 100% when healthy), a milder wellbeing factor (75–100%), national productivity and the education factor. Stocks are capped at 30 days of demand for food and energy, 15 for tools and 10 for medicine. Teachers and soldiers work for the government.
-
-Weekly pay (education baked in; roughly real-world median ratios):
-
-| Farmer | Factory worker | Soldier | Dockworker | Teacher | Energy worker | Researcher | Doctor |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1,000 | 1,300 | 1,400 | 1,450 | 1,750 | 2,100 | 2,500 | 6,000 |
-
-Starting job shares per 100 workers: farmer 21, energy worker 8, factory worker 46, researcher 2, doctor 2, dockworker 3, teacher 8, soldier 5, unemployed 5 (none in the planned economy). One of each essential occupation is placed first so small test worlds still staff every sector. Residents start with two weeks of pay in savings, 4 food, 4 energy and health between 70 and 100 (staggered so doctor visits do not synchronize). Firms start with four weeks of payroll; treasuries with sixteen weeks of public spending.
-
-#### Labor market
-
-- **Salaries are fixed by agreement**, not by effort. A worker hired at a firm's wage offer keeps that salary until the employer changes wages. Effort 2 raises output for the employer (or the owner's own business) and costs 1 health and 1 wellbeing per day; effort 0 is a strike and forfeits that week's pay.
-- **Matching (weekly).** Firms with fewer staff than their headcount target hire, highest wage offer first. Unemployed residents in the occupation are hired first (longest unemployed first), then employed workers who would gain at least 10% more pay. After 14 days unemployed, unskilled workers (farmer, energy worker, factory worker, dockworker) take any unskilled opening; doctors and researchers can swap. Teachers and soldiers stay in the public sector.
-- **Firm autopilot between owner turns.** Goods firms add a worker when stock covers less than 7 days of sales and the firm is profitable, and drop one when stock exceeds 21 days. Clinics hire when patients are turned away and the clinic is profitable, and shrink when under 40% utilized. Freight shrinks when fees do not cover payroll. Wage offers rise 5% a week while openings stay unfilled and the firm is profitable (capped at 1.5× the pay table), and cool 5% a week toward the table when it is not.
-- **Payroll shortfall.** A market firm that cannot cover payroll first cuts all pay 10%, then lays off its most expensive workers until it can pay. Each such week counts as a distress week; four consecutive distress weeks (or four weeks with no revenue and almost no cash) close the business.
-- **Unemployment** pays nothing except the government's weekly benefit and any welfare. Migrants arrive unemployed.
-
-#### Entrepreneurs and businesses
-
-- **Ownership.** An entrepreneur owns exactly one business (1:1). They are residents with their own needs, and they also work in their business. Owners are paid from profit only: after profit tax, up to their former trade's weekly wage first, then half of the rest. A losing week pays them nothing, which keeps the business alive longer.
-- **Model decisions.** The entrepreneur, not the business, gets model turns. Price ±10%, wage ±10% (current staff too), headcount −1/+1/+2 and imports are their business choices; the engine runs the business daily between turns.
-- **Starting a business.** A citizen in a market economy can start a firm in their own trade (skilled workers also in the related trade) by investing eight weeks of their pay from savings. They must also see an opportunity:
-  - no incumbent;
-  - the cheapest incumbent priced at least 20% above base;
-  - stock below three days of national demand;
-  - or, for clinics, patients turned away.
-
-  The new firm launches 10% below the cheapest incumbent. That is its edge, and it keeps customers only while it stays cheaper because households buy from the cheapest seller with stock. Quality is deferred.
-- **Empty sectors.** If a market country has no firm left in a sector (other than freight), the richest resident able to run one and afford the investment opens one at the weekly review. Without this, one closure was permanent and cascaded.
-- **Closing.** Workers are laid off. A competitor in the same sector buys the remaining stock at half the base price; unsold stock goes to the owner. The firm's cash goes to the owner, who becomes a citizen in their former trade and starts looking for work. A state-owned firm's cash would return to the government.
-
-#### Prices
-
-Market prices move up or down 5% at the weekly review, within 0.5× and 3× of the base price:
-
-- Goods: up when stock covers under 3 days of sales, down when it covers over 21 days, otherwise up if the firm's costs exceed its revenue.
-- Clinics: up when more than a tenth of patients are turned away, down when under 60% utilized with nobody turned away, otherwise up if losing money.
-
-The planned economy fixes prices at base.
-
-#### Health and doctor visits
-
-Health falls 1 per day from wear, 30 with a 1% daily chance of illness, 1 more per day on extra effort and 1 per unmet need. A resident visits the cheapest clinic with a free doctor and supplies automatically when health is below their threshold (default 70). A visit restores 40 health and uses one medicine unit that the clinic bought from a pharma, so doctors have product costs. Public healthcare spends the weekly service budget on visits for residents below 60 health, sickest first.
-
-#### Household spending
-
-Food and energy are bought daily. Each week a resident also spends 60% of cash above a 1,000-unit savings buffer on household goods (tools), which are consumed. Agents can also choose `buy_goods` (4 extra units at the quoted price; a repriced seller invalidates the choice) and `pay` (100 for residents, 1,000 for institutions) to a recipient in their own country. Recipients remember payments. Government payments go through the policy delay.
-
-#### Taxes and public spending
-
-| Revenue | Spending |
-| --- | --- |
-| Wage tax on every salary (profile rate) | Public salaries on the fixed pay table; when short, every public employee gets the same fraction |
-| Sales tax inside household prices (default 5%; 0/5/10% by policy) | Weekly welfare per citizen |
-| 20% tax on positive weekly business profit | Weekly unemployment benefit per unemployed citizen |
-| 5% tariff on imports without a trade agreement; migration fees | Public healthcare visits; productivity investment (bought from a workshop) |
-
-Unpaid or sick teachers lower the education factor (0.7–1.0), which multiplies output. Governments observe `budget_last_week` (income, spending, net). In the planned economy the state also takes firm cash above four weeks of payroll and covers payroll shortfalls.
-
-#### Trade and freight
-
-Businesses import in three sizes (½×, 1× and 2× the national population), with up to two shipments in flight per good. Freight fees go to a domestic freight firm (dockworkers), or to the government when none exists. Shipping fees no longer pay into banks.
-
-#### Events and contracts
-
-New v2 event types: `business_started`, `business_closed`, `labor_market` (weekly hires, layoffs, job switches, pay cuts, unemployment, wage offers), `payment_sent` and `goods_purchased`. `economy_cycle` is now weekly and reports the week's wages, sales tax, profit tax, private and public doctor visits, education factor, unemployment, and government income and spending. Owned and closed businesses never get model turns, so model coverage is measured over **decision makers**; the snapshot reports `decision_makers` and `check_world.py --require-full-coverage` compares against it.
-
-#### Calibration evidence and limits
-
-A 365-day, 1,100-agent run with no agent decisions:
-
-- **Stable economy:** health about 82, treasuries and household cash flat after an early adjustment, budgets roughly balanced, no lasting collapse.
-- **Unemployment 13–18%,** which is high: workers produce more than households buy, so firms run lean.
-- **Clinics settle into owner-run practices** at about 225–270 per visit, so doctor-owners earn about a doctor's wage while salaried doctors mostly move to research or unemployment.
-- **No safety net, no food.** Monarchies and dictatorships pay no unemployment benefit, and their jobless residents go hungry.
-- **The planned economies do not change at all.** That reflects fixed prices and favorable endowments, not a finding that planning works better.
-
-Earlier versions collapsed for three reasons, each now fixed:
-
-- loss-making firms bid wages up;
-- clinic prices could only rise;
-- owners took a fixed salary.
-
-Every number here is a first estimate tuned against the simulator, not calibrated against real data. A live model run is still needed to see what model-chosen prices, hiring and startups produce.
-
-<a id="banking-deferred"></a>
 ### Banking and lending (deferred)
 
 Deferred until the pre-banking economy is realistic. The engine still contains the draft loan path: a business requests a working-capital loan, the bank approves it, and it settles at maturity as repaid or defaulted. Loans did not occur in the observed live run. The earlier full design below remains the target when banking returns:

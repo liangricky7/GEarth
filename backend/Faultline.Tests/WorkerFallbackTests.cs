@@ -10,7 +10,7 @@ public sealed class WorkerFallbackTests
     [InlineData(true)]
     public void FallbackDoesNotIncreaseModelCoverageOrRefreshDecisionAge(bool alreadyCovered)
     {
-        var world = SocietyFactory.Create("worker_fallback", true, 100);
+        var world = SocietyFactory.Create("worker_fallback", true, 400);
         var now = DateTimeOffset.UtcNow;
         var agent = world.Agents["aster_citizen_00001"];
 

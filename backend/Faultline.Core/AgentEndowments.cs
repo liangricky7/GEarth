@@ -33,11 +33,11 @@ public static class AgentEndowments
         };
     }
 
-    public static void AllocateCash(Agent[] citizens, long perResidentMinor = 2000)
+    public static void AllocateCash(Agent[] citizens, long perResidentMinor = 2000, long? budgetMinor = null)
     {
         if (citizens.Length == 0)
             return;
-        var budget = perResidentMinor * citizens.Length;
+        var budget = budgetMinor ?? perResidentMinor * citizens.Length;
         var totalWeight = citizens.Sum(citizen => citizen.Weights.Wealth);
         foreach (var citizen in citizens)
             citizen.CashMinor = (long)Math.Floor(budget * citizen.Weights.Wealth / totalWeight);

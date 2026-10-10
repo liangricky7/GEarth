@@ -105,7 +105,7 @@ def main():
                 "FAULTLINE_STORAGE": "local",
                 "FAULTLINE_LIVE": "true",
                 "FAULTLINE_WORLD": "true",
-                "FAULTLINE_POPULATION": "100",
+                "FAULTLINE_POPULATION": "400",
                 "FAULTLINE_CAPACITY": "3",
                 "FAULTLINE_TICKS": str(ticks),
                 "FAULTLINE_INTERVAL_MS": str(interval),

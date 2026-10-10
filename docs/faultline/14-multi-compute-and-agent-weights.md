@@ -1,5 +1,7 @@
 # Shared compute, unequal agent endowments and scheduling integration
 
+Integration update (October 10): the [maintained design](../../faultline-current-plan-and-design.md) supersedes the old cadence formulas and revenue-share payroll below. Main now combines weekly cohorts with scoped compute admission. The previous benchmarks and verification counts remain historical evidence.
+
 ## Current topology
 
 Jayden's laptop remains the coordinator, simulation engine, storage client and observer host. It submits inference over HTTP to model servers rather than running a separate world on each GPU. Jayden can reach Spark A; Ricky operates Spark B and Kennedy can access it. Team members can reach the authenticated AMD endpoint. Team access to AMD shares one GPU and one generation slot; it does not create additional compute capacity.
@@ -65,9 +67,9 @@ Reducing `--interval` advances economic time faster but does not accelerate mode
 
 | Dimension | Distribution and effect |
 | --- | --- |
-| Wealth | Clipped lognormal weight, 0.25–4. Country cash is allocated proportionally within the original 2,000 minor units per resident budget. Integer remainders are assigned deterministically. Wealth is an initial condition, not a recurring income multiplier. |
-| Productivity | Uniform 0.6–1.4. Scales labor output and relative business wage shares. Health, wellbeing and effort remain separate factors. |
-| Bargaining power | Uniform 0.75–1.25. Changes the share of a funded business wage pool; does not increase production or create money. Public salaries remain governed by the existing funded salary rule. |
+| Wealth | Clipped lognormal weight, 0.25–4. Country cash is allocated proportionally within each country's existing two-week-occupation-pay budget. Integer remainders are assigned deterministically. Wealth is an initial condition, not a recurring income multiplier. |
+| Productivity | Uniform 0.6–1.4. Scales goods output; fixed salaries remain governed by agreement. Health, wellbeing and effort remain separate factors. |
+| Bargaining power | Uniform 0.75–1.25. Retained profile metadata; fixed salary agreements supersede the old funded wage-share rule. It does not increase production or create money. |
 | Personal priorities | Five independent positive draws normalized to sum to one: security, wealth, health, belonging and mobility. The live model receives definitions and these relative priorities alongside traits, goals, budgets, memories and available actions. These preferences guide the prompt; they do not force a particular model choice. |
 
 Different dimensions use different seeded hash inputs, so wealth does not automatically imply productivity or bargaining power. Profiles for the same resident ordinal are paired across countries to reduce initial-distribution confounding. At unequal country sizes, the additional resident changes the sampled set and proportional cash allocation. Geography, government policy, country-specific personality traits and subsequent choices remain additional differences.

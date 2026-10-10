@@ -29,7 +29,7 @@ def check_api(url):
         assert compute["pending_decisions"] == 0
         assert compute["max_pending_observed"] <= compute["worker_capacity"]
         assert all(group["pending_decisions"] == 0 for group in roles)
-        assert compute["oldest_eligible_wait_seconds"] >= 0
+        assert compute["citizen_rotation_weeks"] == 8
 
         country = snapshot["countries"][0]["id"]
         page = (
@@ -50,7 +50,8 @@ def check_api(url):
         assert (agent["model_decision_age_seconds"] is None) == (
             agent["last_model_decision_at"] is None
         )
-        assert agent["next_attempt_due_at"] is not None
+        assert agent["decision_maker"]
+        assert agent["next_attempt_due_tick"] is not None
         search = (
             client.get(path + "/agents", params={"q": agent["id"], "limit": 1000})
             .raise_for_status()

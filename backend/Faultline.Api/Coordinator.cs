@@ -125,7 +125,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         var tickLimit = ReadNumber("FAULTLINE_TICKS", 360, 1, 10000);
         var interval = ReadNumber("FAULTLINE_INTERVAL_MS", 2000, 0, 30000);
         var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 384);
-        var population = ReadNumber("FAULTLINE_POPULATION", 1100, 100, 100000);
+        var population = ReadNumber("FAULTLINE_POPULATION", 1100, 160, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
         var id = $"world_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}";
@@ -134,23 +134,30 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
         world.Society!.WorkerCapacity = capacity;
         world.Society.TickIntervalMilliseconds = interval;
-        world.Society.InstitutionIntervalSeconds = ReadNumber("FAULTLINE_INSTITUTION_SECONDS", 120, 10, 3600);
-        world.Society.ResidentIntervalSeconds = ReadNumber("FAULTLINE_RESIDENT_SECONDS", 600, 10, 7200);
         var providerConfig = Environment.GetEnvironmentVariable("FAULTLINE_COMPUTE_PROVIDERS");
         if (!string.IsNullOrEmpty(providerConfig))
             world.Society.ComputeProviders = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider[]>(providerConfig, Wire.Json) ?? [];
+        if (live && world.Society.ComputeProviders.Length > 0)
+            foreach (var group in new[] { "institution", "citizen" })
+                if (!world.Society.ComputeProviders.Any(provider => provider.Capacity > 0 && (provider.DecisionGroup == group || provider.DecisionGroup == "all")))
+                    throw new InvalidOperationException($"No model provider serves {group} decisions");
         await using var pending = new DecisionQueue(capacity, cancellationToken);
+        var queue = new Queue<string>();
         long revision = 0;
 
         async Task Commit(CancellationToken? token = null)
         {
             world.UpdatedAt = DateTimeOffset.UtcNow;
-            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, world.UpdatedAt);
+            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, world.UpdatedAt);
             world.Revision = revision + 1;
-            await store.Save(world, revision, token ?? cancellationToken);
+            // One serialization feeds both the store and the API's read-only copy.
+            var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
+            await store.Save(world, revision, token ?? cancellationToken, serialized);
             revision = world.Revision;
             world.Events = world.Events.TakeLast(512).ToList();
-            current = Wire.Copy(world);
+            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+            copy.Events = copy.Events.TakeLast(512).ToList();
+            current = copy;
             logger.LogInformation("World tick {Tick}: {Coverage}/{Population} model coverage, {Pending} pending",
                 world.Tick, world.Agents.Values.Count(agent => agent.ModelDecisions > 0), world.Agents.Count, pending.Count);
         }
@@ -163,18 +170,38 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             }
         }
 
-        void ScheduleDue(DateTimeOffset now)
+        void Dispatch()
         {
-            foreach (var agent in SocietyScheduler.Select(world, pending.AgentIds, pending.FreeSlots, now))
+            var pendingIds = pending.AgentIds;
+            queue = new Queue<string>(queue.Where(id => world.Agents.TryGetValue(id, out var agent)
+                && SocietyLabor.DecidesForItself(agent) && !pendingIds.Contains(id)));
+            var started = new HashSet<string>();
+            foreach (var agent in SocietyScheduler.SelectQueued(world, queue, pending.AgentIds, pending.FreeSlots))
             {
+                var now = DateTimeOffset.UtcNow;
                 var job = SocietyEngine.Observe(world, agent.Id, now);
                 if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
                 {
                     agent.LastAttemptAt = now;
                     agent.LastAttemptTick = world.Tick;
+                    started.Add(agent.Id);
                 }
             }
-            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, now);
+            queue = new Queue<string>(queue.Where(id => !started.Contains(id)));
+            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, DateTimeOffset.UtcNow);
+        }
+
+        async Task DrainWeek()
+        {
+            while (queue.Count > 0 || pending.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ApplyCompleted();
+                Dispatch();
+                if (pending.Count > 0)
+                    await pending.WaitForCompletion(cancellationToken);
+                ApplyCompleted();
+            }
         }
 
         try
@@ -185,9 +212,14 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             {
                 var started = DateTimeOffset.UtcNow;
                 ApplyCompleted();
+                if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)
+                    await DrainWeek();
                 SocietyEngine.Advance(world);
+                if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)
+                    foreach (var agent in SocietyScheduler.WeeklyCohort(world))
+                        queue.Enqueue(agent.Id);
                 if (tick < tickLimit)
-                    ScheduleDue(started);
+                    Dispatch();
                 ApplyCompleted();
                 if (tick % 5 == 0)
                     await Commit();
@@ -214,14 +246,10 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     }
                     cancellationToken.ThrowIfCancellationRequested();
                     ApplyCompleted();
-                    ScheduleDue(DateTimeOffset.UtcNow);
+                    Dispatch();
                 }
             }
-            while (pending.Count > 0)
-            {
-                await pending.WaitForCompletion(cancellationToken);
-                ApplyCompleted();
-            }
+            await DrainWeek();
             world.Status = "completed";
             world.Emit("run_completed", "rule", [world.Id], new
             {
@@ -235,11 +263,14 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             var abandoned = await pending.CancelAndDrain();
+            var queued = queue.Count;
+            queue.Clear();
             world.Status = "stopped";
             world.Emit("run_stopped", "rule", [world.Id], new
             {
                 reason = "host_shutdown",
                 canceled_pending_requests = abandoned,
+                canceled_queued_requests = queued,
                 canceled_requests_applied = false
             });
             await Commit(CancellationToken.None);

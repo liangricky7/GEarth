@@ -1,5 +1,7 @@
 # Same Qwen models on Spark A, Spark B and AMD
 
+Current deployment update (October 10): clean reinstall completed on Spark A and both Qwen3-8B (8000) and Qwen3-4B (8001) were verified with authenticated requests. Laptop smoke decisions and the stopped hybrid run used both models. The final installer suite passes 39 cases. Earlier troubleshooting entries below record intermediate states. AMD currently serves one Qwen3-4B endpoint; its dual-model upgrade and Spark B remain unverified. See the [maintained design](../../faultline-current-plan-and-design.md).
+
 ## Shared model contract
 
 Every node serves the same two Hugging Face checkpoints:

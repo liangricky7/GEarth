@@ -308,7 +308,9 @@ async function showProfile() {
     for (const memory of data.agent.memories ?? [])
       memories.append(textNode("li", memory));
     profile.append(memories);
-    const decision = data.last_decision ?? data.decisions?.at(-1);
+    // The recent-decisions window keeps full observations; the agent's own copy is slim.
+    const decision = data.decisions.at(-1) ?? data.last_decision;
+    const observed = decision && Object.keys(decision.job.observation ?? {}).length > 0;
     if (decision) {
       profile.append(
         textNode("h3", "Last decision"),
@@ -328,7 +330,9 @@ async function showProfile() {
           "pre",
           JSON.stringify(
             {
-              observation: decision.job.observation,
+              observation: observed
+                ? decision.job.observation
+                : "Not kept: observations are stored for the 256 most recent decisions.",
               action: decision.result.action,
             },
             null,
@@ -577,10 +581,9 @@ function showWorld(snapshot) {
   const compute = snapshot.compute[0];
   const residents = compute.by_role?.find((group) => group.role === "citizen");
   const age = residents?.model_decision_age_p95_seconds;
-  const scheduling =
-    compute.oldest_eligible_wait_seconds === undefined
-      ? ""
-      : ` · oldest eligible wait ${Math.round(compute.oldest_eligible_wait_seconds)}s · resident AI age p95 ${age == null ? "unavailable" : `${Math.round(age)}s`}`;
+  const scheduling = compute.citizen_rotation_weeks
+    ? `institutions decide weekly, citizens every ${compute.citizen_rotation_weeks} weeks`
+    : "historical scheduling configuration";
   const providerNames = compute.providers?.length
     ? compute.providers.map((provider) => {
       const roles = provider.decision_group === "citizen" ? "citizens"
@@ -589,7 +592,7 @@ function showWorld(snapshot) {
     }).join(" + ")
     : "Recorded model compute";
   element("compute").textContent =
-    `${snapshot.run.mode === "LIVE" ? providerNames : "Rule simulation"} · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · institutions every ${compute.institution_interval_seconds}s, residents every ${compute.resident_interval_seconds}s${scheduling}`;
+    `${snapshot.run.mode === "LIVE" ? providerNames : "Rule simulation"} · ${compute.pending_decisions}/${compute.worker_capacity} pending requests · ${compute.due_agents} due · ${compute.average_model_decisions_per_second.toFixed(2)} accepted decisions/s average · p95 ${(snapshot.metrics.latency_p95_ms / 1000).toFixed(1)}s · ${scheduling} · resident AI age p95 ${age == null ? "unavailable" : `${Math.round(age)}s`}`;
   element("route-plan").textContent =
     `${snapshot.shipments.filter((cargo) => cargo.status === "in_transit").length} shipments in transit · ${snapshot.metrics.delivered_shipments} delivered · ${snapshot.metrics.failed_shipments} failed`;
   const nations = element("nations");

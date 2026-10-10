@@ -1,5 +1,7 @@
 # Qwen3 institution and citizen models
 
+Integration update (October 10): see the [maintained specification](../../faultline-current-plan-and-design.md) and [integration evidence](evidence/main-integration.json). Weekly cohorts supersede historical wall-clock eligibility fields; current agent summaries expose `decision_maker` and `next_attempt_due_tick`. Spark A's Qwen pair and AMD Qwen3-4B completed real decisions; Spark B and AMD's second model remain unverified. Earlier measurements below retain their original scope.
+
 For the complete matching model setup across both Sparks and AMD, use the [all-node setup guide](18-all-node-qwen-setup.md). That guide supersedes this document's interim AMD 4B-only routing and adds a fresh Spark B installer. The shared manifest now pins checkpoint revisions for every node.
 
 ## Selected models

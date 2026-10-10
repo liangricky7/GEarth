@@ -9,10 +9,10 @@ public static class Governments
     public static readonly GovernmentProfile[] Profiles =
     [
         new("market_democracy", "Market democracy", 3, true, 45, 0, 1500, 0),
-        new("social_democracy", "Socialist democracy", 2, true, 45, 50, 3000, 40),
-        new("planned_republic", "Single-party planned economy", 1, false, 0, 100, 2500, 60),
+        new("social_democracy", "Social democracy", 2, true, 45, 0, 3000, 100),
+        new("planned_republic", "Single-party planned economy", 1, false, 0, 100, 2500, 150),
         new("dictatorship", "Personal dictatorship", 0, false, 0, 0, 1000, 0),
-        new("monarchy", "Absolute monarchy", 1, false, 0, 25, 2000, 20)
+        new("monarchy", "Absolute monarchy", 1, false, 0, 0, 2000, 50)
     ];
 
     public static GovernmentProfile Get(string id) => Profiles.Single(profile => profile.Id == id);
@@ -25,7 +25,7 @@ public sealed class Nation
     public string GovernmentId { get; set; } = "";
     public int TaxBasisPoints { get; set; }
     public int WelfareMinor { get; set; }
-    public int ServiceBudgetPerResidentMinor { get; set; } = 10;
+    public int ServiceBudgetPerResidentMinor { get; set; } = 50;
     public int LeadershipTerm { get; set; }
     public int NextElectionTick { get; set; } = 100;
     public int Population { get; set; }
@@ -51,6 +51,13 @@ public sealed class Nation
     public long ProfitTaxCollectedMinor { get; set; }
     public long DoctorVisits { get; set; }
     public long PublicDoctorVisits { get; set; }
+    public int UnemploymentBenefitMinor { get; set; }
+    public long DividendsPaidMinor { get; set; }
+    public long UnemploymentPaidMinor { get; set; }
+    public int Unemployed { get; set; }
+    public int BusinessesStarted { get; set; }
+    public int BusinessesClosed { get; set; }
+    public Dictionary<string, long> WeekStartTotals { get; set; } = new();
     public int CrisisUntilTick { get; set; }
     public string? CrisisGood { get; set; }
     public Dictionary<string, int> Stocks { get; set; } = new();
@@ -141,18 +148,17 @@ public sealed class SocietyState
     public int DueAgents { get; set; }
     public int OldestWaitTicks { get; set; }
     public Dictionary<string, int> PendingByRole { get; set; } = new();
-    public int InstitutionCadenceTicks { get; set; } = 30;
-    public int CitizenCadenceTicks { get; set; } = 300;
+    public string[] QueuedAgentIds { get; set; } = [];
     public int TickIntervalMilliseconds { get; set; } = 2000;
-    public double MeasuredDecisionsPerSecond { get; set; }
     public double RecentModelDecisionsPerSecond { get; set; }
     public List<double> LatenciesMs { get; set; } = [];
     public DateTimeOffset StartedAt { get; set; }
     public int GovernmentRotation { get; set; }
     public Dictionary<string, long> PeriodRevenueMinor { get; set; } = new();
     public Dictionary<string, long> PeriodCostMinor { get; set; } = new();
-    public int InstitutionIntervalSeconds { get; set; } = 120;
-    public int ResidentIntervalSeconds { get; set; } = 600;
+    public Dictionary<string, long> PeriodUnitsSold { get; set; } = new();
+    public Dictionary<string, int> VisitsServedToday { get; set; } = new();
+    public Dictionary<string, int> TurnedAwayThisWeek { get; set; } = new();
     public int MaxPendingObserved { get; set; }
     public DateTimeOffset? CoverageCompletedAt { get; set; }
 }

@@ -1,19 +1,19 @@
 {
   "kind": "synthetic integration, no GPU or capacity qualification",
   "completion": {
-    "run_id": "world_20261010_193101_104401",
-    "first_tick_fixture_completions": 8,
+    "run_id": "world_20261010_221200_a8610b",
+    "first_tick_fixture_completions": 6,
     "max_pending": 3,
     "pending_at_completion": 0,
     "fixture_results_by_backend": {
-      "amd": 33,
-      "spark_b": 33,
-      "spark_a": 34
+      "spark_b": 153,
+      "amd": 153,
+      "spark_a": 153
     },
     "automatic_notes": true
   },
   "shutdown": {
-    "run_id": "world_20261010_193103_4b8f9e",
+    "run_id": "world_20261010_221205_3dc036",
     "canceled_pending": 3,
     "pending_at_stop": 0,
     "discarded_results_not_applied": true,

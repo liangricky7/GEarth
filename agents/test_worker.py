@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -248,6 +249,24 @@ def test_world_choice_maps_to_exact_candidate():
     assert action["action_type"] == "work"
     assert action["params"] == {"effort": 2}
     assert action["evidence_ids"] == job.evidence_ids
+
+
+def test_world_rules_form_a_shared_prefix_and_menus_stay_compact():
+    job = make_job()
+    job.observation = {"world_stage": 2, "tick": 3, "note": "One tick is one day."}
+    job.candidates.append(
+        {"action_type": "set_price", "params": {"business_id": "aster_food", "change_pct": 10}}
+    )
+    other = make_job()
+    other.observation = {"world_stage": 2, "tick": 9, "note": "One tick is one day."}
+
+    prompt = worker.build_prompt(job)
+    system, user = prompt["messages"][0]["content"], json.loads(prompt["messages"][1]["content"])
+
+    assert system.endswith("World rules: One tick is one day.")
+    assert system == worker.build_prompt(other)["messages"][0]["content"]  # cacheable across agents
+    assert "note" not in user["observation"]
+    assert user["available_actions"] == ["0: hold", "1: set_price change_pct=10"]
 
 
 @pytest.mark.parametrize("choice", [True, -1, 1, "0", None])

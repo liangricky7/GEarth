@@ -1,6 +1,6 @@
 # Faultline world runbook
 
-Run the world application on Jayden's laptop. The Spark supplies inference through an SSH tunnel; the application, worker, observer and persistence client run locally. Netplan is outside this workflow.
+Run the world application on Jayden's laptop. Spark and AMD supply configured inference services; the application, worker, observer and persistence client run locally. Netplan is outside this workflow.
 
 ## Start without Spark access
 
@@ -17,12 +17,12 @@ This is a fast rule-mode smoke test. It uses deterministic choices and does not 
 Connect to Tailscale and verify noninteractive SSH access to `hackathon@100.70.23.23`. Save the Neon connection string in the ignored `.env.local`; keep credentials out of chat, source and exported evidence.
 
 ```bash
-.venv/bin/python ops/run_stage1.py --world --live --storage neon --population 1100 --capacity 64 --ticks 420
+.venv/bin/python ops/run_stage1.py --world --live --compute hybrid --storage neon --population 1100 --ticks 365
 ```
 
 Use `--storage local` to avoid Neon. The launcher reads the existing model API key over SSH when it is absent from local configuration. It does not restart or reconfigure the model service. Only launcher-owned local child processes are stopped on exit.
 
-Defaults are two-second ticks, economic cycles every five ticks, institution eligibility every 120 seconds, resident eligibility every 600 seconds, and one pending request per agent. Model calls time out at 60 seconds and proposals expire at 65 seconds. At most 64 requests are in flight with this configuration. Rejected or fallback live turns become eligible for retry after 30 seconds. A repeating 3/10 institution and 7/10 resident allocation avoids starvation when only one slot opens. The macOS launcher holds a `caffeinate -i` assertion while the API runs; keep the lid open because lid-closed sleep is not prevented. The observer publishes committed state every five ticks and at completion. Configured eligibility intervals can be exceeded when work waits for available capacity.
+Defaults are two-second ticks (one simulated day each), a weekly economy (payroll, hiring, price reviews and discretionary spending every seven ticks) and one pending request per agent. Decisions follow the weekly rhythm: every government, entrepreneur, bank, newsroom and state firm gets one turn a week, and citizens rotate so each decides once every eight weeks (about 12% a week). Before each weekly review the run waits until that week's requests have returned, so a slow model stretches wall time instead of acting on stale views; any proposal made on a view more than seven days old is rejected as expired. Model calls time out at 60 seconds and proposals expire at 65 seconds. Admission derives from enabled model capacities. Jayden's current private configuration totals 13 slots (4 institutions, 8 citizens, 1 shared AMD); these are concurrency settings, not throughput guarantees. The macOS launcher holds a `caffeinate -i` assertion while the API runs; keep the lid open because lid-closed sleep is not prevented. The observer publishes committed state every five ticks and at completion.
 
 A spawned agent is an individual identity with state and observations. All identities share the model weights. Routine purchases, wages, production and consumption follow engine rules between model turns.
 
@@ -73,4 +73,4 @@ Use [the permanent Faultline address](https://diarockets-faultline.finebear64.ch
 
 If health reports `paused`, the last committed state remains inspectable. Check `.logs/api.log`, `.logs/worker.log` and `.logs/tunnel.log` locally. Inference failures become explicit fallback holds; fallbacks do not count toward accepted model coverage. A storage failure pauses the run after bounded retries. Restarting normally creates a new run; inspect the old checkpoint with `--run-id`.
 
-Cash and goods are simulated. Cargo escrow and credit use internal accounting. Solana, Databricks and AMD remain future integrations. The population is a measured operating target, not an absolute hardware maximum.
+Cash and goods are simulated. Cargo escrow and credit use internal accounting. AMD inference is implemented and verified; Solana and Databricks remain future integrations. The population is a test target, not a measured maximum. The known full-year calibration failure and old hybrid HTTP-error fallbacks remain recorded in the [maintained design](../../faultline-current-plan-and-design.md).

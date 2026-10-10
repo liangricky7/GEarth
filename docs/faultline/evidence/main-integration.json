@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-10",
+  "upstream_main": "6764dea",
+  "integrated_feature_tip": "fb73b0f",
+  "design_source": "faultline-design-vs-current.md (user-supplied comparison; preserved with integration note)",
+  "checks": {
+    "dotnet": {
+      "total": 69,
+      "passed": 68,
+      "failed": [
+        "Faultline.Tests.EconomicLoopTests.MoneyKeepsCirculatingForAFullYear"
+      ],
+      "limitation": "Known upstream year-long economy calibration failure is visible, not skipped or fixed by this merge."
+    },
+    "python": {
+      "passed": 121
+    },
+    "observer_dom": {
+      "passed": 5,
+      "skipped": 1,
+      "skip_reason": "Optional real-API browser fixture was not enabled."
+    },
+    "synthetic_scheduler": {
+      "kind": "synthetic integration, no GPU or capacity qualification",
+      "completion": {
+        "run_id": "world_20261010_221200_a8610b",
+        "first_tick_fixture_completions": 6,
+        "max_pending": 3,
+        "pending_at_completion": 0,
+        "fixture_results_by_backend": {
+          "spark_b": 153,
+          "amd": 153,
+          "spark_a": 153
+        },
+        "automatic_notes": true
+      },
+      "shutdown": {
+        "run_id": "world_20261010_221205_3dc036",
+        "canceled_pending": 3,
+        "pending_at_stop": 0,
+        "discarded_results_not_applied": true,
+        "automatic_notes": true
+      }
+    },
+    "rule_world": {
+      "run_id": "world_20261010_221336_1d637c",
+      "ticks": 365,
+      "checks": [
+        "event_schema",
+        "ordered_sequences",
+        "cause_references",
+        "cash_conservation",
+        "goods_conservation",
+        "nonnegative_resources",
+        "bounded_requests",
+        "checkpoint_readback",
+        "event_archive",
+        "agent_pagination",
+        "read_only_api",
+        "static_assets"
+      ],
+      "model_decision_count": 0,
+      "limitation": "Accounting/API checks do not establish realistic economic outcomes or live capacity.",
+      "initial_population": 1100,
+      "final_agent_records": 1160,
+      "population_note": "Business startups add firm agent records; resident identities remain separate."
+    },
+    "stage2_api": {
+      "run_id": "world_20261010_221336_1d637c",
+      "mode": "RULE",
+      "ticks": 365,
+      "population": 1160,
+      "new_model_calls": 0,
+      "max_pending": 13,
+      "notes_saved": true,
+      "checks": [
+        "role_metrics",
+        "decision_ages",
+        "country_role_filter",
+        "search",
+        "pagination",
+        "revision_metadata",
+        "request_bounds",
+        "read_only",
+        "missing_entities",
+        "secret_file_blocked",
+        "checkpoint_notes_agree",
+        "event_sequence_boundary"
+      ]
+    }
+  },
+  "scope": [
+    "daily labor market and weekly barrier retained",
+    "scoped Spark/AMD routing and Qwen installer retained",
+    "endowments preserve the existing resident cash budget and fixed salaries",
+    "compact cacheable prompts combined with Qwen request settings",
+    "observer consistency and slim observation window combined",
+    "full banking branch excluded as deferred design work"
+  ],
+  "live_state": "User-requested live world remains stopped; verification uses synthetic/local inference only.",
+  "capacity_claim": "No maximum population or integrated live-year timing qualified."
+}

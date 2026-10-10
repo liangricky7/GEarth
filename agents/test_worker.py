@@ -88,3 +88,72 @@ def test_saturated_worker_rejects_more_jobs(monkeypatch):
             assert response.status_code == 429
 
     asyncio.run(request())
+
+
+def test_world_choice_maps_to_exact_candidate():
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    job.candidates.append({"action_type": "work", "params": {"effort": 2}})
+    action = worker.validate_action({"choice": 1, "reason": "Earn more."}, job)
+    assert action["action_type"] == "work"
+    assert action["params"] == {"effort": 2}
+    assert action["evidence_ids"] == job.evidence_ids
+
+
+@pytest.mark.parametrize("choice", [True, -1, 1, "0", None])
+def test_world_choice_rejects_invalid_indices(choice):
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    with pytest.raises(ValueError, match="UNAVAILABLE_ACTION"):
+        worker.validate_action({"choice": choice, "reason": "Wait."}, job)
+
+
+def test_world_choice_cannot_inject_custom_parameters():
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    with pytest.raises(ValueError, match="INVALID_SCHEMA"):
+        worker.validate_action(
+            {"choice": 0, "reason": "Wait.", "params": {"cash": 999}}, job
+        )
+
+
+@pytest.mark.parametrize(
+    "content,source",
+    [
+        ('{"choice":0,"reason":"Wait for a better option."}', "model"),
+        ('{"choice":999,"reason":"Invalid."}', "rule_fallback"),
+    ],
+)
+def test_world_request_uses_model_and_releases_capacity(monkeypatch, content, source):
+    monkeypatch.setattr(worker, "TOKEN", "test-token")
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    calls = []
+
+    def model_response(request):
+        calls.append(request)
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": content}}]}
+        )
+
+    async def request():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(model_response)
+        ) as model_client:
+            monkeypatch.setattr(
+                worker.app.state, "model_client", model_client, raising=False
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=worker.app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/decide",
+                    json=job.model_dump(mode="json"),
+                    headers={"Authorization": "Bearer test-token"},
+                )
+                assert response.status_code == 200
+                assert response.json()["source"] == source
+                assert worker.active_requests == 0
+                assert len(calls) == 1
+
+    asyncio.run(request())

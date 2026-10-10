@@ -13,6 +13,7 @@ IWorldStore store = Environment.GetEnvironmentVariable("FAULTLINE_STORAGE") == "
     : new LocalStore(Path.GetFullPath(".data/runs"));
 
 builder.Services.AddSingleton(store);
+builder.Services.AddSingleton<RunNotesService>();
 builder.Services.AddSingleton<Coordinator>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<Coordinator>());
 
@@ -59,11 +60,35 @@ app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, int? limi
     if (world is null)
         return Results.NotFound();
 
-    var events = world.Events
-        .Where(item => item.Seq > (after_seq ?? 0))
-        .Take(Math.Clamp(limit ?? 100, 1, 500));
+    var after = Math.Max(0, after_seq ?? 0);
+    var count = Math.Clamp(limit ?? 100, 1, 500);
+    var events = world.Events.Count > 0 && after >= world.Events[0].Seq - 1
+        ? world.Events.Where(item => item.Seq > after).Take(count).ToArray()
+        : await store.ReadEvents(id, after, count, cancellationToken);
 
     return Results.Ok(events);
+});
+
+app.MapGet("/api/runs/{id}/agents", async (string id, string? country, string? role, string? q, int? offset, int? limit,
+    Coordinator coordinator, CancellationToken cancellationToken) =>
+{
+    var world = await ReadWorld(id, coordinator, cancellationToken);
+    if (world is null)
+        return Results.NotFound();
+    var matches = world.Agents.Values.Where(agent => (string.IsNullOrEmpty(country) || agent.CountryId == country)
+        && (string.IsNullOrEmpty(role) || agent.Role == role)
+        && (string.IsNullOrEmpty(q) || agent.Id.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || agent.Occupation.Contains(q, StringComparison.OrdinalIgnoreCase))).OrderBy(agent => agent.Id).ToArray();
+    var start = Math.Max(0, offset ?? 0);
+    var count = Math.Clamp(limit ?? 50, 1, 100);
+    return Results.Ok(new
+    {
+        total = matches.Length,
+        offset = start,
+        limit = count,
+        agents = matches.Skip(start).Take(count).Select(agent => new
+        { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions, agent.LastAttemptAt, agent.LastModelDecisionAt })
+    });
 });
 
 app.MapGet("/api/runs/{id}/agents/{agentId}", async (string id, string agentId,
@@ -76,9 +101,27 @@ app.MapGet("/api/runs/{id}/agents/{agentId}", async (string id, string agentId,
     return Results.Ok(new
     {
         agent,
+        last_decision = agent.LastDecision,
         decisions = world.Decisions.Values.Where(item => item.Job.AgentId == agentId).TakeLast(20),
         observer_only = true
     });
+});
+
+app.MapGet("/api/runs/{id}/notes", async (string id, Coordinator coordinator, RunNotesService notes,
+    CancellationToken cancellationToken) =>
+{
+    var world = await ReadWorld(id, coordinator, cancellationToken);
+    return world is null ? Results.NotFound() : Results.Ok(await notes.Record(world, coordinator.Current?.Id == id && coordinator.Error is not null ? "paused" : null, cancellationToken));
+});
+
+app.MapGet("/api/runs/{id}/notes.md", async (string id, Coordinator coordinator, RunNotesService notes,
+    CancellationToken cancellationToken) =>
+{
+    var world = await ReadWorld(id, coordinator, cancellationToken);
+    if (world is null)
+        return Results.NotFound();
+    var report = await notes.Record(world, coordinator.Current?.Id == id && coordinator.Error is not null ? "paused" : null, cancellationToken);
+    return Results.File(System.Text.Encoding.UTF8.GetBytes(report.Markdown), "text/markdown; charset=utf-8", id + "-observations.md");
 });
 
 app.Run();

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:faultline:decision-choice:v2",
+  "title": "Faultline model choice v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["choice", "reason"],
+  "properties": {
+    "choice": { "type": "integer", "minimum": 0 },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "\\S"
+    }
+  }
+}

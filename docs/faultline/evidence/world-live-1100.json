@@ -1,0 +1,157 @@
+{
+  "run_id": "world_20261010_125750_6d3812",
+  "mode": "LIVE",
+  "ticks": 420,
+  "population": 1100,
+  "model_coverage": 977,
+  "model_coverage_by_role": {
+    "bank": 10,
+    "citizen": 907,
+    "business": 40,
+    "government": 10,
+    "media": 10
+  },
+  "metrics": {
+    "model_decision_count": 1881,
+    "fallback_decision_count": 69,
+    "rejected_decision_count": 149,
+    "rule_decision_count": 0,
+    "cash_minor": 12460000,
+    "escrow_minor": 0,
+    "initial_cash_minor": 12460000,
+    "unmet_needs": 4839,
+    "delivered_shipments": 82,
+    "failed_shipments": 0,
+    "initial_goods": {
+      "food": 16480,
+      "energy": 22660,
+      "tools": 5150,
+      "medicine": 4120
+    },
+    "produced_goods": {
+      "food": 82908,
+      "energy": 88747,
+      "tools": 2480,
+      "medicine": 5329
+    },
+    "consumed_goods": {
+      "food": 84808,
+      "energy": 93058,
+      "tools": 653,
+      "medicine": 2849
+    },
+    "lost_goods": {
+      "food": 0,
+      "energy": 0,
+      "tools": 0,
+      "medicine": 0
+    },
+    "held_goods": {
+      "food": 14580,
+      "energy": 18349,
+      "tools": 6977,
+      "medicine": 6600
+    },
+    "started_at": "2026-10-10T12:57:50.547854+00:00",
+    "coverage_completed_at": null,
+    "elapsed_seconds": 2052.244795,
+    "latency_p95_ms": 41511.89
+  },
+  "compute": [
+    {
+      "id": "spark_a",
+      "status": "configured",
+      "worker_capacity": 64,
+      "pending_decisions": 0,
+      "due_agents": 356,
+      "oldest_wait_ticks": 282,
+      "average_model_decisions_per_second": 0.9165573252190902,
+      "max_pending_observed": 64,
+      "institution_interval_seconds": 120,
+      "resident_interval_seconds": 600,
+      "tick_interval_milliseconds": 2000
+    }
+  ],
+  "decision_attempts": 2086,
+  "accepted_actions": {
+    "hold": 224,
+    "publish": 66,
+    "work": 1327,
+    "set_price": 83,
+    "set_tax": 14,
+    "invest": 11,
+    "import_goods": 82,
+    "set_border": 1,
+    "set_welfare": 6,
+    "propose_agreement": 16,
+    "household_policy": 49,
+    "fund_services": 7,
+    "respond_agreement": 6,
+    "request_loan": 20,
+    "express_support": 10,
+    "approve_loan": 15
+  },
+  "rejection_codes": {
+    "CURRENT_PRECONDITION_FAILED": 19,
+    "EXPIRED_PROPOSAL": 130
+  },
+  "fallback_errors": {
+    "ValueError": 10,
+    "TimeoutError": 11,
+    "RemoteProtocolError": 48
+  },
+  "event_types": {
+    "world_initialized": 1,
+    "economy_cycle": 840,
+    "action_accepted": 1937,
+    "public_report": 66,
+    "policy_proposed": 61,
+    "policy_enacted": 58,
+    "shipment_dispatched": 82,
+    "border_changed": 2,
+    "shipment_delivered": 82,
+    "diplomatic_offer": 14,
+    "action_rejected": 149,
+    "resource_crisis": 1,
+    "diplomatic_tension": 1,
+    "policy_blocked": 2,
+    "election_result": 16,
+    "diplomatic_response": 5,
+    "loan_requested": 20,
+    "loan_funded": 15,
+    "loan_settled": 9,
+    "run_completed": 1
+  },
+  "event_count": 3362,
+  "latency_median_ms": 25029.71,
+  "latency_p95_ms": 43107.39,
+  "persistence": "neon_https",
+  "checks": [
+    "event_schema",
+    "ordered_sequences",
+    "cause_references",
+    "cash_conservation",
+    "goods_conservation",
+    "nonnegative_resources",
+    "bounded_requests",
+    "checkpoint_readback",
+    "event_archive",
+    "agent_pagination",
+    "read_only_api",
+    "static_assets"
+  ],
+  "visual_inspection": "unverified: browser permission denied",
+  "limitations": [
+    "one Spark",
+    "sparse model turns between rule-driven life cycles",
+    "synthetic institutional assumptions",
+    "internal currency and escrow",
+    "no absolute capacity claim"
+  ],
+  "qualification": "incomplete coverage; host sleep interruption",
+  "interruption": {
+    "host_sleep_confirmed": true,
+    "effect": "wall-clock elapsed includes a long laptop sleep; outstanding requests failed or expired",
+    "not_a_sustained_capacity_measurement": true
+  }
+}

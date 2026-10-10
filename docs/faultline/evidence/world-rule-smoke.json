@@ -1,0 +1,131 @@
+{
+  "run_id": "world_20261010_125302_419bf6",
+  "mode": "RULE",
+  "ticks": 120,
+  "population": 1100,
+  "model_coverage": 0,
+  "model_coverage_by_role": {},
+  "metrics": {
+    "model_decision_count": 0,
+    "fallback_decision_count": 0,
+    "rejected_decision_count": 8,
+    "rule_decision_count": 1092,
+    "cash_minor": 12460000,
+    "escrow_minor": 0,
+    "initial_cash_minor": 12460000,
+    "unmet_needs": 0,
+    "delivered_shipments": 11,
+    "failed_shipments": 0,
+    "initial_goods": {
+      "food": 16480,
+      "energy": 22660,
+      "tools": 5150,
+      "medicine": 4120
+    },
+    "produced_goods": {
+      "food": 34019,
+      "energy": 30638,
+      "tools": 2945,
+      "medicine": 4383
+    },
+    "consumed_goods": {
+      "food": 24720,
+      "energy": 29048,
+      "tools": 504,
+      "medicine": 1794
+    },
+    "lost_goods": {
+      "food": 192,
+      "energy": 192,
+      "tools": 192,
+      "medicine": 192
+    },
+    "started_at": "2026-10-10T12:53:02.896742+00:00",
+    "coverage_completed_at": null,
+    "elapsed_seconds": 3.677914,
+    "latency_p95_ms": 0
+  },
+  "compute": [
+    {
+      "id": "spark_a",
+      "status": "disabled",
+      "worker_capacity": 64,
+      "pending_decisions": 0,
+      "due_agents": 0,
+      "oldest_wait_ticks": 0,
+      "average_model_decisions_per_second": 0,
+      "max_pending_observed": 0,
+      "institution_interval_seconds": 120,
+      "resident_interval_seconds": 600,
+      "tick_interval_milliseconds": 0
+    }
+  ],
+  "decision_attempts": 1100,
+  "accepted_actions": {
+    "set_border": 2,
+    "propose_agreement": 2,
+    "set_tax": 1,
+    "hold": 138,
+    "set_welfare": 1,
+    "fund_services": 1,
+    "declare_conflict": 2,
+    "set_price": 13,
+    "publish": 4,
+    "import_goods": 11,
+    "work": 215,
+    "household_policy": 366,
+    "express_support": 116,
+    "migrate": 220
+  },
+  "rejection_codes": {
+    "CURRENT_PRECONDITION_FAILED": 8
+  },
+  "fallback_errors": {},
+  "event_types": {
+    "world_initialized": 1,
+    "action_accepted": 1092,
+    "policy_proposed": 9,
+    "conflict_started": 2,
+    "policy_enacted": 9,
+    "public_report": 4,
+    "shipment_dispatched": 11,
+    "agent_migrated": 220,
+    "diplomatic_offer": 2,
+    "border_changed": 4,
+    "action_rejected": 8,
+    "shipment_rerouted": 2,
+    "economy_cycle": 240,
+    "conflict_costs": 72,
+    "shipment_delivered": 11,
+    "resource_crisis": 1,
+    "diplomatic_tension": 1,
+    "election_result": 4,
+    "run_completed": 1
+  },
+  "event_count": 1694,
+  "latency_median_ms": null,
+  "latency_p95_ms": null,
+  "persistence": "local",
+  "checks": [
+    "event_schema",
+    "ordered_sequences",
+    "cause_references",
+    "cash_conservation",
+    "goods_conservation",
+    "nonnegative_resources",
+    "bounded_requests",
+    "checkpoint_readback",
+    "event_archive",
+    "agent_pagination",
+    "read_only_api",
+    "static_assets"
+  ],
+  "visual_inspection": "unverified: browser permission denied",
+  "limitations": [
+    "one Spark",
+    "sparse model turns between rule-driven life cycles",
+    "synthetic institutional assumptions",
+    "internal currency and escrow",
+    "no absolute capacity claim"
+  ]
+}

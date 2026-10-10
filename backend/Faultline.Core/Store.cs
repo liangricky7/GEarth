@@ -9,9 +9,12 @@ public interface IWorldStore
 {
     string Kind { get; }
     Task Initialize(CancellationToken cancellationToken);
+    Task SaveNotes(RunNotes notes, CancellationToken cancellationToken);
+    Task<RunNotes?> LoadNotes(string id, CancellationToken cancellationToken);
     Task Save(World world, long expectedRevision, CancellationToken cancellationToken);
     Task<World?> Load(string id, CancellationToken cancellationToken);
     Task<string[]> List(CancellationToken cancellationToken);
+    Task<WorldEvent[]> ReadEvents(string id, long afterSequence, int limit, CancellationToken cancellationToken);
 }
 
 public sealed class LocalStore(string directory) : IWorldStore
@@ -35,6 +38,16 @@ public sealed class LocalStore(string directory) : IWorldStore
             return;
         if ((existing?.Revision ?? 0) != expectedRevision)
             throw new InvalidOperationException("Revision conflict");
+
+        var eventDirectory = path + ".events";
+        Directory.CreateDirectory(eventDirectory);
+        var newEvents = world.Events.Where(item => item.Seq > (existing?.Seq ?? 0)).ToArray();
+        if (newEvents.Length > 0)
+        {
+            var chunk = Path.Combine(eventDirectory, $"{world.Revision:D12}.json");
+            await File.WriteAllTextAsync(chunk + ".tmp", JsonSerializer.Serialize(newEvents, Wire.Json), cancellationToken);
+            File.Move(chunk + ".tmp", chunk, true);
+        }
 
         var temporaryPath = path + ".tmp";
         await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(world, Wire.Json), cancellationToken);
@@ -61,6 +74,43 @@ public sealed class LocalStore(string directory) : IWorldStore
             .ToArray();
 
         return Task.FromResult(runIds);
+    }
+
+    public async Task<WorldEvent[]> ReadEvents(string id, long afterSequence, int limit, CancellationToken cancellationToken)
+    {
+        var world = await Load(id, cancellationToken);
+        if (world is null)
+            return [];
+        var events = new List<WorldEvent>(world.Events);
+        var eventDirectory = PathFor(id) + ".events";
+        if (Directory.Exists(eventDirectory))
+        {
+            foreach (var path in Directory.GetFiles(eventDirectory, "*.json").Order())
+            {
+                if (!long.TryParse(Path.GetFileNameWithoutExtension(path), out var revision) || revision > world.Revision)
+                    continue;
+                var content = await File.ReadAllTextAsync(path, cancellationToken);
+                events.AddRange(JsonSerializer.Deserialize<WorldEvent[]>(content, Wire.Json) ?? []);
+            }
+        }
+        return events.Where(item => item.Seq > afterSequence && item.Seq <= world.Seq)
+            .DistinctBy(item => item.Seq).OrderBy(item => item.Seq).Take(limit).ToArray();
+    }
+
+    public async Task SaveNotes(RunNotes notes, CancellationToken cancellationToken)
+    {
+        var existing = await LoadNotes(notes.RunId, cancellationToken);
+        if (existing is not null && existing.ThroughSequence > notes.ThroughSequence)
+            return;
+        var path = PathFor(notes.RunId) + ".notes";
+        await File.WriteAllTextAsync(path + ".tmp", JsonSerializer.Serialize(notes, Wire.Json), cancellationToken);
+        File.Move(path + ".tmp", path, true);
+    }
+
+    public async Task<RunNotes?> LoadNotes(string id, CancellationToken cancellationToken)
+    {
+        var path = PathFor(id) + ".notes";
+        return File.Exists(path) ? JsonSerializer.Deserialize<RunNotes>(await File.ReadAllTextAsync(path, cancellationToken), Wire.Json) : null;
     }
 
     private string PathFor(string id)
@@ -135,6 +185,29 @@ public sealed class NeonStore : IWorldStore, IDisposable
                 PRIMARY KEY(run_id, seq)
             )
             """, [], cancellationToken);
+        await Query("""
+            CREATE TABLE IF NOT EXISTS faultline.run_notes (
+                run_id text PRIMARY KEY REFERENCES faultline.stage1_runs(run_id),
+                through_seq bigint NOT NULL,
+                notes jsonb NOT NULL
+            )
+            """, [], cancellationToken);
+    }
+
+    public async Task SaveNotes(RunNotes notes, CancellationToken cancellationToken)
+    {
+        await Query("""
+            INSERT INTO faultline.run_notes(run_id,through_seq,notes)
+            VALUES($1,$2::bigint,$3::jsonb)
+            ON CONFLICT(run_id) DO UPDATE SET through_seq=EXCLUDED.through_seq,notes=EXCLUDED.notes
+              WHERE run_notes.through_seq<=EXCLUDED.through_seq
+            """, [notes.RunId, notes.ThroughSequence.ToString(), JsonSerializer.Serialize(notes, Wire.Json)], cancellationToken);
+    }
+
+    public async Task<RunNotes?> LoadNotes(string id, CancellationToken cancellationToken)
+    {
+        var rows = await Query("SELECT notes FROM faultline.run_notes WHERE run_id=$1", [id], cancellationToken);
+        return rows.Count == 0 ? null : JsonSerializer.Deserialize<RunNotes>(rows[0]![0]!.GetValue<string>(), Wire.Json);
     }
 
     public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken)
@@ -171,6 +244,13 @@ public sealed class NeonStore : IWorldStore, IDisposable
             [], cancellationToken);
 
         return rows.Select(row => row![0]!.GetValue<string>()).ToArray();
+    }
+
+    public async Task<WorldEvent[]> ReadEvents(string id, long afterSequence, int limit, CancellationToken cancellationToken)
+    {
+        var rows = await Query("SELECT envelope FROM faultline.stage1_events WHERE run_id=$1 AND seq>$2::bigint ORDER BY seq LIMIT $3::int",
+            [id, afterSequence.ToString(), limit.ToString()], cancellationToken);
+        return rows.Select(row => JsonSerializer.Deserialize<WorldEvent>(row![0]!.GetValue<string>(), Wire.Json)!).ToArray();
     }
 
     private async Task<JsonArray> Query(string sql, string?[] parameters, CancellationToken cancellationToken)

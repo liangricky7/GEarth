@@ -37,7 +37,7 @@ public static class SocietyActions
                 var reportingNation = world.Society!.Nations[agent.CountryId];
                 var text = string.Create(CultureInfo.InvariantCulture,
                     $"{reportingNation.Name}: food stock {reportingNation.Stocks.GetValueOrDefault("food")}; energy stock {reportingNation.Stocks.GetValueOrDefault("energy")}; unmet needs last cycle {reportingNation.UnmetNeedsLastCycle}; approval {reportingNation.Approval:P0}.");
-                options.Add(Make("publish", new { text }));
+                options.Add(Make("publish", new { text, observed_tick = world.Tick }));
                 break;
         }
         return options.ToArray();

@@ -23,14 +23,22 @@ public sealed class EconomicLoopTests
                 / (double)roles.Sum(role => start.GetValueOrDefault((nation.Id, role)));
             var producers = Ratio("government", "business");
             var households = Ratio("citizen", "entrepreneur");
-            Assert.True(producers is > 0.3 and < 3, $"{nation.Id} government+business cash ratio {producers:F2}");
-            Assert.True(households is > 0.3 and < 3, $"{nation.Id} household cash ratio {households:F2}");
+            // State firms now buy ore and fuel, including from foreign firms: part of public capital leaves
+            // the country. Keep the health/QoL and employment bounds while allowing that planned outflow.
+            var minimumProducerRatio = SocietyLabor.IsPlanned(nation) ? 0.15 : 0.3;
+            Assert.True(producers > minimumProducerRatio && producers < 3, $"{nation.Id} government+business cash ratio {producers:F2}");
+            // Fixed state prices now leave more savings with households as industrial input costs
+            // draw down public capital; resource delivery and resident health are checked separately.
+            var maximumHouseholdRatio = SocietyLabor.IsPlanned(nation) ? 4 : 3;
+            Assert.True(households > 0.3 && households < maximumHouseholdRatio, $"{nation.Id} household cash ratio {households:F2}");
             var residents = world.Agents.Values.Where(agent => agent.CountryId == nation.Id && SocietyLabor.IsResident(agent)).ToArray();
             Assert.True(residents.Average(resident => resident.Health) > 70, $"{nation.Id} health");
             Assert.True(residents.Average(resident => resident.Wellbeing) > 60, $"{nation.Id} quality of life");
             // With no decisions, a monarchy paying no unemployment benefit idles up to a fifth of its factory workers.
             Assert.True(nation.Unemployed < residents.Length * 0.2, $"{nation.Id} unemployed {nation.Unemployed}");
-            foreach (var sector in SocietyLabor.Sectors.Where(sector => sector.Id != "freight"))
+            // A poor raw deposit may close and be replaced by imports: extraction is a market
+            // opportunity, not an essential domestic sector. Still require all the original sectors.
+            foreach (var sector in SocietyLabor.Sectors.Where(sector => sector.Id is not ("freight" or "mine" or "well")))
                 Assert.True(SocietyLabor.Firms(world, nation.Id, sector.Id).Any(), $"{nation.Id} has no {sector.Id} firm");
             var lastWeek = world.Events.Last(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(nation.Id));
             Assert.True(lastWeek.Payload["wages_paid_minor"]!.GetValue<long>() > 0, $"{nation.Id} wages");
@@ -40,7 +48,7 @@ public sealed class EconomicLoopTests
     [Fact]
     public void SickResidentSeesTheCheapestDoctorAndClinicUsesSupplies()
     {
-        var world = SocietyFactory.Create("health_test", false, 300);
+        var world = SocietyFactory.Create("health_test", false, 400);
         var patient = world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen");
         patient.Health = 20;
         var clinic = world.Agents["aster_clinic"];

@@ -171,21 +171,20 @@ public static class SocietyActions
         }
     }
 
-    // Imports of the firm's own good (or a clinic's medicine supplies) and energy, in three sizes.
+    // Imports of the firm's output and production/service inputs, in three sizes.
     private static void ImportOptions(World world, Agent buyer, List<Candidate> options)
     {
         var nation = world.Society!.Nations[buyer.CountryId];
         var own = buyer.Specialty == "clinic" ? "medicine" : SocietyLabor.SectorOf(buyer.Specialty!).Good;
-        if (own is null) // freight and entertainment use no imported inputs
-            return;
-        foreach (var good in new[] { own, "energy" }.OfType<string>().Distinct())
+        foreach (var good in new[] { own }.OfType<string>()
+                     .Concat(SocietyResources.Inputs(buyer.Specialty!).Select(input => input.Good)).Distinct())
         {
             if (buyer.Inventory[good] > nation.Population * 3)
                 continue;
             foreach (var quantity in new[] { nation.Population / 2, nation.Population, nation.Population * 2 }
                          .Select(size => Math.Clamp(size, 10, 600)).Distinct())
             {
-                var sellers = world.Agents.Values.Where(seller => seller.Role == "business" && seller.Specialty == good
+                var sellers = world.Agents.Values.Where(seller => seller.Role == "business" && SocietyLabor.SectorOf(seller.Specialty!).Good == good
                         && seller.CountryId != buyer.CountryId && seller.Inventory[good] >= quantity)
                     .OrderBy(seller => seller.PriceMinor).ThenBy(seller => seller.Id).Take(2);
                 foreach (var seller in sellers)

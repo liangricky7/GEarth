@@ -32,8 +32,11 @@ public static class SocietyLabor
     public static readonly Sector[] Sectors =
     [
         new("food", "farmer", "food", 40, 7.5, 3),
-        new("energy", "energy_worker", "energy", 25, 22, 2),
+        // Raw extraction and powered services add industrial demand; 22 caused a fuel/power starvation loop.
+        new("energy", "energy_worker", "energy", 25, 28, 2),
         new("tools", "factory_worker", "tools", 100, 3, 2),
+        new("mine", "miner", "ore", 15, 14, 1),
+        new("well", "miner", "fuel", 15, 14, 1),
         new("entertainment", "service_worker", null, 60, 5, 2),
         new("medicine", "researcher", "medicine", 120, 4.5, 1),
         new("clinic", "doctor", null, 200, 8, 1),
@@ -56,6 +59,7 @@ public static class SocietyLabor
     public static readonly Dictionary<string, long> TableWage = new()
     {
         ["farmer"] = 1000, ["service_worker"] = 1100, ["factory_worker"] = 1300, ["soldier"] = 1400, ["dockworker"] = 1450,
+        ["miner"] = 1000,
         ["teacher"] = 1750, ["banker"] = 2000, ["energy_worker"] = 2100, ["researcher"] = 2500, ["planner"] = 2500,
         ["doctor"] = 6000
     };
@@ -130,6 +134,7 @@ public static class SocietyLabor
         "food" or "energy" => "needs",
         "clinic" or "medicine" => "health",
         "school" => "security",
+        "mine" or "well" => "industrial_inputs",
         _ => "comfort"
     };
 
@@ -152,7 +157,7 @@ public static class SocietyLabor
     // A gap worth a founder's money: residents feel the shortfall (the sector's part of quality of life is
     // low) and the market shows it (no firm, high prices, empty shelves or customers turned away).
     public static bool HasGap(World world, Nation nation, string sector) =>
-        nation.QolParts.GetValueOrDefault(QolPartOf(sector), 1) < QolGapBelow && HasOpportunity(world, nation, sector);
+        (sector is "mine" or "well" || nation.QolParts.GetValueOrDefault(QolPartOf(sector), 1) < QolGapBelow) && HasOpportunity(world, nation, sector);
 
     // A skilled business needs someone qualified to do the work: the founder or a resident free to hire.
     public static bool CanStaff(World world, Agent founder, string sector)
@@ -588,7 +593,7 @@ public static class SocietyLabor
         // plus energy and tools inputs); a firm losing money on weak sales sheds staff instead.
         var nation = society.Nations[firm.CountryId];
         var marginalCost = firm.WageOfferMinor / (spec.DailyOutput * DaysPerWeek * (spec.Good is { } made ? SocietyEconomy.OutputMultiplier(world, nation, made) : 1))
-            + (spec.Good is null ? 0 : 0.1 * SocietyFactory.BasePrice("energy")) + (spec.Id == "medicine" ? 0.1 * SocietyFactory.BasePrice("tools") : 0);
+            + SocietyResources.InputCostPerOutput(world, firm);
         var losing = society.PeriodCostMinor.GetValueOrDefault(firm.Id) + Staff(world, firm).Sum(worker => worker.SalaryMinor)
             > society.PeriodRevenueMinor.GetValueOrDefault(firm.Id) && firm.PriceMinor < 1.25 * marginalCost;
         double step;

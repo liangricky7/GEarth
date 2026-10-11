@@ -86,7 +86,7 @@ public sealed class HistoryWriter : IDisposable
                     agent.Id, agent.Role, agent.CountryId, agent.LocationId, agent.Occupation, agent.EmployerId,
                     agent.CashMinor, agent.Health, agent.Wellbeing, agent.Specialty,
                     firm ? agent.PriceMinor : null,
-                    firm && agent.Specialty is { } good && agent.Inventory.TryGetValue(good, out var stock) ? stock : null,
+                    firm && agent.Specialty is { } sector && SocietyLabor.SectorOf(sector).Good is { } good && agent.Inventory.TryGetValue(good, out var stock) ? stock : null,
                     staff.GetValueOrDefault(agent.Id)
                 };
             }),

@@ -34,7 +34,8 @@ public sealed class LaborTests
     [Fact]
     public void FirmShortOfCashCutsPayAndLaysOffAndClosingReturnsCashToOwner()
     {
-        var world = NewWorld();
+        // Extra extraction owners leave too few employees in the 400-agent fixture for a payroll shock.
+        var world = SocietyFactory.Create("labor_distress", false, 1100);
         var workshop = world.Agents["aster_tools"];
         var owner = world.Agents[workshop.OwnerId!];
         var staff = SocietyLabor.Staff(world, workshop);

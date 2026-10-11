@@ -54,12 +54,15 @@ public sealed class WarTests
     }
 
     [Fact]
-    public void DefencelessCountrySurrendersWithinTwoWeeksAndPaysReparations()
+    public void DefencelessCountrySurrendersWithinTwoWeeksAndGrantsTerms()
     {
         var world = NewWorld();
         var relation = StartWar(world, "dune", "ionia");
         Disarm(world, "ionia");
         var events = world.Events.Count;
+        var (winner, loser) = (world.Society!.Nations["dune"], world.Society.Nations["ionia"]);
+        var richest = PhaseContracts.RawMaterials.OrderByDescending(good => PhaseContracts.Endowment(loser, good)).First();
+        var (winnerBefore, loserBefore) = (PhaseContracts.Endowment(winner, richest), PhaseContracts.Endowment(loser, richest));
 
         AdvanceDays(world, 2 * SocietyLabor.DaysPerWeek + 1);
 
@@ -67,8 +70,19 @@ public sealed class WarTests
         var ended = world.Events.Skip(events).Single(item => item.EventType == "war_ended");
         Assert.Equal("dune", ended.Payload["winner"]!.GetValue<string>());
         Assert.Equal("surrender", ended.Payload["reason"]!.GetValue<string>());
-        Assert.Equal("reparations", ended.Payload["terms"]!.GetValue<string>()); // no raw materials on this branch
-        Assert.True(ended.Payload["reparations_minor"]!.GetValue<long>() > 0);
+        // With resources present, surrender cedes the richest deposit; the standalone war phase uses cash.
+        if (PhaseContracts.HasRawMaterials)
+        {
+            Assert.Equal("cede_" + richest, ended.Payload["terms"]!.GetValue<string>());
+            Assert.Equal(winnerBefore + loserBefore * SocietyWar.CessionShare, PhaseContracts.Endowment(winner, richest), 6);
+            Assert.Equal(loserBefore * (1 - SocietyWar.CessionShare), PhaseContracts.Endowment(loser, richest), 6);
+            Assert.Equal(0, ended.Payload["reparations_minor"]!.GetValue<long>());
+        }
+        else
+        {
+            Assert.Equal("reparations", ended.Payload["terms"]!.GetValue<string>());
+            Assert.True(ended.Payload["reparations_minor"]!.GetValue<long>() > 0);
+        }
         // The undefended side lost every week it fought and paid tribute.
         var weeks = world.Events.Skip(events).Where(item => item.EventType == "war_week").ToArray();
         Assert.NotEmpty(weeks);
@@ -99,10 +113,12 @@ public sealed class WarTests
     {
         var world = NewWorld();
         var (dune, ionia) = (world.Society!.Nations["dune"], world.Society.Nations["ionia"]);
+        var (winnerOre, loserOre) = (PhaseContracts.Endowment(dune, "ore"), PhaseContracts.Endowment(ionia, "ore"));
         var relation = StartWar(world, "dune", "ionia");
         SocietyWar.EndWar(world, relation, dune, ionia, "cede_ore", "test");
-        Assert.Equal(0.75, PhaseContracts.Endowment(ionia, "ore"), 6);
-        Assert.Equal(1.25, PhaseContracts.Endowment(dune, "ore"), 6);
+        // Phase 1 supplies unequal concentrations instead of the standalone contract's fallback of 1.
+        Assert.Equal(loserOre * (1 - SocietyWar.CessionShare), PhaseContracts.Endowment(ionia, "ore"), 6);
+        Assert.Equal(winnerOre + loserOre * SocietyWar.CessionShare, PhaseContracts.Endowment(dune, "ore"), 6);
 
         relation = StartWar(world, "ionia", "dune");
         var (payer, payee) = (world.Agents["dune_government"], world.Agents["ionia_government"]);

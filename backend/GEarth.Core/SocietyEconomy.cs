@@ -98,6 +98,8 @@ public static class SocietyEconomy
             var firms = agents.Where(agent => agent.Role == "business").ToArray();
             foreach (var firm in firms.OrderBy(firm => firm.Specialty == "energy" ? 0 : 1).ThenBy(firm => firm.Id))
                 Produce(world, nation, firm, SocietyLabor.Workers(world, firm), residents.Length);
+            foreach (var school in firms.Where(firm => firm.Specialty == "school"))
+                SocietyResources.SchoolDay(world, school);
             foreach (var clinic in firms.Where(firm => firm.Specialty == "clinic"))
             {
                 var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek), 1);
@@ -333,6 +335,8 @@ public static class SocietyEconomy
         var shops = Sellers(world, nation, "tools").ToArray();
         var venues = SocietyLabor.Firms(world, nation.Id, "entertainment").OrderBy(venue => venue.PriceMinor).ThenBy(venue => venue.Id).ToArray();
         var seats = venues.ToDictionary(venue => venue.Id, venue => SocietyPlanning.Cap(world, nation, venue, (int)SocietyLabor.ServiceCapacity(world, venue), SocietyLabor.DaysPerWeek));
+        foreach (var venue in venues)
+            SocietyResources.PrepareServices(world, venue, seats[venue.Id]);
         var basePrice = SocietyLabor.SectorOf("entertainment").BasePrice;
         // Necessities come first: a week of food and energy at today's cheapest prices is set aside.
         long Cheapest(string good) => Sellers(world, nation, good).Select(seller => (long)seller.PriceMinor).DefaultIfEmpty(SocietyFactory.BasePrice(good)).First();
@@ -351,7 +355,7 @@ public static class SocietyEconomy
                 var spendable = SocietyBank.Liquid(world, resident) - essentials; // savings in the bank can be spent too
                 var shop = PickSeller(shops.Where(seller => seller.Inventory["tools"] > 0 && seller.PriceMinor <= spendable).ToArray(),
                     world.Seed, $"{resident.Id}:{world.Tick}:tools:{round}");
-                var venue = PickSeller(venues.Where(seller => seats[seller.Id] > 0 && seller.PriceMinor <= spendable).ToArray(),
+                var venue = PickSeller(venues.Where(seller => seats[seller.Id] > 0 && SocietyResources.CanPowerSession(world, seller) && seller.PriceMinor <= spendable).ToArray(),
                     world.Seed, $"{resident.Id}:{world.Tick}:entertainment:{round}");
                 var goodsGain = shop is null ? 0 : Net(goods, shop.PriceMinor);
                 var serviceGain = venue is null ? 0 : Net(services, venue.PriceMinor);
@@ -369,6 +373,8 @@ public static class SocietyEconomy
                 }
                 else
                 {
+                    if (!SocietyResources.PowerSession(world, venue!))
+                        break;
                     SocietyBank.Draw(world, resident, venue!.PriceMinor);
                     Sell(world, resident, venue, venue.PriceMinor, true, 1);
                     seats[venue.Id]--;
@@ -403,7 +409,7 @@ public static class SocietyEconomy
 
     // Domestic sellers of a good, cheapest first.
     public static IEnumerable<Agent> Sellers(World world, Nation nation, string good) =>
-        SocietyLabor.Firms(world, nation.Id, good).Where(agent => agent.Inventory[good] > 0)
+        SocietyLabor.Firms(world, nation.Id, SocietyResources.SectorForGood(good).Id).Where(agent => agent.Inventory[good] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id);
 
     // Buys up to the wanted quantity from domestic sellers the buyer can afford. Firms buy inputs from the
@@ -411,6 +417,8 @@ public static class SocietyEconomy
     // has the treasury pay its share of a household's food, so the farm still receives the full price.
     public static int Acquire(World world, Agent buyer, string good, int wanted, bool household)
     {
+        if (household && PhaseContracts.RawMaterials.Contains(good))
+            return 0; // households demand the finished goods, never raw industrial inputs
         var nation = world.Society!.Nations[buyer.CountryId];
         var bought = 0;
         var sellers = Sellers(world, nation, good).Where(seller => seller != buyer).ToArray();
@@ -563,7 +571,7 @@ public static class SocietyEconomy
         var multiplier = good switch
         {
             "food" => nation.FoodMultiplier,
-            "energy" => nation.EnergyMultiplier,
+            "ore" or "fuel" => PhaseContracts.Endowment(nation, good),
             _ => 1
         };
         if (nation.CrisisUntilTick > world.Tick && nation.CrisisGood == good)
@@ -587,19 +595,7 @@ public static class SocietyEconomy
             : Math.Min(potential, Math.Max(0, stockLimit - producer.Inventory[good]));
         if (quantity <= 0)
             return;
-        var inputs = good switch { "energy" => [], "medicine" => new[] { "energy", "tools" }, _ => new[] { "energy" } };
-        foreach (var input in inputs)
-        {
-            var needed = (quantity + 9) / 10;
-            AcquireInput(world, producer, input, Math.Max(0, needed - producer.Inventory[input]));
-            quantity = Math.Min(quantity, producer.Inventory[input] * 10);
-        }
-        foreach (var input in inputs)
-        {
-            var used = (quantity + 9) / 10;
-            producer.Inventory[input] -= used;
-            world.Society!.ConsumedGoods[input] += used;
-        }
+        quantity = SocietyResources.SupplyProduction(world, producer, quantity);
         producer.Inventory[good] += quantity;
         nation.ProducedUnits += quantity;
         world.Society!.ProducedGoods[good] += quantity;
@@ -622,7 +618,7 @@ public static class SocietyEconomy
         PaySoldiers(world, nation, government, 1000L * conflicts);
         foreach (var business in businesses.Where(business => SocietyLabor.SectorOf(business.Specialty!).Good is not null))
         {
-            var good = business.Specialty!;
+            var good = SocietyLabor.SectorOf(business.Specialty!).Good!;
             var destroyed = Math.Min(business.Inventory[good], Math.Max(1, nation.Population / 40) * conflicts);
             business.Inventory[good] -= destroyed;
             nation.LostUnits += destroyed;

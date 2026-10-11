@@ -36,7 +36,7 @@ public static class SocietyDiplomacy
         var profile = Governments.Get(nation.GovernmentId);
         var policy = new PolicyProposal
         {
-            Id = $"policy_{world.Seq}", CountryId = nation.Id, ActionType = action.ActionType,
+            Id = $"policy_{world.NextEntityNumber()}", CountryId = nation.Id, ActionType = action.ActionType,
             Params = (JsonObject)action.Params.DeepClone(), ProposedTick = world.Tick,
             EffectiveTick = world.Tick + profile.PolicyDelay, CauseId = cause
         };

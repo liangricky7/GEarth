@@ -38,7 +38,7 @@ public static class SocietyTrade
         seller.Inventory[good] -= quantity;
         var cargo = new Cargo
         {
-            Id = $"cargo_{world.Seq}", BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
+            Id = $"cargo_{world.NextEntityNumber()}", BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
             Quantity = quantity, EscrowMinor = value, LocationId = seller.LocationId,
             DestinationId = buyer.LocationId, Plan = path, CreatedTick = world.Tick,
             DeadlineTick = world.Tick + 60, CauseId = cause

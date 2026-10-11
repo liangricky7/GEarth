@@ -136,6 +136,7 @@ public static class SocietyLabor
         var firm = new Agent
         {
             Id = $"{founder.CountryId}_{sector}_firm{world.Seq}", Role = "business", CountryId = founder.CountryId,
+            Id = $"{founder.CountryId}_{sector}_firm{world.NextEntityNumber()}", Role = "business", CountryId = founder.CountryId,
             LocationId = founder.LocationId, Occupation = sector, Specialty = sector, PriceMinor = launchPrice,
             Traits = founder.Traits, WageOfferMinor = TableWage[spec.Occupation], TargetHeadcount = 1,
             OwnerId = founder.Id, InvestedMinor = cost, FoundedTick = world.Tick,

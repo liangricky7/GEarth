@@ -128,10 +128,33 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         var population = ReadNumber("FAULTLINE_POPULATION", 1100, 160, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
-        var id = $"world_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}";
-        var world = SocietyFactory.Create(id, live, population,
-            ReadNumber("FAULTLINE_SEED", 20261010, 1, int.MaxValue),
-            ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
+        var resumeId = Environment.GetEnvironmentVariable("FAULTLINE_RESUME_RUN_ID");
+        World world;
+        if (string.IsNullOrEmpty(resumeId))
+        {
+            var id = $"world_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}";
+            world = SocietyFactory.Create(id, live, population,
+                ReadNumber("FAULTLINE_SEED", 20261010, 1, int.MaxValue),
+                ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
+        }
+        else
+        {
+            // A forked timeline: continue a saved run (on its own Neon branch) from a week-boundary checkpoint.
+            world = await store.Load(resumeId, cancellationToken) ?? throw new InvalidOperationException("Resume run missing");
+            if (world.Society is null || world.Status != "running"
+                || (world.Tick != 0 && (world.Tick + 1) % SocietyLabor.DaysPerWeek != 0))
+                throw new InvalidOperationException("Resume needs a running week-boundary checkpoint");
+            world.Mode = live ? "LIVE" : "RULE";
+            var change = Environment.GetEnvironmentVariable("FAULTLINE_FORK_GOVERNMENT")?.Split('=');
+            world.Emit("timeline_forked", "rule", [world.Id], new
+            {
+                from_tick = world.Tick,
+                timeline = Environment.GetEnvironmentVariable("FAULTLINE_TIMELINE"),
+                change = change is [var country, var government] ? new { country, government } : null
+            });
+            if (change is [var countryId, var profileId])
+                SocietyFactory.ChangeGovernment(world, countryId, profileId);
+        }
         world.Society!.WorkerCapacity = capacity;
         world.Society.TickIntervalMilliseconds = interval;
         var providerConfig = Environment.GetEnvironmentVariable("FAULTLINE_COMPUTE_PROVIDERS");
@@ -143,10 +166,11 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     throw new InvalidOperationException($"No model provider serves {group} decisions");
         await using var pending = new DecisionQueue(capacity, cancellationToken);
         var queue = new Queue<string>();
-        long revision = 0;
-        // Verbose runs also write the day-by-day history file the renderer replays.
+        long revision = world.Revision;
+        // Verbose runs also write the day-by-day history file the renderer replays (a fork's file is named after its timeline).
         using var history = Environment.GetEnvironmentVariable("FAULTLINE_VERBOSE") == "true"
-            ? new HistoryWriter(HistoryWriter.PathFor(id), world) : null;
+            ? new HistoryWriter(HistoryWriter.PathFor(Environment.GetEnvironmentVariable("FAULTLINE_TIMELINE") is { Length: > 0 } timeline
+                ? timeline : world.Id), world) : null;
         history?.Day(world);
 
         async Task Commit(CancellationToken? token = null)
@@ -213,12 +237,18 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         {
             await Commit();
             await notes.Record(current!);
-            for (var tick = 1; tick <= tickLimit; tick++)
+            var firstTick = world.Tick + 1;
+            for (var tick = firstTick; tick <= tickLimit; tick++)
             {
                 var started = DateTimeOffset.UtcNow;
                 ApplyCompleted();
                 if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)
+                {
                     await DrainWeek();
+                    // Week-boundary checkpoint: nothing in flight or queued, so a fork resumes from it exactly.
+                    if (tick > firstTick)
+                        await Commit();
+                }
                 SocietyEngine.Advance(world);
                 if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)
                     foreach (var agent in SocietyScheduler.WeeklyCohort(world))
@@ -227,8 +257,6 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     Dispatch();
                 ApplyCompleted();
                 history?.Day(world);
-                if (tick % 5 == 0)
-                    await Commit();
                 var nextTick = started.AddMilliseconds(interval);
                 while (DateTimeOffset.UtcNow < nextTick)
                 {

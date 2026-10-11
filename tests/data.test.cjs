@@ -87,7 +87,7 @@ test('expanded feature comparison separates typed null legacy data, retained JSO
   assert.match(schooling,/part_time_school: "v1"/);assert.match(schooling,/part_time_student: payload retained.*205 zero\/false/);
   const wages=rows.find(row=>row.cells[0].textContent==='Labor, wages and unpaid income').textContent;
   assert.match(wages,/arrears_minor: typed column, 0 non-null; capture not proven by column existence/);
-  const infrastructure=rows.find(row=>row.cells[0].textContent==='Infrastructure and maintenance').textContent;
+  const infrastructure=rows.find(row=>row.cells[0].textContent==='Infrastructure, maintenance and repairs').textContent;
   assert.match(infrastructure,/silver.infrastructure_daily: unavailable; no verified rows/);assert.ok(!infrastructure.includes('0 rows'));
   assert.match(rows.find(row=>row.cells[0].textContent==='Prices and price changes').textContent,/price_response: "v1"/);
   assert.match(rows.find(row=>row.cells[0].textContent==='Currency and trade balances').textContent,/currency_trade: "v1"/);
@@ -109,6 +109,31 @@ test('war coverage shows military facts and retained diplomatic JSON without cla
   assert.match(diplomacy,/relationships_json: typed column/);assert.match(diplomacy,/\/relationships: payload retained/);
   assert.match(rows.find(row=>row.cells[0].textContent==='Central banks').textContent,/No explicit capture contract \/ unknown/);
   close(v);
+});
+
+test('v4 nutrition clinic and loan coverage is distinct from legacy missing fields',async()=>{
+  const f=fixture();
+  f.manifest.capture_metadata={capture_contract_version:'gearth.economy_capture.v4',features:{nutrition_recovery:'v1',clinic_feedback:'v1',loan_provisions:'v1',infrastructure_repairs:'v1'},active_features:[]};
+  f.datasets.dataset_catalog.datasets[0].columns.push({name:'nutrition_debt_days',data_type:'bigint',nullable:true,non_null_count:205},{name:'production_remainder',data_type:'double',nullable:true,non_null_count:205},{name:'food_spoilage_remainder',data_type:'bigint',nullable:true,non_null_count:205},{name:'loan_loss_provisions_minor',data_type:'bigint',nullable:true,non_null_count:10});
+  f.datasets.dataset_catalog.datasets.push({dataset_id:'silver.country_daily',availability:'available',row_count:15,
+    columns:[{name:'clinic_capacity_this_week',data_type:'bigint',nullable:true,non_null_count:15},{name:'credit_positions_json',data_type:'string',nullable:true,non_null_count:15},{name:'repair_orders_json',data_type:'string',nullable:true,non_null_count:15}],
+    payload_fields:[{path:'/clinic_last_week',present_count:15,null_count:7,non_null_count:8,zero_or_false_count:0},{path:'/credit_positions',present_count:15,null_count:0,non_null_count:15,zero_or_false_count:0},{path:'/repair_orders',present_count:15,null_count:0,non_null_count:15,zero_or_false_count:0}],field_coverage_scope:'all_run_rows_bounded_inventory'});
+  const v=view({A:f});await ready(v);
+  const rows=[...v.doc.querySelectorAll('#feature-coverage tr')];
+  const nutrition=rows.find(row=>row.cells[0].textContent==='Nutrition, production and spoilage').textContent;
+  assert.match(nutrition,/nutrition_recovery: "v1"/);assert.match(nutrition,/food_spoilage_remainder: typed column/);
+  const clinics=rows.find(row=>row.cells[0].textContent==='Clinic capacity and funding').textContent;
+  assert.match(clinics,/clinic_feedback: "v1"/);assert.match(clinics,/clinic_last_week: payload retained, 15 present, 7 null/);
+  const loans=rows.find(row=>row.cells[0].textContent==='Loans and loss provisions').textContent;
+  assert.match(loans,/loan_provisions: "v1"/);assert.match(loans,/credit_positions: payload retained/);assert.match(loans,/loan_loss_provisions_minor: typed column, 10 non-null/);
+  const repairs=rows.find(row=>row.cells[0].textContent==='Infrastructure, maintenance and repairs').textContent;
+  assert.match(repairs,/infrastructure_repairs: "v1"/);assert.match(repairs,/repair_orders: payload retained/);
+  close(v);
+  const legacy=view();await ready(legacy);
+  const row=[...legacy.doc.querySelectorAll('#feature-coverage tr')].find(row=>row.cells[0].textContent==='Nutrition, production and spoilage');
+  assert.match(row.textContent,/Not declared \/ unknown/);assert.match(row.textContent,/No matching field in published inventory/);
+  assert.ok(!row.textContent.includes('0 non-null'));
+  close(legacy);
 });
 
 test('catalog discovers new IDs while preserving selected older run and pages through old IDs',async()=>{

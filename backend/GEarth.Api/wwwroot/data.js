@@ -330,13 +330,16 @@
   }
   const features = [
     { name:"Banking / deposits", keys:["banking","deposit_creation"], terms:["bank","banking","deposit_minor","bank_ledger","deposit","insured_minor"] },
+    { name:"Loans and loss provisions", keys:["banking","loan_provisions"], terms:["loan","loans","credit","provision","provisions"] },
     { name:"Schooling", keys:["public_services","school","part_time_school"], terms:["school","is_student","student","part_time_student","enrolled_students"] },
     { name:"Health and public services", keys:["public_services"], terms:["health","hungry","hunger","public_service","clinic","qol","quality_of_life"] },
+    { name:"Clinic capacity and funding", keys:["public_services","clinic_feedback"], terms:["clinic","untreated_patient_days"] },
+    { name:"Nutrition, production and spoilage", keys:["nutrition_recovery"], terms:["nutrition","production","spoilage"] },
     { name:"Labor, wages and unpaid income", keys:["labor_distribution","wage_arrears"], terms:["disposable_income","labor_force","inequality","wage","salary","arrears","unpaid_hungry_weeks"] },
     { name:"Prices and price changes", keys:["price_response"], terms:["price","price_change","units_before_price_change","profit_before_price_change_minor","price_before_price_change_minor"] },
     { name:"Currency and trade balances", keys:["currency_trade"], terms:["currency","trade_net_week_minor","trade_gross_week_minor","trade_value_minor"] },
     { name:"Resources", keys:["resources"], terms:["inventory","stock","endowment","resource","resources"] },
-    { name:"Infrastructure and maintenance", keys:["infrastructure"], terms:["infrastructure","construction","maintenance","borrowed_builders"] },
+    { name:"Infrastructure, maintenance and repairs", keys:["infrastructure","infrastructure_repairs"], terms:["infrastructure","construction","maintenance","borrowed_builders","repair_orders"] },
     { name:"War and military", keys:["war_diplomacy","war","warfare"], terms:["war","wars","warfare","military","missile","missiles","soldier","soldiers","tribute"] },
     { name:"Diplomacy, elections and unrest", keys:["war_diplomacy"], terms:["relation","relations","relationship","relationships","diplomacy","peace","unrest","election","leadership","government_id","mission"] },
     { name:"Central banks", keys:["central_banks","central_bank"], terms:["central_bank","central_banks"] }

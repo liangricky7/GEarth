@@ -9,7 +9,7 @@ from analytics.conditions import comparison_conditions
 from analytics.export import export_run
 from analytics.report import build_report
 from analytics.schema import economy_backfill_fields
-from analytics.transform import (CAPTURE_VERSION, CAPTURE_VERSION_V2, REQUIRED_AGENT_V2, REQUIRED_AGENT_V3,
+from analytics.transform import (CAPTURE_VERSION_V3 as CAPTURE_VERSION, CAPTURE_VERSION_V2, REQUIRED_AGENT_V2, REQUIRED_AGENT_V3,
     REQUIRED_COUNTRY_V3, capture_requirements, typed_record, validate_capture)
 from test_economy_capture import record
 from test_pipeline import fixture, fake_fetch

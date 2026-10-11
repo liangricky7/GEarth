@@ -263,14 +263,156 @@ public sealed class EconomyCaptureTests
     }
 
     [Fact]
+    public void DailyRecoveryClinicAndCreditPositionsRetainRawValuesAndCountryScope()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var person = world.InCountry(nation.Id).First(agent => agent.Role == "citizen");
+        person.NutritionDebtDays = 9;
+        person.ProductionRemainder = 0.731;
+        person.FoodSpoilageRemainder = 57;
+        nation.ClinicCapacityThisWeek = 81;
+        nation.UntreatedPatientDaysThisWeek = 17;
+        nation.ClinicLastWeek = new(7, 93, 42, 11, 1500);
+        world.Tick = 8;
+        SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, 100);
+        world.Tick = 9;
+        SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, 200);
+        world.Tick = 10;
+        SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, 300);
+        world.Tick = 11;
+        SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, 400);
+        var crossCountryLoan = new Credit
+        {
+            Id = "loan_foreign", Kind = "treasury", BankId = "aster_bank", BorrowerId = "cinder_government",
+            PrincipalMinor = 10000, PrincipalLeftMinor = 7500, WeeklyPrincipalMinor = 389,
+            WeeklyInterestMinor = 19, RatePct = 6, MissedPayments = 4, ProvisionMinor = 1500,
+            Sector = "tools", LaunchPriceMinor = 87, RequestedTick = 1, RequestEventId = "loan_request", Status = "active", DepositCreated = true
+        };
+        var repaidLoan = new Credit { Id = "loan_repaid", BankId = "aster_bank", BorrowerId = person.Id,
+            PrincipalMinor = 130, PrincipalLeftMinor = 0, Status = "repaid" };
+        var unrelatedLoan = new Credit { Id = "loan_other", BankId = "cinder_bank", BorrowerId = "cinder_government", PrincipalMinor = 200 };
+        world.Society.Credit.AddRange([crossCountryLoan, repaidLoan, unrelatedLoan]);
+        RunAudit.Enable(world);
+        RunAudit.Day(world);
+        var agent = Day(world, "agent_day", "agent_id", person.Id);
+        Assert.Equal(9, agent["nutrition_debt_days"]!.GetValue<int>());
+        Assert.Equal(0.731, agent["production_remainder"]!.GetValue<double>());
+        Assert.Equal(57, agent["food_spoilage_remainder"]!.GetValue<int>());
+        var country = Day(world, "nation_day", "nation_id", nation.Id);
+        Assert.Equal(81, country["clinic_capacity_this_week"]!.GetValue<int>());
+        Assert.Equal(17, country["untreated_patient_days_this_week"]!.GetValue<int>());
+        Assert.True(JsonNode.DeepEquals(Wire.Node(nation.ClinicLastWeek), country["clinic_last_week"]));
+        Assert.Equal(3, country["clinic_funding_history"]!.AsArray().Count);
+        Assert.Equal(9, country["clinic_funding_history"]![0]!["tick"]!.GetValue<int>());
+        Assert.True(JsonNode.DeepEquals(Wire.Node(SocietyGovernmentDecisions.ClinicView(world, nation)), country["clinic_funding"]));
+        Assert.Null(agent["loan_loss_provisions_minor"]);
+        var bank = Day(world, "agent_day", "agent_id", "aster_bank");
+        Assert.Equal(1500, bank["loan_loss_provisions_minor"]!.GetValue<long>());
+        Assert.Equal(Wire.Node(SocietyBank.View(world, world.Agents["aster_bank"], true))["loan_loss_provisions_minor"]!.GetValue<long>(),
+            bank["loan_loss_provisions_minor"]!.GetValue<long>());
+        var credits = country["credit_positions"]!.AsArray();
+        Assert.Equal(2, credits.Count);
+        Assert.DoesNotContain(credits, node => node!["id"]!.GetValue<string>() == unrelatedLoan.Id);
+        Assert.Contains(credits, node => node!["status"]!.GetValue<string>() == "repaid");
+        var actual = Assert.Single(credits, node => node!["id"]!.GetValue<string>() == crossCountryLoan.Id)!;
+        foreach (var field in Wire.Node(crossCountryLoan).AsObject())
+            Assert.True(JsonNode.DeepEquals(field.Value, actual[field.Key]), field.Key);
+        Assert.Equal("aster", actual["bank_country_id"]!.GetValue<string>());
+        Assert.Equal("cinder", actual["borrower_country_id"]!.GetValue<string>());
+        var borrowerCountry = Day(world, "nation_day", "nation_id", "cinder");
+        Assert.Contains(borrowerCountry["credit_positions"]!.AsArray(), node => node!["id"]!.GetValue<string>() == crossCountryLoan.Id);
+        crossCountryLoan.ProvisionMinor = 7500;
+        nation.ClinicFundingHistory.Clear();
+        Assert.Equal(1500, actual["provision_minor"]!.GetValue<long>());
+        Assert.Equal(3, country["clinic_funding_history"]!.AsArray().Count);
+    }
+
+    [Fact]
+    public void EffectsCaptureActualRecoveryFundingFeedbackAndCreditCreation()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var person = world.InCountry(nation.Id).First(agent => agent.Role == "citizen");
+        person.NutritionDebtDays = 9;
+        person.Inventory["food"] = 151;
+        person.FoodSpoilageRemainder = 57;
+        world.Tick = 7;
+        RunAudit.Enable(world);
+        using (RunAudit.Effects(world, person, new("hold", new(), "routine fixture", []), "recovery", "recovery_event"))
+        {
+            SocietyEconomy.RecordMeal(person, true);
+            SocietyEconomy.SpoilFood(world, person);
+        }
+        var recovery = world.PendingAudit.Single(row => row.Kind == "action_effect"
+            && row.Payload["decision_id"]?.GetValue<string>() == "recovery").Payload;
+        Assert.Equal(9, recovery["before"]!["nutrition_debt_days"]!.GetValue<int>());
+        Assert.Equal(7, recovery["after"]!["nutrition_debt_days"]!.GetValue<int>());
+        Assert.Equal(57, recovery["before"]!["food_spoilage_remainder"]!.GetValue<int>());
+        Assert.Equal(8, recovery["after"]!["food_spoilage_remainder"]!.GetValue<int>());
+        var government = world.Agents["aster_government"];
+        using (RunAudit.Effects(world, government, new("fund_services", new() { ["amount_minor"] = 200 }, "fixture", []), "funding", "funding_event"))
+            SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, 200);
+        var funding = world.PendingAudit.Single(row => row.Kind == "action_effect"
+            && row.Payload["decision_id"]?.GetValue<string>() == "funding" && row.Payload["entity_type"]!.GetValue<string>() == "nation").Payload;
+        Assert.Empty(funding["before"]!["clinic_funding_history"]!.AsArray());
+        Assert.Equal(200, funding["after"]!["clinic_funding_history"]![0]!["to_minor"]!.GetValue<int>());
+        using (RunAudit.Effects(world, person, new("enroll_school", new() { ["part_time"] = true }, "fixture", []), "loan", "loan_event"))
+            Assert.NotNull(SocietyBank.StudentLoan(world, person, 120));
+        var credit = world.PendingAudit.Single(row => row.Kind == "action_effect"
+            && row.Payload["decision_id"]?.GetValue<string>() == "loan" && row.Payload["entity_type"]!.GetValue<string>() == "credit").Payload;
+        Assert.Null(credit["before"]);
+        Assert.Equal(person.Id, credit["after"]!["borrower_id"]!.GetValue<string>());
+        Assert.Equal(120, credit["after"]!["principal_minor"]!.GetValue<long>());
+        Assert.Equal(0, credit["after"]!["provision_minor"]!.GetValue<long>());
+        Assert.Equal("student", credit["after"]!["kind"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void RepairQueueIsCapturedAtEnactmentAndInDailyStateWithoutClaimingDamageWasRestored()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var project = new Project { Id = "repair_roads", Type = "roads", Complete = true, CostMinor = 31000,
+            PaidMinor = 31000, Condition = 52 };
+        nation.Infrastructure.Add(project);
+        world.Tick = 6;
+        RunAudit.Enable(world);
+        var options = new List<Candidate>();
+        SocietyInfrastructure.AddOptions(world, nation, world.Agents["aster_government"], options);
+        var repair = Assert.Single(options, option => option.ActionType == "repair_infrastructure");
+        var action = new ActionProposal(repair.ActionType, SocietyActions.Resolve(repair), "fixture", []);
+        using (RunAudit.Effects(world, world.Agents["aster_government"], action, "repair", "repair_event"))
+            Assert.True(SocietyInfrastructure.Enact(world, nation, new()
+                { ActionType = action.ActionType, Params = action.Params, CauseId = "repair_event" }));
+        var queued = world.PendingAudit.Single(row => row.Kind == "action_effect"
+            && row.Payload["decision_id"]?.GetValue<string>() == "repair").Payload;
+        Assert.Empty(queued["before"]!["repair_orders"]!.AsArray());
+        Assert.Equal(project.Id, queued["after"]!["repair_orders"]![0]!.GetValue<string>());
+        Assert.Equal(52, project.Condition); // queueing a repair does not complete its work
+        Assert.Null(queued["after"]!["infrastructure"]);
+        RunAudit.Day(world);
+        var daily = Day(world, "nation_day", "nation_id", nation.Id);
+        Assert.Equal(project.Id, daily["repair_orders"]![0]!.GetValue<string>());
+        Assert.Equal(52, daily["infrastructure"]![0]!["condition"]!.GetValue<int>());
+        nation.RepairOrders.Clear();
+        Assert.Equal(project.Id, daily["repair_orders"]![0]!.GetValue<string>());
+        var metadata = world.PendingAudit[0].Payload;
+        Assert.Equal("v1", metadata["features"]!["infrastructure_repairs"]!.GetValue<string>());
+        Assert.Equal(10, metadata["economy_configuration"]!["infrastructure"]!["repair_max_condition_per_week"]!.GetValue<int>());
+        Assert.Equal(0.005, metadata["economy_configuration"]!["infrastructure"]!["repair_cost_fraction_per_condition"]!.GetValue<double>());
+        Assert.Contains("does_not_restore_damage", metadata["economy_configuration"]!["infrastructure"]!["maintenance_basis"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void MetadataVersionsCaptureWithoutChangingAuditEnvelopeAndLegacyPayloadAbsence()
     {
         var world = NewWorld();
         RunAudit.Enable(world);
         var metadata = world.PendingAudit[0].Payload;
         Assert.Equal(1, world.AuditSchemaVersion);
-        Assert.Equal("gearth.economy_capture.v3", metadata["capture_contract_version"]!.GetValue<string>());
-        foreach (var feature in new[] { "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy" })
+        Assert.Equal("gearth.economy_capture.v4", metadata["capture_contract_version"]!.GetValue<string>());
+        foreach (var feature in new[] { "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy", "nutrition_recovery", "clinic_feedback", "loan_provisions", "infrastructure_repairs" })
         {
             Assert.NotNull(metadata["features"]![feature]);
             Assert.Contains(metadata["active_features"]!.AsArray(), node => node!.GetValue<string>() == feature);
@@ -279,6 +421,9 @@ public sealed class EconomyCaptureTests
         Assert.Equal(SocietyLabor.ArrearsStrikeWeeks, metadata["economy_configuration"]!["labor"]!["arrears_strike_weeks"]!.GetValue<int>());
         Assert.Equal(SocietyTrade.CurrencyStep, metadata["economy_configuration"]!["currency_trade"]!["currency_step"]!.GetValue<double>());
         Assert.NotEmpty(metadata["economy_configuration"]!["infrastructure"]!["catalog"]!.AsArray());
+        Assert.Equal(SocietyEconomy.StarvationDays, metadata["economy_configuration"]!["nutrition_recovery"]!["starvation_days"]!.GetValue<int>());
+        Assert.Equal(3, metadata["economy_configuration"]!["clinic_feedback"]!["retained_funding_changes"]!.GetValue<int>());
+        Assert.Contains("not_additive", metadata["economy_configuration"]!["loan_provisions"]!["credit_positions_scope"]!.GetValue<string>());
         Assert.Equal(SocietyWar.WarBelow, metadata["economy_configuration"]!["war_diplomacy"]!["war_below"]!.GetValue<int>());
         Assert.Contains(metadata["economy_configuration"]!["infrastructure"]!["catalog"]!.AsArray(),
             node => node!["type"]!.GetValue<string>() == PhaseContracts.Missile);

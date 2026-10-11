@@ -30,7 +30,7 @@ public static class RunAudit
 {
     public const int SchemaVersion = 1;
     public const string PublicServicesContract = "gearth.public_services.v1";
-    public const string EconomyCaptureContract = "gearth.economy_capture.v3";
+    public const string EconomyCaptureContract = "gearth.economy_capture.v4";
     public const string MenuContract = "fixed_or_bounded_integer.v1";
 
     public static void PrepareResume(World world, bool enableAnalytics)
@@ -71,11 +71,15 @@ public static class RunAudit
             wage_arrears = world.Society is null ? null : "v1",
             price_response = world.Society is null ? null : "v1",
             currency_trade = world.Society is null ? null : "v1",
-            war_diplomacy = world.Society is null ? null : "phase3_v1"
+            war_diplomacy = world.Society is null ? null : "phase3_v1",
+            nutrition_recovery = world.Society is null ? null : "v1",
+            clinic_feedback = world.Society is null ? null : "v1",
+            loan_provisions = world.Society is null ? null : "v1",
+            infrastructure_repairs = world.Society is null ? null : "v1"
         });
         configuration["active_features"] = Wire.Node(world.Society is null ? new[] { "bounded_integer_choices" }
             : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices", "deposit_creation", "resources", "labor_distribution",
-                "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy" });
+                "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy", "nutrition_recovery", "clinic_feedback", "loan_provisions", "infrastructure_repairs" });
         configuration["banking_paused"] = world.Society is null ? null : JsonValue.Create(SocietyBank.Paused);
         configuration["economy_configuration"] = world.Society is null ? null : Wire.Node(EconomyConfiguration());
         Append(world, "run_metadata", configuration);
@@ -124,7 +128,32 @@ public static class RunAudit
             seeking_better_job_days = SocietyLabor.CourseDays },
         health = new { SocietyEconomy.VisitHealthGain, SocietyEconomy.MedicineHealthGain,
             SocietyEconomy.HealthDecayDays, SocietyEconomy.SickBelow, SocietyEconomy.DailyIllnessChance,
-            SocietyEconomy.HungerOutputFactor },
+            SocietyEconomy.HungerOutputFactor, SocietyEconomy.StarvationDays },
+        nutrition_recovery = new
+        {
+            SocietyEconomy.StarvationDays, SocietyEconomy.HungerOutputFactor,
+            missed_meal_debt_days = 1, fed_day_recovery_days = 2,
+            output_factor_basis = "max(hunger_output_factor,1-0.99*max(nutrition_debt_days,hungry?1:0)/starvation_days)",
+            fractional_production_basis = "sub_unit_exact_potential_carried_between_days; normal_batches_truncated_without_carry",
+            food_spoilage_basis = "weekly_1_percent_stock_integer_loss_with_carried_remainder; empty_stock_resets_remainder"
+        },
+        clinic_feedback = new
+        {
+            retained_funding_changes = 3, observation_window_days = SocietyLabor.DaysPerWeek,
+            capacity_basis = "daily_available_visit_slots_accumulated_for_week",
+            untreated_basis = "patient_days_below_personal_health_threshold_after_daily_care",
+            funding_basis = "clinic_capitation_paid_actual_minor; completed_week_differences",
+            interpretation = "before_after_outcomes_descriptive_not_proof_of_causation"
+        },
+        loan_provisions = new
+        {
+            SocietyBank.MissedPaymentsToDefault,
+            impairment_basis = "treasury_active_principal_times_min(10,missed_payments-2)/10_after_default_threshold; bounded_by_remaining_principal",
+            recovery_basis = "reserve_kept_until_principal_recovered; impairment_never_exceeds_remaining_principal",
+            lending_basis = "treasury_missed_payments_or_outstanding_provision_block_new_advances",
+            equity_basis = "cash_reserves_plus_active_loan_principal_minus_active_provisions_minus_deposit_liabilities",
+            credit_positions_scope = "all_statuses_lender_or_borrower_in_country; cross_country_positions_repeated_per_country_not_additive"
+        },
         quality_of_life = new { SocietyEconomy.NeedsWeight, SocietyEconomy.HealthBonus,
             SocietyEconomy.SickPenalty, SocietyEconomy.ComfortWeight, SocietyEconomy.SecurityWeight,
             SocietyEconomy.LeisureWeight, SocietyEconomy.ComfortUnitsAtFull, SocietyEconomy.SecurityWeeksOfPay,
@@ -137,6 +166,10 @@ public static class RunAudit
         {
             SocietyInfrastructure.AdvanceShare, upkeep_cost_fraction_per_week = 0.01,
             unfunded_condition_loss_per_week = 2,
+            maintenance_basis = "funded_upkeep_prevents_ordinary_wear_does_not_restore_damage",
+            repair_max_condition_per_week = 10, repair_builders_required = 1,
+            repair_cost_fraction_per_condition = 0.005,
+            repair_materials_basis = "ceil(full_project_material_units*condition_points/100)",
             progress_basis = "engine_remaining_schedule_ticks",
             catalog = PhaseContracts.Catalog.Select(spec => new { spec.Type, spec.Builders, spec.Ticks, spec.CostMinor, spec.MaxLevel, spec.Effects,
                     levels = Enumerable.Range(1, spec.MaxLevel).Select(level => new
@@ -190,7 +223,8 @@ public static class RunAudit
         agent.FormerOccupation, agent.InvestedMinor, agent.DistressWeeks,
         agent.LastWeekUnitsSold, agent.LastWeekTurnedAway, agent.OvertimeDays,
         agent.GoodsBoughtLastWeek, agent.ServicesBoughtLastWeek, agent.LastWeekWellbeing,
-        agent.SickDays, agent.Hungry, agent.NeedsMet, agent.HungryThisWeek, agent.PricedOutThisWeek, agent.InKindMinor,
+        agent.SickDays, agent.NutritionDebtDays, agent.ProductionRemainder, agent.FoodSpoilageRemainder,
+        agent.Hungry, agent.NeedsMet, agent.HungryThisWeek, agent.PricedOutThisWeek, agent.InKindMinor,
         agent.StudentUntilTick, agent.SchoolId, agent.Graduated, agent.SeekingUntilTick,
         agent.PartTimeStudent, agent.ArrearsMinor, agent.ArrearsWeeks, agent.UnpaidHungryWeeks, agent.InsuredMinor,
         agent.PriceChangeTick, agent.PriceChangePct, agent.UnitsBeforePriceChange,
@@ -220,6 +254,8 @@ public static class RunAudit
         agent.OperatingSurplusWeeksMinor, agent.EstateBeneficiaryId, agent.EstateCreditIds, agent.EstateFinalized,
         agent.DepositInterestSuspended, agent.EstateUnreportedPayoutMinor,
         agent.WarWeariness, agent.MilitaryPaidTick, agent.MilitaryPayMinor,
+        loan_loss_provisions_minor = world.Society is not null && SocietyBank.IsBank(agent)
+            ? Wire.Node(SocietyBank.View(world, agent, manager: true))["loan_loss_provisions_minor"]!.GetValue<long>() : (long?)null,
         net_wealth_minor = SocietyLabor.IsResident(agent) ? (long?)SocietyMetrics.NetWealth(world, agent) : null
     };
 
@@ -240,6 +276,7 @@ public static class RunAudit
         nation.BankFailures, nation.DefaultedLoans,
         infrastructure = nation.Infrastructure.Select(project => ProjectState(world, project)).ToArray(),
         nation.MaintenanceFunded,
+        repair_orders = nation.RepairOrders.Order(StringComparer.Ordinal).ToArray(),
         construction_materials_used = nation.ConstructionMaterialsUsed.Order(StringComparer.Ordinal).ToArray(),
         nation.BorrowedBuilders, nation.CurrencyIndex, nation.TradeNetWeekMinor, nation.TradeGrossWeekMinor,
         nation.Endowment, nation.ResourceImports, nation.PoweredSessionsLeft, nation.ProductionInputCredits,
@@ -250,10 +287,25 @@ public static class RunAudit
             .OrderBy(relation => relation.Id, StringComparer.Ordinal).ToArray(),
         military = MilitaryState(world, nation),
         mission = MissionState(world, nation),
+        nation.ClinicCapacityThisWeek, nation.UntreatedPatientDaysThisWeek, nation.ClinicLastWeek,
+        clinic_funding_history = nation.ClinicFundingHistory.TakeLast(3).ToArray(),
+        clinic_funding = SocietyGovernmentDecisions.ClinicView(world, nation),
+        credit_positions = world.Society!.Credit.Where(credit =>
+                world.Agents.TryGetValue(credit.BankId, out var lender) && lender.CountryId == nation.Id
+                || world.Agents.TryGetValue(credit.BorrowerId, out var borrower) && borrower.CountryId == nation.Id)
+            .OrderBy(credit => credit.Id, StringComparer.Ordinal).Select(credit => CreditState(world, credit)).ToArray(),
         nation.EmployedResidents, nation.LaborForce, nation.Nonparticipants, nation.JoblessResidents,
         nation.GiniDisposableIncome, nation.GiniNetWealth, nation.EssentialsBasketMinor, nation.MedianRealDisposableIncomeMinor,
         labor_and_distribution = SocietyMetrics.View(nation)
     };
+
+    private static JsonObject CreditState(World world, Credit credit)
+    {
+        var state = Wire.Node(credit).AsObject();
+        state["bank_country_id"] = world.Agents.TryGetValue(credit.BankId, out var bank) ? bank.CountryId : null;
+        state["borrower_country_id"] = world.Agents.TryGetValue(credit.BorrowerId, out var borrower) ? borrower.CountryId : null;
+        return state;
+    }
 
     private static object MilitaryState(World world, Nation nation)
     {
@@ -507,7 +559,7 @@ public static class RunAudit
                     Append(world, "action_effect", new
                     {
                         decision_id = decisionId, event_id = eventId, entity_id = key[2..],
-                        entity_type = key[0] switch { 'a' => "agent", 'n' => "nation", 'r' => "route", _ => "relationship" },
+                        entity_type = key[0] switch { 'a' => "agent", 'n' => "nation", 'r' => "route", 'c' => "credit", _ => "relationship" },
                         before = beforeFields, after = afterFields, link_type = "engine_execution"
                     });
                 }
@@ -523,6 +575,9 @@ public static class RunAudit
                     state.Remove(field);
                 return (JsonNode)state;
             });
+            if (world.Society is { } lending)
+                foreach (var credit in lending.Credit.Where(credit => ids.Contains(credit.BankId) || ids.Contains(credit.BorrowerId)))
+                    states["c:" + credit.Id] = CreditState(world, credit);
             if (agent.Role is "government" or "planner" && world.Society is { } society)
             {
                 var nation = society.Nations[agent.CountryId];

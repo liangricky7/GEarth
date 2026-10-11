@@ -14,7 +14,7 @@ from .transform import typed_record, agent_facts, COUNTRY_FACTS, COUNTRY_JSON_FA
 from .choice import candidate_matches, matching_indices, parameter_contract
 from .validate import file_sha256, iter_records, read_manifest, validate
 
-ANALYSIS_VERSION = "1.3.0"
+ANALYSIS_VERSION = "1.4.0"
 
 
 def build_report(manifest_path, *, max_agents=100, work_directory=None):

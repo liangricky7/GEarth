@@ -20,7 +20,8 @@ AGENT_FACTS = ("occupation", "specialty", "owner_id", "owned_business_id", "stud
                "unpaid_hungry_weeks", "insured_minor", "price_change_tick", "price_change_pct",
                "units_before_price_change", "profit_before_price_change_minor", "price_before_price_change_minor",
                "estate_unreported_payout_minor", "week_disposable_income_minor", "week_work_days",
-               "war_weariness", "military_paid_tick", "military_pay_minor")
+               "war_weariness", "military_paid_tick", "military_pay_minor",
+               "nutrition_debt_days", "production_remainder", "food_spoilage_remainder", "loan_loss_provisions_minor")
 COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_residents_last_week", "priced_out_last_week",
                  "output_lost_to_hunger_pct", "food_subsidy_pct", "food_subsidy_paid_minor", "startup_grants_paid_minor",
                  "capitation_paid_minor", "tuition_subsidy_pct", "student_stipend", "hiring_bonus_minor", "doctor_visits",
@@ -33,7 +34,8 @@ COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_res
                  "trade_net_week_minor", "trade_gross_week_minor", "bank_failures", "defaulted_loans",
                  "deposit_insurance_paid_minor", "tax_changed_tick", "living_cost_at_review", "crisis_until_tick", "crisis_good",
                  "missiles", "war_weeks", "no_fit_soldier_weeks", "war_weariness", "unrest_since_tick", "tax_mark_minor",
-                 "war_accounting_initialized", "government_id", "leadership_term", "next_election_tick", "wars")
+                 "war_accounting_initialized", "government_id", "leadership_term", "next_election_tick", "wars",
+                 "clinic_capacity_this_week", "untreated_patient_days_this_week")
 
 AGENT_TYPES = {key: "long" for key in AGENT_FACTS}
 AGENT_TYPES.update({key: "boolean" for key in ("graduated", "is_student", "seeking_better_job", "hungry", "hungry_this_week",
@@ -44,6 +46,7 @@ AGENT_TYPES["needs_met"] = "double"
 AGENT_TYPES["last_week_work_days"] = "double"
 AGENT_TYPES["week_work_days"] = "double"
 AGENT_TYPES["war_weariness"] = "double"
+AGENT_TYPES["production_remainder"] = "double"
 COUNTRY_TYPES = {key: "long" for key in COUNTRY_FACTS}
 COUNTRY_TYPES.update(student_stipend="boolean", last_policy_action="string", maintenance_funded="boolean", crisis_good="string", war_accounting_initialized="boolean", government_id="string")
 COUNTRY_TYPES.update({key: "double" for key in ("approval", "gini", "output_lost_to_hunger_pct", "average_health", "average_wellbeing", "productivity")})
@@ -53,11 +56,13 @@ COUNTRY_TYPES.update(gini_disposable_income="double", gini_net_wealth="double", 
 AGENT_JSON_FACTS = ("inventory", "qol_parts_points")
 COUNTRY_JSON_FACTS = ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params",
     "infrastructure", "construction_materials_used", "borrowed_builders", "endowment", "resource_imports",
-    "powered_sessions_left", "production_input_credits", "relationships", "military", "mission")
+    "powered_sessions_left", "production_input_credits", "relationships", "military", "mission",
+    "clinic_last_week", "clinic_funding_history", "clinic_funding", "credit_positions", "repair_orders")
 LEGACY_AGENT_JSON_FACTS = ("qol_parts_points",)
 LEGACY_COUNTRY_JSON_FACTS = ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params")
 CAPTURE_VERSION_V2 = "gearth.economy_capture.v2"
-CAPTURE_VERSION = "gearth.economy_capture.v3"
+CAPTURE_VERSION_V3 = "gearth.economy_capture.v3"
+CAPTURE_VERSION = "gearth.economy_capture.v4"
 REQUIRED_AGENT_V2 = ("part_time_student", "arrears_minor", "arrears_weeks", "unpaid_hungry_weeks", "insured_minor",
     "price_change_tick", "price_change_pct", "units_before_price_change", "profit_before_price_change_minor",
     "price_before_price_change_minor", "inventory")
@@ -68,6 +73,14 @@ REQUIRED_AGENT_V3 = (*REQUIRED_AGENT_V2, "war_weariness", "military_paid_tick", 
 REQUIRED_COUNTRY_V3 = (*REQUIRED_COUNTRY_V2, "missiles", "war_weeks", "no_fit_soldier_weeks", "war_weariness",
     "unrest_since_tick", "tax_mark_minor", "war_accounting_initialized", "government_id", "leadership_term",
     "next_election_tick", "wars", "relationships", "military", "mission")
+REQUIRED_AGENT_V4 = (*REQUIRED_AGENT_V3, "nutrition_debt_days", "production_remainder", "food_spoilage_remainder", "loan_loss_provisions_minor")
+REQUIRED_COUNTRY_V4 = (*REQUIRED_COUNTRY_V3, "clinic_capacity_this_week", "untreated_patient_days_this_week",
+    "clinic_last_week", "clinic_funding_history", "clinic_funding", "credit_positions", "repair_orders")
+CLINIC_WEEK_TYPES = {name: "long" for name in ("tick", "capacity", "visits", "untreated_patient_days", "paid_minor")}
+CREDIT_TYPES = {**{name: "long" for name in ("principal_minor", "principal_left_minor", "weekly_principal_minor",
+    "weekly_interest_minor", "rate_pct", "missed_payments", "provision_minor", "launch_price_minor", "requested_tick")},
+    **{name: "string" for name in ("id", "kind", "bank_id", "borrower_id", "sector", "request_event_id", "status",
+        "bank_country_id", "borrower_country_id")}, "deposit_created": "boolean"}
 RELATIONSHIP_TYPES = {"id": "string", "first": "string", "second": "string", "score": "long",
     "trade_agreement": "boolean", "at_war": "boolean", "aggressor": "string", "proposed_by": "string",
     "proposal_kind": "string", "proposal_terms": "string", "proposal_expires_tick": "long",
@@ -92,12 +105,14 @@ def json_fact(payload, key):
 
 
 def capture_requirements(kind, capture_version=None):
-    agent, country = (REQUIRED_AGENT_V3, REQUIRED_COUNTRY_V3) if capture_version == CAPTURE_VERSION else (REQUIRED_AGENT_V2, REQUIRED_COUNTRY_V2)
+    agent, country = ((REQUIRED_AGENT_V4, REQUIRED_COUNTRY_V4) if capture_version == CAPTURE_VERSION else
+        (REQUIRED_AGENT_V3, REQUIRED_COUNTRY_V3) if capture_version == CAPTURE_VERSION_V3 else
+        (REQUIRED_AGENT_V2, REQUIRED_COUNTRY_V2))
     return agent if kind == "agent_day" else country if kind == "nation_day" else ()
 
 
 def validate_capture(record, capture_version):
-    if capture_version in (CAPTURE_VERSION_V2, CAPTURE_VERSION):
+    if capture_version in (CAPTURE_VERSION_V2, CAPTURE_VERSION_V3, CAPTURE_VERSION):
         missing = [key for key in capture_requirements(record["kind"], capture_version) if key not in record["payload"]]
         if missing:
             raise ValueError(capture_version + " capture omitted fields: " + ", ".join(missing))
@@ -105,15 +120,25 @@ def validate_capture(record, capture_version):
             for project in record["payload"].get("infrastructure") or []:
                 if isinstance(project, dict) and any(key not in project for key in PROJECT_TYPES):
                     raise ValueError(capture_version + " capture omitted infrastructure project fields")
+            if capture_version == CAPTURE_VERSION:
+                for credit in record["payload"].get("credit_positions") or []:
+                    if isinstance(credit, dict) and any(key not in credit for key in CREDIT_TYPES):
+                        raise ValueError(capture_version + " capture omitted credit position fields")
+                last = record["payload"].get("clinic_last_week")
+                if isinstance(last, dict) and any(key not in last for key in CLINIC_WEEK_TYPES):
+                    raise ValueError(capture_version + " capture omitted completed clinic week fields")
 
 
 def structure_facts(payload):
     structures = {"inventory": dict, "qol_parts_points": dict, "infrastructure": list,
         "construction_materials_used": list, "borrowed_builders": dict, "endowment": dict, "resource_imports": dict,
-        "powered_sessions_left": dict, "production_input_credits": dict, "relationships": list, "military": dict, "mission": dict}
+        "powered_sessions_left": dict, "production_input_credits": dict, "relationships": list, "military": dict, "mission": dict,
+        "clinic_last_week": dict, "clinic_funding_history": list, "clinic_funding": dict, "credit_positions": list, "repair_orders": list}
     for key, kind in structures.items():
         if payload.get(key) is not None and not isinstance(payload[key], kind):
             raise ValueError("Invalid structured snapshot fact: " + key)
+    if isinstance(payload.get("repair_orders"), list) and any(not isinstance(identity, str) or not identity for identity in payload["repair_orders"]):
+        raise ValueError("Invalid infrastructure repair order")
     for key, types in (("military", MILITARY_TYPES), ("mission", MISSION_TYPES)):
         if isinstance(payload.get(key), dict):
             fact_types(payload[key], types)
@@ -126,6 +151,34 @@ def structure_facts(payload):
             identity = relation.get("id")
             if not isinstance(identity, str) or not identity or identity in seen:
                 raise ValueError("Missing or duplicate relationship ID")
+            seen.add(identity)
+
+    if isinstance(payload.get("clinic_last_week"), dict):
+        fact_types(payload["clinic_last_week"], CLINIC_WEEK_TYPES)
+    for change in payload.get("clinic_funding_history") or []:
+        if not isinstance(change, dict):
+            raise ValueError("Invalid clinic funding change")
+        fact_types(change, {"tick": "long", "from_minor": "long", "to_minor": "long"})
+        before = change.get("before")
+        if before is not None:
+            if not isinstance(before, dict):
+                raise ValueError("Invalid clinic funding prior week")
+            fact_types(before, CLINIC_WEEK_TYPES)
+    funding = payload.get("clinic_funding")
+    if isinstance(funding, dict):
+        fact_types(funding, {name: "long" for name in ("budget_per_resident_minor", "doctors_now",
+            "medicine_in_clinics_now", "cheapest_visit_minor", "full_weeks_since_change")})
+        if isinstance(funding.get("last_completed_week"), dict):
+            fact_types(funding["last_completed_week"], CLINIC_WEEK_TYPES)
+    if isinstance(payload.get("credit_positions"), list):
+        seen = set()
+        for credit in payload["credit_positions"]:
+            if not isinstance(credit, dict):
+                raise ValueError("Invalid credit position")
+            fact_types(credit, CREDIT_TYPES)
+            identity = credit.get("id")
+            if not isinstance(identity, str) or not identity or identity in seen:
+                raise ValueError("Missing or duplicate credit position ID")
             seen.add(identity)
 
 

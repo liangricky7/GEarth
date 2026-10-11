@@ -1,6 +1,6 @@
 # Capture the current economy fields
 
-Fresh normal runs use `gearth.economy_capture.v3`, adding war/diplomacy coverage to the prior `gearth.economy_capture.v2` economy fields. The audit format remains `gearth.audit.v1`; the feature contract records which engine state was captured. Existing v2 exports and older 19-dataset browse bundles remain readable without claiming missing war history.
+Fresh normal runs use `gearth.economy_capture.v4`, adding nutrition, clinic feedback and credit positions to v3’s war/diplomacy and v2’s economy fields. The audit format remains `gearth.audit.v1`; the feature contract records which engine state was captured. Existing v2/v3 exports and older 19-dataset browse bundles remain readable without claiming missing newer history.
 
 ## Where the added information goes
 
@@ -15,6 +15,7 @@ Neon’s world snapshots retain the engine state as JSON. With analytics enabled
 | Inventory | `silver.agent_daily.inventory_json`, plus original payload JSON |
 | Infrastructure | `silver.country_daily.infrastructure_json` and project rows in `silver.infrastructure_daily` |
 | Maintenance, materials and builders | `maintenance_funded`, `construction_materials_used_json`, `borrowed_builders_json` in `silver.country_daily` |
+| Queued infrastructure repairs | `silver.country_daily.repair_orders_json`: recorded repair queue, separate from the maintenance funding setting |
 | Currency and trade balances | `currency_index`, `trade_net_week_minor`, `trade_gross_week_minor` in `silver.country_daily` |
 | Resources | `endowment_json`, `resource_imports_json` in `silver.country_daily` |
 | Soldier pay and war weariness | `military_paid_tick`, `military_pay_minor`, `war_weariness` in `silver.agent_daily` |
@@ -22,10 +23,17 @@ Neon’s world snapshots retain the engine state as JSON. With analytics enabled
 | Diplomatic relationships | `silver.country_daily.relationships_json`: original per-run relationship state, including score, war status, aggressor and peace terms |
 | Military capacity | `silver.country_daily.military_json`: soldiers, fit/paid soldiers, strength, salary and missile defense |
 | Public mission and unrest | `silver.country_daily.mission_json`: actual quality of life, its threshold and unrest timing |
+| Nutrition, production and spoilage | `nutrition_debt_days`, `production_remainder`, `food_spoilage_remainder` in `silver.agent_daily` |
+| Clinic capacity and unmet treatment | `clinic_capacity_this_week`, `untreated_patient_days_this_week` in `silver.country_daily` |
+| Clinic feedback | `clinic_last_week_json`, `clinic_funding_history_json`, `clinic_funding_json` in `silver.country_daily` |
+| Loans and loss provisions | `silver.country_daily.credit_positions_json`: full recorded credit state, including provisions, repayment state and lender/borrower country identities |
+| Bank loan-loss reserve | `silver.agent_daily.loan_loss_provisions_minor`: active-loan provisions for banks; explicitly null for other agents |
 
 Infrastructure rows retain run, country, day, frame kind and project identity, project attributes, original JSON and source audit/export pins. The engine records `progress_days`, `required_days` and `progress_fraction` from its remaining construction schedule, with the explicit `engine_remaining_schedule_ticks` basis. Payment amounts remain separate from work progress.
 
 Main’s phase-three war additions are declared as `war_diplomacy=phase3_v1` in capture v3. Their original structured state is retained as JSON; military construction uses the existing infrastructure project dataset, so the catalog still contains 20 datasets. The explorer separates war/military coverage from diplomacy, elections and unrest. A v2 run does not gain complete war coverage merely because its export can still be imported.
+
+Capture v4 declares `nutrition_recovery`, `clinic_feedback`, `loan_provisions` and `infrastructure_repairs` as v1 features. Country credit positions include every recorded status when that country is the lender or borrower. A cross-country loan appears on both sides: deduplicate by credit identity before computing global totals. The bank reserve scalar includes active loans only and is not the sum of every recorded credit status. Repair orders record queued work; maintenance funding records the upkeep setting. These additions remain in existing datasets; the catalog still contains 20.
 
 ## Deploy, capture and import
 

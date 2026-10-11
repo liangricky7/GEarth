@@ -10,7 +10,7 @@ from analytics.delta_validation import assert_coverage
 from analytics.conditions import comparison_conditions
 from analytics.export import export_run
 from analytics.report import build_report
-from analytics.transform import (AGENT_TYPES, COUNTRY_TYPES, PROJECT_TYPES, CAPTURE_VERSION,
+from analytics.transform import (AGENT_TYPES, COUNTRY_TYPES, PROJECT_TYPES, CAPTURE_VERSION_V3 as CAPTURE_VERSION,
     REQUIRED_AGENT_V2, REQUIRED_COUNTRY_V2, REQUIRED_AGENT_V3, REQUIRED_COUNTRY_V3, CAPTURE_VERSION_V2, TABLES, infrastructure_rows, typed_record, validate_capture)
 from test_pipeline import fixture, fake_fetch
 from test_public_services import feature_metadata
@@ -147,7 +147,7 @@ class EconomyProjectionTests(unittest.TestCase):
         self.assertEqual(counts["part_time_student"]["present_count"], 2)
         self.assertEqual(counts["part_time_student"]["zero_or_false_count"], 2)
         self.assertEqual(counts["insured_minor"]["present_count"], 0)
-        self.assertEqual(report["analysis_version"], "1.3.0")
+        self.assertEqual(report["analysis_version"], "1.4.0")
 
 
 class EconomyBrowseCompatibilityTests(unittest.TestCase):

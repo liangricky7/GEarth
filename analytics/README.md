@@ -64,7 +64,7 @@ and the exact source `manifest.json`. Publication validates the checkpoint and
 manifest hash; website clients only read the cached report. `ops/analyze_run.py`
 provides orchestration when available. Local report generation is deterministic
 in facts/provenance; `generated_at` varies with execution time.
-The current analysis version is `1.3.0`. A changed analysis version may replace the
+The current analysis version is `1.4.0`. A changed analysis version may replace the
 derived current report alias only for identical manifest/run pins; the previous
 report is preserved as `report-<manifestprefix>-<analysisversion>.json`. Conflicting
 facts at the same analysis version and conflicting archives are refused. Export
@@ -321,7 +321,7 @@ scalar and JSON projections from Bronze and requires null-safe equality in both
 directions, plus the fresh manifest hash on every Bronze/Silver dataset.
 
 
-New runs use `gearth.economy_capture.v3`, adding war weariness and military pay
+Runs using `gearth.economy_capture.v3`, adding war weariness and military pay
 for agents; missiles, war duration/readiness, political leadership/elections and
 war accounting for countries. Country `relationships_json` preserves each
 relationship's score, war/trade state, proposals and delivery totals;
@@ -332,3 +332,28 @@ The existing v2 contract and metadata signatures remain valid; report required
 field coverage follows each run's original contract. No v2 run is retroactively
 required to contain v3 war history. The capture version and war feature/config
 are explicit comparison conditions for new v3 runs.
+
+
+Current new runs use `gearth.economy_capture.v4`. Agent columns add nutrition
+recovery debt, fractional production carry, food spoilage carry and recorded
+`loan_loss_provisions_minor` (actual active provisions for bank agents; explicitly
+null for nonbanks). Country columns add this week's clinic capacity and untreated
+patient-days. `clinic_last_week_json`, `clinic_funding_history_json` and
+`clinic_funding_json` preserve measured completed weeks, the retained three funding
+changes and current clinic feedback. Descriptive before/after outcomes do not
+establish causation. `credit_positions_json` retains complete original loan terms,
+status, remaining principal, impairment provision and lender/borrower country
+identity for every status. Cross-country credit positions deliberately appear in
+both countries; these repeated observations must not be summed as global assets.
+
+Required field coverage and comparison gates are selected by each original capture
+version. Previously imported v3 runs do not require v4 clinic, nutrition or credit
+history. New nullable columns may recover only already recorded original payload
+fields; old missing fields remain unknown. The analysis report is now `1.4.0` so
+source-preserving report upgrades do not conflict with prior `1.3.0` evidence.
+
+`repair_orders_json` retains the selected project IDs for manual restoration;
+empty arrays represent no queued repairs, while older missing keys remain unknown.
+V4 metadata names the repair feature and distinguishes funded upkeep (prevents
+ordinary wear) from ordered repair (restores damage using workers/materials/cost).
+The existing project schema stays unchanged for older v3 infrastructure history.

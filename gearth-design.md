@@ -648,7 +648,7 @@ npm run test:observer
 .venv/bin/python ops/check_scheduler_integration.py
 ```
 
-**Current results:**
+**Earlier integration results (historical; superseded by [GEarth rename verification](docs/gearth/evidence/gearth-rename-20261011.json)):**
 - **C#:** 69 of 70 pass. Only the known year-long calibration test, `MoneyKeepsCirculatingForAFullYear`, fails.
 - **Python:** 121 of 121 pass.
 - **Observer:** 5 offline tests pass.

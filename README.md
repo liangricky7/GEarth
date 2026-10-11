@@ -10,9 +10,9 @@ The [shared cloud simulation](https://8-34-212-187.sslip.io/) runs continuously 
 
 Group members can open the website and unlock controls using the shared team password provided privately by the owner. Stop finishes in-flight decisions, saves and pauses the current world; Start resumes it. Reset saves the current run and starts a fresh world, retaining history. Everyone shares the same world, and closing a browser does not stop it. See the [cloud runbook](docs/gearth/22-google-cloud-deployment.md) for operation and access details.
 
-See the [design](gearth-design.md) for the full specification, current limitations, decisions and their reasons.
+See the [design](gearth-design.md) for the full specification, current limitations, decisions and their reasons. Existing deployments require the [GEarth cutover](docs/gearth/24-gearth-rename.md) to preserve saved data.
 
-The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
+The full-year calibration test passes in the current rename verification. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
 
 ## Run locally
 
@@ -64,7 +64,7 @@ npm run test:observer
 .venv/bin/python ops/check_scheduler_integration.py
 ```
 
-Exact consolidation results and the known calibration failure are recorded in [integration evidence](docs/gearth/evidence/main-integration.json). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures. Browser visual layout remains unverified.
+Earlier consolidation results, including the previous calibration failure, remain in [historical integration evidence](docs/gearth/evidence/main-integration.json). Current rename checks passed 156 C# and 231 Python tests; see [rename verification](docs/gearth/evidence/gearth-rename-20261011.json). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures. Browser visual layout remains unverified.
 
 For observer changes, `node ops/check_observer.cjs` checks desktop/mobile rendering, saved-run switching with delayed responses, agent filters and pagination using API fixtures and installed Chrome or Edge. Screenshots are saved under ignored `artifacts/local/`.
 

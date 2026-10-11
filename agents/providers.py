@@ -115,7 +115,10 @@ class ProviderPool:
         self.completed = {provider.name: 0 for provider in providers}
         self.failures = {provider.name: 0 for provider in providers}
         self.unavailable_until = {provider.name: 0.0 for provider in providers}
-        self.cursor = 0
+        # One role's selection must not reset the other role's rotation. With
+        # a shared cursor, alternating institution/citizen jobs can repeatedly
+        # select Spark A and starve Spark B and AMD when requests finish quickly.
+        self.cursors = {}
 
     def acquire(self, now, decision_group="all"):
         candidates = [
@@ -132,14 +135,15 @@ class ProviderPool:
         ]
         if scoped:
             candidates = scoped
+        cursor = self.cursors.get(decision_group, 0)
         index, provider = min(
             candidates,
             key=lambda item: (
                 self.active[item[1].name] / item[1].capacity,
-                (item[0] - self.cursor) % len(self.providers),
+                (item[0] - cursor) % len(self.providers),
             ),
         )
-        self.cursor = (index + 1) % len(self.providers)
+        self.cursors[decision_group] = (index + 1) % len(self.providers)
         self.active[provider.name] += 1
         return provider
 

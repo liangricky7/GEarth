@@ -122,4 +122,25 @@ public sealed class WarResourceNeedsTests
         Assert.Equal(1, Assert.Single(Need(world, buyer).HeldBy).Exportable);
         SocietyEconomy.AssertConservation(world);
     }
+
+    [Fact]
+    public void ForeignAccessDistinguishesFreightFundingFromShipmentCapacity()
+    {
+        var (world, buyer) = Shortage();
+        var seller = world.Agents["beryl_mine"];
+        Supply(world, seller, 10);
+        var government = world.Agents["aster_government"];
+        var escrow = SocietyTrade.Price(world, buyer, seller, 1).AtWorld;
+        var savings = SocietyBank.Liquid(world, buyer);
+        SocietyEconomy.Transfer(world, buyer, government, savings - escrow);
+        Assert.Equal("unaffordable", Assert.Single(Need(world, buyer).HeldBy).BlockedBy);
+        SocietyEconomy.Transfer(world, government, buyer, savings - escrow);
+        SocietyTrade.Dispatch(world, buyer, seller, "ore", 1, "cheapest", null);
+        SocietyTrade.Dispatch(world, buyer, seller, "ore", 1, "cheapest", null);
+        var need = Need(world, buyer);
+        Assert.Equal(2, need.Incoming);
+        Assert.Equal("shipment_limit", Assert.Single(need.HeldBy).BlockedBy);
+        Assert.True(need.CannotBuyAny);
+        SocietyEconomy.AssertConservation(world);
+    }
 }

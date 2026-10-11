@@ -8,7 +8,7 @@ AMD can supplement both Sparks in the same collector through its existing authen
 
 - Project: `project-73e10704-566a-4d04-886` (My First Project).
 - Instance: `faultline-sim`, zone `us-central1-a`, Ubuntu 24.04, `e2-medium`, 40 GB persistent boot disk.
-- Public observer: the instance's external IP, served by Nginx on port 80. The inference worker and engine listen on loopback; only observer GET/HEAD traffic is forwarded publicly.
+- Team website: https://8-34-212-187.sslip.io/, served by Nginx over HTTPS. The reserved IP's HTTP address redirects here. The inference worker and engine listen on loopback; public observation is read-only, and Start/Stop/Reset require the team password.
 - The VM joins Jayden's existing Tailscale network. Spark A is reached at `hackathon@100.70.23.23` using the existing pinned SSH host keys.
 - One managed SSH connection forwards Spark A's model ports 8000/8001. Spark B is reached directly over Tailscale through Ken's existing relay at `100.119.198.81:18002/18004`. All four catalogs must pass before the service starts. The observer IP is reserved as `faultline-observer-ip` so it survives VM stop/start.
 

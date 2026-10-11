@@ -133,7 +133,7 @@ and failed; imports are 40% of entrepreneur choices and 576 of 621 rejections.
 | # | Decision | Status |
 |---|---|---|
 | P1 | Shoppers lean hard away from prices above 1.3x base (extra 8th power of reference/price; 1.3 and 8 arbitrary, tune after runs); each `set_price` option shows expected weekly sales and margin if competitors hold | built |
-| P2 | Government hoarding: (a) welfare and unemployment benefit indexed to the full cost-of-living rise every 28 days (never cut; levers' ranges stretch to include the indexed level); (b) a lever set to its current level is a hold (no policy; `unchanged_lever` on the accepted event). (c) lever effect text and (d) surplus rule wait for the phase 2 infrastructure run | a, b built; c, d deferred |
+| P2 | Government hoarding: (a) welfare and unemployment benefit indexed to the full cost-of-living rise every 28 days (never cut; levers' ranges stretch to include the indexed level); (b) a lever set to its current level is a hold (no policy; `unchanged_lever` on the accepted event). (c) lever effect text and (d) surplus rule wait for the phase 2 infrastructure run | a, b built; c built as D1 (ranges replaced by moves); d deferred |
 | P4 | An empty mine, well or pharma is a gap (and gets an essential grant) only if imports do not land below 1.5x a local firm's unit cost; food, energy and tools always keep a local seller (households only buy at home) | built |
 | P5 | Gap demand is market-wide: buyers turned away at least a tenth of sales (not any one seller turning someone away) | built |
 | P6 | Bank: another banker only when loans fill 80% of banker capacity; deposit-rate options capped at loan rate x loans / deposits | built |
@@ -160,15 +160,59 @@ re-imported the same goods (cinder: 10.2k ore out, 10.4k in); haven's treasury w
 
 | # | Decision | Status |
 |---|---|---|
-| I1 | Builders work for a construction firm the government contracts (state-owned in planned economies), not a civil-service job; idle between projects like real construction. Builder is an unskilled job. Observe in runs: ticks a project waits for builders (old-build run had 7–33 unemployed per market country, 0 in planned ones) | agreed |
-| I2 | Catalog: roads (+5% all goods), power grid (+15% energy), irrigation (+15% food), mine rail (+15% ore and fuel), port (-25% shipping cost, -1 day transit), hospital (+50% clinic capacity); Phase 3 adds anti-missile turret | default (not yet confirmed) |
+| I1 | Builders work for a construction firm the government contracts (state-owned in planned economies), not a civil-service job; idle between projects like real construction. Builder is an unskilled job. Observe in runs: ticks a project waits for builders (old-build run had 7–33 unemployed per market country, 0 in planned ones) | superseded by C1: state contractor everywhere |
+| I2 | Catalog: roads (+5% all goods), power grid (+15% energy), irrigation (+15% food), mine rail (+15% ore and fuel), port (-25% transit time per level-1 port; see C4), hospital (+50% clinic capacity); Phase 3 adds anti-missile turret | default (not yet confirmed) |
 | I3 | Boosts sized to evidence (public capital output elasticity about 0.1–0.2): +5–15%, not +50% | agreed |
 | I4 | Each project needs builders (3–6), ticks and materials (ore, tools, energy); paid weekly as work progresses, not all upfront | agreed: roads 28, irrigation 28, grid 35, mine rail 35, port 42, hospital 42 ticks; observe and tune in runs |
 | I5 | Degradation agreed. Proposal: the engine tracks a condition 0–100 per project (like Stocks); it loses 2 a week; weekly upkeep (1% of build cost, paid automatically to the construction firm, needs its builders) restores it; boost = full x condition/100; government can cut upkeep to save money (set_maintenance) | agreed |
 | I6 | One of each type per country, up to level 3, smaller gain each level | default (not yet confirmed) |
 | I7 | Paid from the treasury only; no government borrowing (bonds deferred) | default (not yet confirmed) |
-| I8 | Builders: about 3 per 100 workers to start, taken from factory work (25 to 22) | default (not yet confirmed) |
+| I8 | Builders: about 3 per 100 workers to start, taken from factory work (25 to 22) | superseded by C5: no starting crew |
 | I9 | Planned economies have no unemployed: the state construction firm takes workers from the largest state firm for the project's length | agreed |
+
+### Infrastructure review fixes (Oct 11, after merging main into `gearth/phase-2-infrastructure`)
+
+Review finding: infrastructure almost never got built. In a probe where every country ordered irrigation and a
+hospital on day 56, 1 of 20 projects finished in 140 days. Five of eight market contractors closed. Planned contractors
+deadlocked: they had no cash for materials, the state settlement swept them and their crews struck. Idle market
+contractors' owners went hungry all year. After the fixes, 19 of 20 projects finished within 8 weeks and the
+twentieth a week later.
+
+| # | Fix | Status |
+|---|---|---|
+| C1 | The construction contractor is state-owned in every country, like the school. It never closes, nobody can found one, and the rules run it, not an agent | built |
+| C2 | A generous advance: half the project cost is paid when it is ordered. Installments resume once work passes it. While builders are missing, the contractor raises its wage offer 10% a week, up to 2x the table wage, and recruits from unskilled jobs outside the essential sectors | built |
+| C3 | Before each payroll the treasury tops the contractor up to a week of its builders' pay. With no project under way, it takes back anything above two weeks of pay | built |
+| C4 | A port cuts import transit time on every leg (25% at level 1) instead of freight fees. The fees go to the country's own freight firm, so cutting them gained the country nothing | built |
+| C5 | No starting builders: the seeded crew was laid off in week one in market countries and sat idle all year in planned ones | built |
+| — | Optional, not approved: index contract prices to costs; upkeep 1%/week (52%/yr) against about 2–4%/yr in reality | open |
+
+Watch in the next run: whether governments order projects, weeks a project waits for builders, which sectors lose
+workers to the contractor, and contractor top-ups against treasury cash.
+
+### Post-resource run fixes (run `102658_3098da` on main `3726bd0`, day 118; signed off Oct 11, built on `gearth/phase-2-infrastructure`)
+
+Findings: price ratchet fixed (793 cuts against 576 raises) and treasuries down to 12–30% of national cash, but:
+governments froze (156 of 165 `fund_services` picks re-chose the level in force; taxes, welfare and benefits never moved
+while ember sat at 25–28% unemployment with no benefit and market treasuries grew every week); food-poor ionia and dune
+sold food at 4–5x the price imports landed for; 732 of 1,369 owner price moves chose a worse forecast margin than
+holding (197 sold less *and* earned less); founders entered in herds (4 food firms in aster in one day, 4 unstaffed
+mines in grove), and market unemployment rose from about 1 to 20–28 per country.
+
+| # | Fix | Status |
+|---|---|---|
+| D1 | Government levers (tax ±2 points, unemployment benefit ±300, welfare ±50, sales tax ±2 points, services ±50) are a cut and a raise from the level in force, each with its weekly cost or revenue; holding is the hold option. `country.problems` names joblessness ≥10% (and a missing benefit), hungry residents, and a treasury idling over 8 weeks of spending or running out within 12 | built |
+| D2 | A unit's cost is the cheaper of making it here or importing a week's sales of it, in the entry test, the cost push, price forecasts and the owner's view | built |
+| D3 | No price option forecast to sell no more and earn less than holding; each option states its margin against now. A firm's first week has no empty-shelf price rise | built |
+| D4 | A market that took a newcomer in the past week stays closed to founders; food's priced-out signal needs a tenth of residents (as for the food subsidy), not one shopper | built (trial) |
+| D5 | Remove `pay` from planned state firms' menus (147 gifts of 10 WLD to random residents and their own government) | built |
+| D6 | A closed firm's late receipts are still paid out as they arrive, but `estate_settled` is emitted once a week per estate (and when wound up), not per sale (was 1,149 events) | built |
+
+Watch: planned treasuries fall about 185 WLD a week (cinder 5,399 to 3,732 since day 42), pointing at arrears around
+day 250; planned economies still lead on needs met, comfort and approval, so P8's productivity knob waits for that.
+D2 cost: the entry test checks demand and an idle worker before the margin, and prices imports once per market, so
+a citizen menu got slightly faster (1.4 to 1.2 ms) and a day costs about 2 ms more (15.9 to 18.0 ms, best of 4), from
+each goods firm's weekly price review pricing one import.
 
 ## Phase 3: War, unrest, relations (in discussion; stretch goal)
 

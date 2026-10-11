@@ -11,6 +11,10 @@ ExecStart=/opt/gearth/current/.venv/bin/python -m ops.gcp.control_server
 Restart=on-failure
 RestartSec=5
 UMask=0077
+Environment=DOTNET_ROOT=/opt/dotnet
+Environment=PATH=/opt/dotnet:/opt/gearth/current/.venv/bin:/usr/local/bin:/usr/bin:/bin
+KillMode=control-group
+TimeoutStopSec=60
 PrivateTmp=true
 ProtectSystem=full
 

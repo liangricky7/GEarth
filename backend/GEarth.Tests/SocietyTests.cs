@@ -12,11 +12,11 @@ public sealed class SocietyTests
 
         Assert.Equal(1000, world.Agents.Count);
         Assert.Equal(10, world.Society!.Nations.Count);
-        // Government, media and sixteen firms per country: 3 farms, 2 each of energy, tools and
-        // entertainment, and one mine, well, pharma, clinic, school, freight firm and bank.
-        Assert.Equal(180, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
+        // Government, media and seventeen firms per country: 3 farms, 2 each of energy, tools and
+        // entertainment, and one mine, well, pharma, clinic, school, freight firm, bank and state construction contractor.
+        Assert.Equal(190, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
         Assert.Equal(3, SocietyLabor.Firms(world, "aster", "food").Count());
-        // Market countries' firms each have an entrepreneur owner; planned economies' firms and every school are state-owned.
+        // Market countries' firms each have an entrepreneur owner; planned economies' firms, every school and the contractor are state-owned.
         Assert.Equal(120, world.Agents.Values.Count(agent => agent.Role == "entrepreneur"));
         // Doctors are scarce: one employed doctor per country (plus the clinic's owner in market economies).
         Assert.All(world.Society.Nations.Keys, country => Assert.Equal(1,

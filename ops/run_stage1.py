@@ -130,7 +130,12 @@ def main():
     parser.add_argument("--fork-government", help=argparse.SUPPRESS)
     parser.add_argument("--timeline", help=argparse.SUPPRESS)
     parser.add_argument("--skip-build", action="store_true", help="Use an already built API (deployment/collection only)")
+    parser.add_argument("--api-port", type=int, default=5080, help="Loopback API port for an isolated run.")
+    parser.add_argument("--output-directory", type=Path, help="Isolated logs, notes and pause state for an experiment.")
     options = parser.parse_args()
+    if not 1024 <= options.api_port <= 65535:
+        parser.error("API port must be 1024-65535.")
+    api_url = f"http://127.0.0.1:{options.api_port}"
     signal.signal(signal.SIGTERM, handle_stop)
 
     options.ticks = (
@@ -162,8 +167,8 @@ def main():
         parser.error("--analytics records a new --world run.")
     if options.analytics and options.resume:
         parser.error("Analytics currently supports normal runs; fork analytics needs separate timeline identities.")
-    if options.resume and (not options.world or options.run_id or options.storage != "neon"):
-        parser.error("--resume continues a --world run on Neon; start forks with ops/fork_run.py.")
+    if options.resume and (not options.world or options.run_id):
+        parser.error("--resume requires a --world checkpoint; start Neon forks with ops/fork_run.py.")
     if options.run_id:
         if options.live:
             parser.error("Saved-run inspection does not need --live.")
@@ -204,7 +209,7 @@ def main():
         )
         managed_forwards = spark_a_forwards(providers)
 
-    ensure_port_available(5080)
+    ensure_port_available(options.api_port)
     if options.live:
         ensure_port_available(8100)
         for local_port, _ in managed_forwards:
@@ -217,8 +222,9 @@ def main():
             cwd=ROOT,
         )
 
-    logs = ROOT / ".logs"
-    logs.mkdir(exist_ok=True)
+    output_directory = options.output_directory.resolve() if options.output_directory else None
+    logs = output_directory / "logs" if output_directory else ROOT / ".logs"
+    logs.mkdir(parents=True, exist_ok=True)
     processes = []
     handles = []
     token = secrets.token_urlsafe(32)
@@ -324,6 +330,7 @@ def main():
             {
                 "DATABASE_URL": config.get("DATABASE_URL", ""),
                 "GEARTH_STORAGE": options.storage,
+                "GEARTH_PORT": str(options.api_port),
                 "GEARTH_LIVE": str(options.live).lower(),
                 "GEARTH_WORLD": str(options.world).lower(),
                 "GEARTH_SAVED_RUN_ID": options.run_id or "",
@@ -353,6 +360,9 @@ def main():
                 "ASPNETCORE_CONTENTROOT": str(ROOT / "backend/GEarth.Api"),
             }
         )
+        if output_directory:
+            api_environment["GEARTH_NOTES_DIRECTORY"] = str(output_directory / "notes")
+            api_environment["GEARTH_CONTROL_DIRECTORY"] = str(output_directory / "control")
 
         if options.analytics:
             commit = clean_engine_commit()
@@ -370,9 +380,9 @@ def main():
             start(
                 ["caffeinate", "-i", "-w", str(api.pid)], "awake.log", os.environ.copy()
             )
-        wait_for_service(f"{API_URL}/api/health", api)
-        print(f"Observer: {API_URL}", flush=True)
-        if config.get("GEARTH_SHARE_URL") and config.get("GEARTH_SHARE_KEY"):
+        wait_for_service(f"{api_url}/api/health", api)
+        print(f"Observer: {api_url}", flush=True)
+        if not output_directory and config.get("GEARTH_SHARE_URL") and config.get("GEARTH_SHARE_KEY"):
             if not supervisor_running():
                 start(
                     [sys.executable, str(ROOT / "ops/share_site.py")],
@@ -401,7 +411,7 @@ def main():
         completed = False
         pause_reported = False
         while api.poll() is None:
-            health = wait_for_service(f"{API_URL}/api/health", api, seconds=5)
+            health = wait_for_service(f"{api_url}/api/health", api, seconds=5)
             if health["status"] == "paused":
                 if options.exit_on_complete:
                     raise RuntimeError(health.get("error") or "Simulation paused")

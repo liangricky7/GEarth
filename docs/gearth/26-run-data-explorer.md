@@ -36,6 +36,7 @@ Implementation and acceptance checks follow the Astra plan prepared on October 1
 - Full C# suite: 293 passed. Python analytics/operator suite: 77 passed, plus two subtests.
 - Browser behavior tests: 15 explorer, 13 observer/control and three report tests passed; the existing live observer test remained skipped.
 - Headless Chrome checks passed at desktop and mobile sizes, including old/new run selection, original JSON, weekly replay, report sections and dataset rows after row 100. The real local API also rendered successfully in Chrome.
+- Integration with main `ba87aa7` retained its experiment-selection event and frontend test command alongside explorer navigation. The combined suite passed 327 C# tests, 77 Python tests plus two subtests, and 36 frontend tests (one existing live observer test skipped); desktop/mobile observer Chrome checks passed again.
 - A local RULE simulation verified all daily records for days 1–14 across 20 bounded pages, retained weekly frames, and a separate final frame. A second local run was discovered without replacing the selected older run.
 - A clearly synthetic Python-generated bundle was accepted by C# publication and row pagination, including explicit nulls. This checks format compatibility, not actual Databricks execution.
 

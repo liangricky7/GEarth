@@ -1,0 +1,234 @@
+{
+  "measured_at": "2026-10-11T11:04:07.065406+00:00",
+  "hardware": "AMD Radeon Pro W7900D",
+  "model": "Qwen/Qwen3-4B",
+  "policy": {
+    "batch_size": 32,
+    "capacity": 32,
+    "batch_tokens": 65536,
+    "wait_ms": 20,
+    "utilization_target_percent": 90
+  },
+  "worker_capacity": 128,
+  "benchmarks": [
+    {
+      "concurrency": 32,
+      "attempts": 96,
+      "valid": 96,
+      "elapsed_seconds": 38.654,
+      "valid_per_second": 2.484,
+      "p50_seconds": 11.99,
+      "p95_seconds": 14.176,
+      "min_free_gib": 29.67,
+      "largest_batch": 31,
+      "oom_splits": 0
+    },
+    {
+      "concurrency": 32,
+      "attempts": 192,
+      "valid": 192,
+      "elapsed_seconds": 69.305,
+      "valid_per_second": 2.77,
+      "p50_seconds": 11.298,
+      "p95_seconds": 12.778,
+      "min_free_gib": 29.56,
+      "largest_batch": 31,
+      "oom_splits": 0
+    }
+  ],
+  "worker_probe": {
+    "attempts": 16,
+    "model_actions": 16,
+    "range_actions": 8
+  },
+  "dashboard_samples": [
+    {
+      "at": "2026-10-11T11:04:04.030Z",
+      "gpu_percent": 100,
+      "metrics": "AMD Radeon Cloud\nWorkspace20/100 GiB\nGPU100%\nVRAM38.5%\nRAM34.2%\nCPU12.1%\nRuntime19h 36m\nConsumed Credits20\nMetrics updated \u00b7 2s ago\nStatus updated \u00b7 3s ago\nHelp\nDelete instance"
+    },
+    {
+      "at": "2026-10-11T11:04:09.094Z",
+      "gpu_percent": 1,
+      "metrics": "AMD Radeon Cloud\nWorkspace20/100 GiB\nGPU1%\nVRAM38.5%\nRAM34.2%\nCPU11.1%\nRuntime19h 36m\nConsumed Credits20\nMetrics updated \u00b7 2s ago\nStatus updated \u00b7 8s ago\nHelp\nDelete instance"
+    },
+    {
+      "at": "2026-10-11T11:04:14.128Z",
+      "gpu_percent": 0,
+      "metrics": "AMD Radeon Cloud\nWorkspace20/100 GiB\nGPU0%\nVRAM38.5%\nRAM34.2%\nCPU6.3%\nRuntime19h 36m\nConsumed Credits20\nMetrics updated \u00b7 2s ago\nStatus updated \u00b7 13s ago\nHelp\nDelete instance"
+    },
+    {
+      "at": "2026-10-11T11:04:19.152Z",
+      "gpu_percent": 0,
+      "metrics": "AMD Radeon Cloud\nWorkspace20/100 GiB\nGPU0%\nVRAM38.5%\nRAM34.2%\nCPU6.3%\nRuntime19h 36m\nConsumed Credits20\nMetrics updated \u00b7 1s ago\nStatus updated \u00b7 18s ago\nHelp\nDelete instance"
+    },
+    {
+      "at": "2026-10-11T11:04:24.169Z",
+      "gpu_percent": 0,
+      "metrics": "AMD Radeon Cloud\nWorkspace20/100 GiB\nGPU0%\nVRAM38.5%\nRAM34.2%\nCPU6.3%\nRuntime19h 36m\nConsumed Credits20\nMetrics updated \u00b7 1s ago\nStatus updated \u00b7 23s ago\nHelp\nDelete instance"
+    },
+    {
+      "at": "2026-10-11T11:04:29.190Z",
+      "gpu_percent": 0,
+      "metrics": "AMD Radeon Cloud\nWorkspace20/100 GiB\nGPU0%\nVRAM38.5%\nRAM34.2%\nCPU6.3%\nRuntime19h 36m\nConsumed Credits20\nMetrics updated \u00b7 1s ago\nStatus updated \u00b7 28s ago\nHelp\nDelete instance"
+    }
+  ],
+  "live_verification": {
+    "world": {
+      "status": "ok",
+      "error": null,
+      "storage": "neon_https",
+      "run_id": "world_20261011_102658_3098da",
+      "tick": 140,
+      "run_status": "running",
+      "updated_at": "2026-10-11T11:06:11.7359045+00:00"
+    },
+    "worker": {
+      "status": "ok",
+      "model": "Qwen/Qwen3-8B",
+      "active_requests": 60,
+      "capacity": 128,
+      "providers": [
+        {
+          "name": "spark_a",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution",
+          "active_requests": 16,
+          "completed_requests": 77,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_b",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution",
+          "active_requests": 16,
+          "completed_requests": 81,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_a_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 34,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_b_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 20,
+          "completed_requests": 22,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "amd",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 8,
+          "completed_requests": 17,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        }
+      ]
+    },
+    "pause_ack": false,
+    "before": {
+      "status": "ok",
+      "error": null,
+      "storage": "neon_https",
+      "run_id": "world_20261011_102658_3098da",
+      "tick": 133,
+      "run_status": "running",
+      "updated_at": "2026-10-11T10:52:25.3787483+00:00"
+    }
+  },
+  "automated_checks_passed": 75,
+  "strict_instantaneous_ceiling": false,
+  "limitations": [
+    "The owner accepts brief spikes; stability and headroom are the objective.",
+    "Both dashboard and raw sensor samples caught brief 100% readings.",
+    "Pacing targets average activity and does not limit utilization inside individual kernels.",
+    "Short tests and current zero-failure counters do not guarantee future reliability.",
+    "The running world keeps its startup admission and provider labels until the next run."
+  ],
+  "latest_live_status": {
+    "world": {
+      "status": "ok",
+      "error": null,
+      "storage": "neon_https",
+      "run_id": "world_20261011_102658_3098da",
+      "tick": 154,
+      "run_status": "running",
+      "updated_at": "2026-10-11T11:08:16.9258199+00:00"
+    },
+    "worker": {
+      "status": "ok",
+      "model": "Qwen/Qwen3-8B",
+      "active_requests": 32,
+      "capacity": 128,
+      "providers": [
+        {
+          "name": "spark_a",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution",
+          "active_requests": 16,
+          "completed_requests": 352,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_b",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution",
+          "active_requests": 16,
+          "completed_requests": 357,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_a_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 96,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_b_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 108,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "amd",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 74,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        }
+      ]
+    },
+    "pause_ack": false
+  }
+}

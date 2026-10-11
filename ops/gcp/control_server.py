@@ -7,13 +7,16 @@ import json
 import secrets
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from collections import OrderedDict
 from pathlib import Path
 from urllib.request import urlopen
 
 from dotenv import dotenv_values
 from fastapi import FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Literal
+
 
 COOKIE = "__Host-gearth_team"
 SESSION_SECONDS = 8 * 60 * 60
@@ -26,6 +29,29 @@ def password_hash(password, salt=None):
 
 class Login(BaseModel):
     password: str = Field(min_length=1, max_length=256)
+
+
+class PreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    run_id: str = Field(min_length=1, max_length=100)
+    revision: int = Field(ge=1, strict=True)
+
+
+class EditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope: Literal["agent", "country"]
+    target_id: str = Field(min_length=1, max_length=128)
+    field: str = Field(min_length=1, max_length=32)
+    value: Any
+    expected_value: Any
+
+
+class ExperimentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_key: str = Field(min_length=8, max_length=64)
+    preview_id: str = Field(min_length=1, max_length=64)
+    edit: EditRequest
+    days: int = Field(ge=1, le=365, strict=True)
 
 
 class Controller:
@@ -127,8 +153,74 @@ class Controller:
         self.task = asyncio.create_task(self.execute(action))
 
 
-def create_app(controller):
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+def create_app(controller, experiments=None):
+    @asynccontextmanager
+    async def lifespan(app):
+        if experiments:
+            await asyncio.to_thread(experiments.start)
+        try:
+            yield
+        finally:
+            if experiments:
+                await asyncio.to_thread(experiments.close)
+
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+    if experiments:
+        from ops.experiments import ExperimentError
+
+        @app.exception_handler(ExperimentError)
+        async def experiment_error(request, error):
+            return Response(content=json.dumps({"detail": str(error)}), status_code=error.status, media_type="application/json")
+
+    def experiment_service(request, authenticated=False):
+        if authenticated and not controller.authenticated(request):
+            raise HTTPException(401, "Unlock team controls first.")
+        if not experiments:
+            raise HTTPException(503, "Timeline experiments are not enabled on this server.")
+        return experiments
+
+    @app.get("/api/control/experiments/capabilities")
+    async def experiment_capabilities():
+        return {"enabled": experiments is not None, "mode": "RULE", "max_days": 365,
+                "checkpoint_note": "Weekly checkpoints within Neon's history window; previews pin the starting state."}
+
+    @app.get("/api/control/experiments/runs/{run_id}/checkpoints")
+    async def checkpoints(run_id: str, request: Request):
+        service = experiment_service(request, True)
+        return {"checkpoints": await asyncio.to_thread(service.checkpoints, run_id)}
+
+    @app.post("/api/control/experiments/previews", status_code=201)
+    async def preview(body: PreviewRequest, request: Request):
+        return await asyncio.to_thread(experiment_service(request, True).preview, body.run_id, body.revision)
+
+    @app.get("/api/control/experiments/previews/{preview_id}/targets")
+    async def targets(preview_id: str, request: Request, scope: Literal["agent", "country"] = "agent",
+                      q: str = "", offset: int = 0):
+        if len(q) > 100 or not 0 <= offset <= 100000:
+            raise HTTPException(400, "Invalid target search.")
+        return await asyncio.to_thread(experiment_service(request, True).targets, preview_id, scope, q, offset)
+
+    @app.post("/api/control/experiments", status_code=202)
+    async def submit_experiment(body: ExperimentRequest, request: Request):
+        service = experiment_service(request, True)
+        return await asyncio.to_thread(service.submit, body.request_key, body.preview_id, body.edit.model_dump(), body.days)
+
+    @app.get("/api/control/experiments")
+    async def list_experiments(request: Request):
+        return {"experiments": await asyncio.to_thread(experiment_service(request).list)}
+
+    @app.get("/api/control/experiments/{experiment_id}/comparison")
+    async def comparison(experiment_id: str, request: Request):
+        return await asyncio.to_thread(experiment_service(request).comparison, experiment_id)
+
+    @app.post("/api/control/experiments/{experiment_id}/cancel")
+    async def cancel_experiment(experiment_id: str, request: Request):
+        return await asyncio.to_thread(experiment_service(request, True).cancel, experiment_id)
+
+    @app.get("/api/control/experiments/{experiment_id}")
+    async def experiment(experiment_id: str, request: Request):
+        return await asyncio.to_thread(experiment_service(request).get, experiment_id)
 
     @app.middleware("http")
     async def same_origin(request, call_next):
@@ -175,7 +267,15 @@ def main():
     config = dotenv_values("/var/lib/gearth/control.env", interpolate=False)
     controller = Controller("/var/lib/gearth/control", config["CONTROL_ORIGIN"],
                             config["CONTROL_PASSWORD_HASH"], config["CONTROL_SESSION_KEY"])
-    uvicorn.run(create_app(controller), host="127.0.0.1", port=5090, access_log=False)
+    experiments = None
+    private = {**dotenv_values(".env.local", interpolate=False), **config}
+    if private.get("GEARTH_EXPERIMENTS_ENABLED", "false").lower() == "true":
+        from ops.experiments import ExperimentService, NeonExperimentBackend
+
+        if not all(private.get(key) for key in ("DATABASE_URL", "NEON_API_KEY", "NEON_PROJECT_ID")):
+            raise RuntimeError("Timeline experiments require server-side Neon configuration")
+        experiments = ExperimentService("/var/lib/gearth/experiments", NeonExperimentBackend(private))
+    uvicorn.run(create_app(controller, experiments), host="127.0.0.1", port=5090, access_log=False)
 
 
 if __name__ == "__main__":

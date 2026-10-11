@@ -148,8 +148,8 @@ public static class SocietyFactory
                 world.Agents.Add(resident.Id, resident);
                 return resident;
             }
-            if (!planned) // the school is state-owned everywhere
-                foreach (var firm in firms.Values.SelectMany(group => group).Where(firm => firm.Specialty != "school").Take(citizensPerCountry))
+            if (!planned) // the school and the construction contractor are state-owned everywhere
+                foreach (var firm in firms.Values.SelectMany(group => group).Where(firm => firm.Specialty is not ("school" or PhaseContracts.Construction)).Take(citizensPerCountry))
                 {
                     var sector = SocietyLabor.SectorOf(firm.Specialty!);
                     var owner = NewResident("entrepreneur", 2 * SocietyLabor.TableWage[sector.Occupation]);

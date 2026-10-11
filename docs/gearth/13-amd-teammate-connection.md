@@ -4,7 +4,7 @@ This guide lets Kennedy, Ahmad, Ricky, and their coding agents use GEarth's shar
 
 ## Current connection
 
-Verified on October 10, 2026:
+Updated on October 11, 2026. See the [batch deployment and benchmark](25-amd-batch-optimization.md). The existing URL and bearer key are unchanged.
 
 | Setting | Value |
 | --- | --- |
@@ -13,8 +13,8 @@ Verified on October 10, 2026:
 | Model | `Qwen/Qwen3-4B` |
 | Hardware | AMD Radeon Pro W7900D, 48 GiB VRAM |
 | Authentication | `Authorization: Bearer <AMD_API_KEY>` |
-| Shared server capacity | One generation at a time, across all teammates |
-| Last verified decision latency | 3.21 seconds for one fictional resident decision |
+| Shared server capacity | 32 admitted requests, batched across all clients; 90% average utilization target |
+| Verified load result | 192/192 valid choices, 2.77 choices/second, 12.78-second p95 at concurrency 32 |
 
 The API key is deliberately absent from this document and Git. Ask Jayden to provide it through an agreed private channel, or to fill in your local `.env.local` securely. Do not paste the key into a GitHub issue, pull request, Trello card, coding-agent conversation, or committed file. A coding agent can read the local configuration without printing its values.
 
@@ -115,7 +115,7 @@ That run uses rule choices and consumes no AMD GPU time.
 
 ## Shared capacity and API contract
 
-`AMD_CAPACITY=1` limits each local worker. It does not coordinate independent workers on different laptops. The remote server enforces one generation across everyone, so overlapping requests can return `429`. Coordinate live sessions rather than increasing the capacity setting or starting several coding agents' model probes at once.
+`AMD_CAPACITY=1` in the teammate example limits that local worker. It does not coordinate independent workers on different laptops. The remote server admits 32 requests across everyone; the shared cloud simulation is configured to use that capacity. Additional clients can receive `429` when all slots are occupied. Coordinate separate load tests with the shared simulation operator.
 
 All routes require the bearer key:
 

@@ -37,7 +37,8 @@ server {
         proxy_pass http://127.0.0.1:5090;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_read_timeout 10s;
+        # Checkpoint previews can wait for a Neon compute to become ready.
+        proxy_read_timeout 180s;
     }
     location /api/ {
         limit_except GET HEAD { deny all; }

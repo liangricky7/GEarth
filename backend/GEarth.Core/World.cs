@@ -63,6 +63,7 @@ public sealed class Agent
     public string? EstateBeneficiaryId { get; set; }
     public List<string> EstateCreditIds { get; set; } = [];
     public bool EstateFinalized { get; set; }
+    public long EstateUnreportedPayoutMinor { get; set; } // paid out since the last weekly estate_settled event
     public int OvertimeDays { get; set; }
     // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
     public int GoodsBoughtLastWeek { get; set; }

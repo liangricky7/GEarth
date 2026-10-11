@@ -722,6 +722,7 @@ function selectRun(runId, cancelRefresh = true) {
   viewGeneration += 1;
   selectedRun = runId;
   element("data-explorer-link").href = `/data.html?run_id=${encodeURIComponent(runId)}`;
+  document.dispatchEvent(new CustomEvent("gearth-run-selected", {detail:{runId}}));
   selectedAgent = null;
   agentOffset = 0;
   agentTotal = 0;

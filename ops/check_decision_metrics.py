@@ -117,7 +117,7 @@ def run_checks():
     def start(saved_id="", ticks=80):
         environment = os.environ.copy()
         environment.update(GEARTH_STORAGE="local", GEARTH_WORLD="true", GEARTH_LIVE="true",
-            GEARTH_POPULATION="200", GEARTH_CAPACITY="8", GEARTH_TICKS=str(ticks),
+            GEARTH_POPULATION="170", GEARTH_CAPACITY="8", GEARTH_TICKS=str(ticks),
             GEARTH_INTERVAL_MS="10", GEARTH_SAVED_RUN_ID=saved_id,
             GEARTH_PORT="5080", WORKER_TOKEN="controlled-local-check",
             ASPNETCORE_CONTENTROOT=str(ROOT / "backend/GEarth.Api"))

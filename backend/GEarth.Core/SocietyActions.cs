@@ -229,7 +229,6 @@ public static class SocietyActions
         options.Add(new("fund_services", new JsonObject { ["amount_minor"] = Range(0, 150, nation.ServiceBudgetPerResidentMinor) }));
         if (agent.CashMinor >= 1500 && nation.Productivity < 2)
             options.Add(Make("invest", new { amount_minor = 1500 }));
-        SocietyInfrastructure.AddOptions(world, nation, agent, options);
         // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
         // a food subsidy when residents went hungry with food on the shelves, and schooling when people are
         // out of work (each also shows while in force, so it can be changed or ended).

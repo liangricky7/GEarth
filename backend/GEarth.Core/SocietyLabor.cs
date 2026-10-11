@@ -43,7 +43,6 @@ public static class SocietyLabor
         new("clinic", "doctor", null, 200, 8, 1),
         new("school", "teacher", null, 2000, 5, 1),
         new("freight", "dockworker", null, 0, 0, 1),
-        new(PhaseContracts.Construction, "builder", null, 0, 0, 1),
         new(SocietyBank.Sector, "banker", null, 0, 0, 1)
     ];
 
@@ -62,14 +61,13 @@ public static class SocietyLabor
     {
         ["farmer"] = 1000, ["service_worker"] = 1100, ["factory_worker"] = 1300, ["soldier"] = 1400, ["dockworker"] = 1450,
         ["teacher"] = 1750, ["banker"] = 2000, ["energy_worker"] = 2100, ["researcher"] = 2500, ["planner"] = 2500,
-        ["builder"] = 1300,
         ["doctor"] = 6000
     };
 
     // Unskilled jobs are open to anyone after a spell of unemployment, so skilled workers can step down;
     // doctors and researchers also move between each other. Banks train their own staff, so anyone can
     // become a banker. Teachers are skilled; soldiers and planners are public-sector only.
-    public static readonly string[] Unskilled = ["farmer", "service_worker", "energy_worker", "factory_worker", "dockworker", "miner", "builder"];
+    public static readonly string[] Unskilled = ["farmer", "service_worker", "energy_worker", "factory_worker", "dockworker"];
 
     public static bool CanSwitch(string from, string to) => from == to
         || Unskilled.Contains(to) || to == "banker"
@@ -196,7 +194,6 @@ public static class SocietyLabor
         var nation = world.Society!.Nations[founder.CountryId];
         var cost = StartupCost(sector);
         return founder.Role == "citizen" && !IsStudent(founder) && !IsPlanned(nation) && StartableSectors().Contains(sector)
-            && (sector != PhaseContracts.Construction || !Firms(world, nation.Id, sector).Any())
             && SocietyBank.Liquid(world, founder) + loan >= cost && loan <= SocietyBank.StartupLoan(world, founder, cost)
             && (!Firms(world, nation.Id, sector).Any() || HasGap(world, nation, sector)) && CanStaff(world, founder, sector);
     }
@@ -348,7 +345,7 @@ public static class SocietyLabor
     // resident who could run one and can afford it opens one (agents can also choose to start firms).
     private static void FillEmptySectors(World world, Nation nation, Agent[] residents)
     {
-        foreach (var sector in Sectors.Where(sector => sector.Id is not ("freight" or "school" or SocietyBank.Sector or PhaseContracts.Construction) && !Firms(world, nation.Id, sector.Id).Any()))
+        foreach (var sector in Sectors.Where(sector => sector.Id is not ("freight" or "school" or SocietyBank.Sector) && !Firms(world, nation.Id, sector.Id).Any()))
         {
             var founder = residents.Where(person => CanStart(world, person, sector.Id))
                 .OrderByDescending(person => person.CashMinor).ThenBy(person => person.Id).FirstOrDefault();
@@ -451,11 +448,6 @@ public static class SocietyLabor
 
     private static void Autopilot(World world, Nation nation, Agent firm)
     {
-        if (firm.Specialty == PhaseContracts.Construction)
-        {
-            SocietyInfrastructure.Autopilot(world, nation, firm);
-            return;
-        }
         var society = world.Society!;
         var spec = SectorOf(firm.Specialty!);
         var staff = Staff(world, firm).Length;

@@ -78,7 +78,6 @@ public static class SocietyDiplomacy
     {
         var government = world.Agents[nation.Id + "_government"];
         var parameters = policy.Params;
-        if (SocietyInfrastructure.Enact(world, nation, policy) is { } built) return built;
         switch (policy.ActionType)
         {
             case "adjust_tax":

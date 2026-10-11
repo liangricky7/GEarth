@@ -23,7 +23,7 @@ public static class Governments
     public static GovernmentProfile Get(string id) => Profiles.Single(profile => profile.Id == id);
 }
 
-public sealed partial class Nation
+public sealed class Nation
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";

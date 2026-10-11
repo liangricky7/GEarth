@@ -56,7 +56,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
 
 | Area | Built and verified | Not built or not verified |
 |---|---|---|
-| World engine | C#/.NET 10; 10 countries; 1,100 agents by default (software range 200–100,000); one tick = one day | No maximum population qualified for live inference |
+| World engine | C#/.NET 10; 10 countries; 1,100 agents by default (software range 170–100,000); one tick = one day | No maximum population qualified for live inference |
 | Economy | Labor market, fixed salaries, entrepreneurs, 13 competing firms in 8 sectors per country, quality of life with a steep health penalty, too sick to work, always-staffed clinics with capitation, pharmacy medicine, hunger penalty, automatic input and food imports, startup grants, food and tuition subsidies, school and graduates, planned-economy quotas set by a planner, tax steps, overtime by consent, wage/sales/profit tax, welfare, unemployment and sick benefit ([5.10](#510-public-services-batch)) | Live behavior of the new levers; product quality |
 | Trade and politics | Physical shipments with escrow, freight firms, tariffs, routes; diplomacy, borders, conflict, migration, elections, five government profiles | Tick-based political durations not rescaled to days |
 | Banking | Full bank (deposits, interest, insurance, bank runs) merged | Live calibration with the public-services batch |
@@ -139,7 +139,7 @@ Political structure and economic policy are modeled as explicit rules, not perso
 
 ### 3.3 Institutions and population
 
-Every country starts with 16 institutions: a government, a bank, a newsroom and 13 firms (including the state school). The smallest world is 200 agents.
+Every country starts with 16 institutions: a government, a bank, a newsroom and 13 firms (including the state school). The smallest world is 170 agents.
 
 | Sector | Firms | Occupation | Base price |
 |---|---:|---|---:|

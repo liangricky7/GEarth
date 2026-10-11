@@ -170,7 +170,7 @@ public sealed class AnalyticsReportTests
     public async Task PublicationAuthenticatesPublicServicesConfigurationAgainstCapturedMetadata()
     {
         var world = Finished(); var store = new TestStore(world); var service = new AnalyticsService(store);
-        var captured = SocietyFactory.Create(world.Id, false, 200);
+        var captured = SocietyFactory.Create(world.Id, false, 170);
         RunAudit.Enable(captured);
         store.Records = [captured.PendingAudit[0] with { Revision = 1 }];
         var exported = Wire.Node(await service.ExportMetadata(world.Id, default));

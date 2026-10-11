@@ -67,7 +67,7 @@ public static class SocietyEconomy
         ["needs"] = 100 * NeedsWeight * needsMet / 2.0,
         ["health"] = HealthPoints(resident.Health),
         ["comfort"] = 100 * ComfortWeight * Comfort(resident.GoodsBoughtLastWeek, resident.ServicesBoughtLastWeek),
-        ["security"] = 100 * SecurityWeight * Security(resident, SocietyBank.Savings(resident)),
+        ["security"] = 100 * SecurityWeight * Security(resident, SocietyBank.Savings(resident)) * (1 - resident.WarWeariness),
         ["free_time"] = 100 * LeisureWeight * (overtime ? 0.5 : 1)
     };
 
@@ -630,6 +630,11 @@ public static class SocietyEconomy
     {
         using var auditGroup = RunAudit.Group(world);
         Transfer(world, employer, worker, wage, "wage");
+        if (wage > 0 && employer.Role == "government" && worker.Occupation == "soldier")
+        {
+            worker.MilitaryPayMinor = worker.MilitaryPaidTick == world.Tick ? worker.MilitaryPayMinor + wage : wage;
+            worker.MilitaryPaidTick = world.Tick;
+        }
         var tax = wage * nation.TaxBasisPoints / 10000;
         Transfer(world, worker, government, tax, "income_tax");
         nation.TaxesCollectedMinor += tax;
@@ -689,16 +694,9 @@ public static class SocietyEconomy
 
     private static void ConflictCosts(World world, Nation nation, Agent government, Agent[] businesses, int conflicts)
     {
-        PaySoldiers(world, nation, government, 1000L * conflicts);
-        foreach (var business in businesses.Where(business => SocietyLabor.SectorOf(business.Specialty!).Good is not null))
-        {
-            var good = SocietyLabor.SectorOf(business.Specialty!).Good!;
-            var destroyed = Math.Min(business.Inventory[good], Math.Max(1, nation.Population / 40) * conflicts);
-            business.Inventory[good] -= destroyed;
-            nation.LostUnits += destroyed;
-            world.Society!.LostGoods[good] += destroyed;
-        }
-        world.Emit("conflict_costs", "rule", [nation.Id], new { conflicts, nation.LostUnits });
+        var funded = SocietyWar.Soldiers(world, nation).Length == 0 ? 0 : Math.Min(1000L * conflicts, SocietyBank.Liquid(world, government));
+        PaySoldiers(world, nation, government, funded);
+        world.Emit("conflict_costs", "rule", [nation.Id], new { conflicts, funded_upkeep_minor = funded });
     }
 
     public static void UpdateMetrics(World world)

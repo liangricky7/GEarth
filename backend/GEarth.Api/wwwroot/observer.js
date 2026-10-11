@@ -372,7 +372,7 @@ function describe(event, labor) {
       return { country: place, alert: true, text: `${(p.reason ?? "crisis").toUpperCase()}: ${p.good} output falls to ${Math.round(p.production_multiplier * 100)}% until day ${p.until_tick}` };
     case "diplomatic_tension": {
       const [a, b] = String(ids[0]).split(":");
-      return { country: countryName(a), text: `Tension between ${countryName(a)} and ${countryName(b)} rises to ${p.tension}`, body: p.reason };
+      return { country: countryName(a), text: p.score != null ? `Relations between ${countryName(a)} and ${countryName(b)} fall to ${p.score}` : `Tension between ${countryName(a)} and ${countryName(b)} rises to ${p.tension}`, body: p.reason };
     }
     case "diplomatic_offer":
       return { country: place, text: `${countryName(p.proposed_by ?? ids[0])} offers ${p.proposal_kind === "peace" ? "peace" : "a trade agreement"}` };
@@ -381,7 +381,32 @@ function describe(event, labor) {
     case "conflict_started":
       return { country: countryName(p.first), alert: true, text: `CONFLICT: ${countryName(p.first)} and ${countryName(p.second)} are at war` };
     case "conflict_costs":
-      return { country: place, alert: true, text: `War costs this week (${plural(p.conflicts ?? 0, "conflict")}), ${p.lost_units ?? 0} units of goods lost so far` };
+      return { country: place, alert: true, text: p.funded_upkeep_minor != null ? `Soldiers receive ${wld(p.funded_upkeep_minor)} in war upkeep (${plural(p.conflicts ?? 0, "conflict")})` : `War costs this week (${plural(p.conflicts ?? 0, "conflict")}), ${p.lost_units ?? 0} units of goods lost so far` };
+    case "war_week":
+      return { country: countryName(p.winner), alert: true, text: `${countryName(p.winner)} wins the weekly contest against ${countryName(p.loser)}`,
+        body: `Tribute ${wld(p.tribute_minor)} and ${Object.entries(p.tribute_goods ?? {}).map(([good, units]) => `${units} ${good}`).join(", ")}; ${plural(p.wounded ?? 0, "soldier")} wounded` };
+    case "war_ended":
+      return { country: countryName(p.winner), text: `War ends with ${countryName(p.loser)}: ${String(p.terms).replaceAll("_", " ")}`, body: p.reason };
+    case "gift_sent":
+      return { country: place, text: `${countryName(ids[0])} sends ${p.kind === "cash" ? wld(p.amount) : `${p.amount} ${p.kind}`} to ${countryName(ids[1])}`,
+        body: `Relations +${p.relation_gain}, now ${p.score}` };
+    case "missile_ready":
+      return { country: place, text: `Missile completed; ${p.missiles} in stock` };
+    case "missile_strike":
+      return { country: countryName(p.target), alert: true, text: `${countryName(p.attacker)} launches a missile: ${p.hit ? p.damaged ? `${p.damaged} condition falls to ${p.condition}` : "hits, but no completed project can be damaged" : "intercepted"}` };
+    case "soldiers_recruited":
+    case "soldiers_discharged":
+      return { country: place, text: `${p.recruited ?? p.discharged} soldiers ${event.event_type === "soldiers_recruited" ? "recruited" : "discharged"}; ${p.soldiers} total` };
+    case "unrest_started":
+      return { country: place, alert: true, text: `Unrest begins: average quality of life ${p.average_quality_of_life}, below ${p.threshold}` };
+    case "early_election_called":
+      return { country: place, alert: true, text: `Unrest calls an early election on day ${p.next_election_tick}` };
+    case "revolution":
+      return { country: place, alert: true, text: `Revolution changes government from ${p.from} to ${p.to}`, body: `${p.paid_soldiers} paid soldiers for ${p.residents} residents` };
+    case "revolution_deferred":
+      return { country: place, alert: true, text: "Revolution deferred: ownership transition is unsupported", body: p.reason };
+    case "unrest_suppressed":
+      return { country: place, alert: true, text: `Unrest suppressed by ${p.paid_soldiers} paid soldiers` };
     case "border_changed":
       return { country: "", text: `Border ${p.edge_id} ${p.open ? "opens" : "closes"}` };
     case "loan_requested":
@@ -1076,7 +1101,7 @@ function showWorld(snapshot) {
     relations.append(
       textNode(
         "p",
-        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · tension ${relation.tension}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
+        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · relations ${relation.score ?? (40 - Number(relation.tension ?? 40))}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
         relation.at_war ? "event-rejected" : "",
       ),
     );

@@ -81,6 +81,7 @@ public sealed class RealismFixesTests
     public void LeversShowTheCurrentLevelAndConflictComesOnlyAfterFailedDiplomacy()
     {
         var world = NewWorld();
+        world.Mode = "LIVE"; // Phase 3 rule governments also require a blocked input need and superior strength.
         var government = world.Agents["aster_government"];
         var level = world.Society!.Nations["aster"].UnemploymentBenefitMinor;
         var benefits = SocietyActions.Available(world, government).Where(candidate => candidate.ActionType == "set_unemployment_benefit")

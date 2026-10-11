@@ -296,7 +296,9 @@ public static class SocietyActions
         }
         var relationships = society.Relations.Values.Where(relation => relation.First == nation.Id || relation.Second == nation.Id)
             .OrderByDescending(relation => relation.ProposedBy is not null && relation.ProposedBy != nation.Id)
-            .ThenByDescending(relation => relation.AtWar).ThenByDescending(relation => relation.Tension).Take(4);
+            .ThenByDescending(relation => relation.AtWar).ThenBy(relation => relation.Score).ToArray();
+        relationships = relationships.Where(relation => relation.AtWar || relation.ProposedBy is not null)
+            .Concat(relationships.Where(relation => !relation.AtWar && relation.ProposedBy is null).Take(4)).ToArray();
         foreach (var relation in relationships)
         {
             var countryId = relation.First == nation.Id ? relation.Second : relation.First;
@@ -308,21 +310,25 @@ public static class SocietyActions
             else if (relation.ProposedBy is null)
             {
                 if (relation.AtWar)
-                    options.Add(Make("offer_peace", new { country_id = countryId }));
+                    foreach (var terms in SocietyWar.PeaceTerms)
+                        options.Add(Make("offer_peace", new { country_id = countryId, terms,
+                            effect = SocietyWar.PeaceEffect(world, nation.Id, countryId, terms) }));
                 else if (!relation.TradeAgreement)
                     options.Add(Make("propose_agreement", new { country_id = countryId }));
             }
             // Conflict comes only after diplomacy between the two has failed, and the option says what it does.
-            if (!relation.AtWar && relation.Tension >= 60 && relation.DiplomacyFailedTick >= 0 && SocietyBank.Liquid(world, agent) >= 5000)
+            if (!relation.AtWar && relation.Score <= SocietyWar.WarBelow && relation.DiplomacyFailedTick >= 0 && SocietyBank.Liquid(world, agent) >= 5000
+                && SocietyWar.OffersWar(world, nation, society.Nations[countryId]))
                 options.Add(Make("declare_conflict", new
                 {
                     country_id = countryId,
-                    effect = "start an economic conflict: trade with them stops, both sides lose stock every week, costs 5000 now and 1000 a week; it raises tension to 100"
+                    effect = "Costs 5000 now and 1000 per war week in soldier pay; closes bilateral trade and sets relations to -100. Weekly contests take 10% of taxes and ore/fuel stocks from the loser and wound 25% of fit soldiers. Third countries condemn the aggressor. Two weeks without fit soldiers forces surrender regardless of missiles."
                 }));
         }
         foreach (var route in world.Routes.Values.Where(route => route.ControllerCountryId == nation.Id)
             .OrderBy(route => route.Open).ThenBy(route => route.Id).Take(2))
             options.Add(Make("set_border", new { edge_id = route.Id, open = !route.Open }));
+        SocietyWar.AddOptions(world, nation, agent, options);
         SocietyPayments.AddOptions(world, agent, options);
     }
 

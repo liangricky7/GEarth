@@ -30,11 +30,11 @@ public static class SocietyInfrastructure
     private static int Working(World world, Agent? firm) => firm is null ? 0
         : SocietyLabor.Workers(world, firm).Count(worker => SocietyLabor.DayEffort(world, worker) > 0);
 
-    private static bool CanBuild(World world, Nation nation, ProjectSpec spec, int level)
+    public static bool CanOrder(World world, Nation nation, ProjectSpec spec, int level)
     {
-        if (spec.Type is PhaseContracts.Missile or PhaseContracts.Turret)
-            return false;
-        var previous = nation.Infrastructure.SingleOrDefault(project => project.Type == spec.Type);
+        var previous = spec.Type == PhaseContracts.Missile
+            ? nation.Infrastructure.FirstOrDefault(project => project.Type == spec.Type && !project.Complete)
+            : nation.Infrastructure.SingleOrDefault(project => project.Type == spec.Type);
         return level == (previous?.Level ?? 0) + 1 && level <= spec.MaxLevel
             && (previous is null || previous.Complete) && Firm(world, nation) is not null
             && world.Agents[nation.Id + "_government"].CashMinor >= PhaseContracts.CostOf(spec.Type, level)
@@ -43,10 +43,10 @@ public static class SocietyInfrastructure
 
     public static void AddOptions(World world, Nation nation, Agent government, List<Candidate> options)
     {
-        foreach (var spec in PhaseContracts.Catalog)
+        foreach (var spec in PhaseContracts.Catalog.Where(spec => spec.Type is not (PhaseContracts.Missile or PhaseContracts.Turret)))
         {
             var level = (nation.Infrastructure.FirstOrDefault(project => project.Type == spec.Type)?.Level ?? 0) + 1;
-            if (CanBuild(world, nation, spec, level))
+            if (CanOrder(world, nation, spec, level))
                 options.Add(SocietyActions.Make("build_infrastructure", new { type = spec.Type, level }));
         }
         options.Add(SocietyActions.Make("set_maintenance", new { on = !nation.MaintenanceFunded }));
@@ -66,11 +66,19 @@ public static class SocietyInfrastructure
         if (policy.Params["type"] is not JsonValue typeValue || !typeValue.TryGetValue<string>(out var type)
             || policy.Params["level"] is not JsonValue levelValue || !levelValue.TryGetValue<int>(out var level))
             return false;
-        var spec = PhaseContracts.Catalog.FirstOrDefault(item => item.Type == type);
-        if (spec is null || !CanBuild(world, nation, spec, level))
+        if (type is PhaseContracts.Missile or PhaseContracts.Turret)
             return false;
-        var previous = nation.Infrastructure.SingleOrDefault(project => project.Type == type);
-        if (previous is not null)
+        return Order(world, nation, type, level, policy.CauseId);
+    }
+
+    // Civilian and military orders share commitments, advance funding and the same construction lifecycle.
+    public static bool Order(World world, Nation nation, string type, int level, string cause)
+    {
+        var spec = PhaseContracts.Catalog.FirstOrDefault(item => item.Type == type);
+        if (spec is null || !CanOrder(world, nation, spec, level))
+            return false;
+        var previous = nation.Infrastructure.FirstOrDefault(project => project.Type == type);
+        if (previous is not null && type != PhaseContracts.Missile)
         {
             nation.Infrastructure.Remove(previous);
             nation.ConstructionMaterialsUsed.Remove(previous.Id);
@@ -86,7 +94,7 @@ public static class SocietyInfrastructure
         world.Emit("infrastructure_started", "rule", [nation.Id, project.Id], new
         {
             project.Type, project.Level, project.CostMinor, advance_minor = project.PaidMinor, project.ReadyTick, spec.Builders
-        }, policy.CauseId);
+        }, cause);
         return true;
     }
 

@@ -15,7 +15,8 @@ public static class SocietyDiplomacy
         var from = route.From.Replace("_city", "", StringComparison.Ordinal);
         var to = route.To.Replace("_city", "", StringComparison.Ordinal);
         return route.Open && world.Society!.Nations.ContainsKey(from)
-            && world.Society.Nations.ContainsKey(to) && !Relation(world, from, to).AtWar;
+            && world.Society.Nations.ContainsKey(to) && !Relation(world, from, to).AtWar
+            && Relation(world, from, to).Score > SocietyWar.EmbargoBelow;
     }
 
     public static bool HasAuthority(World world, Nation nation)
@@ -155,14 +156,17 @@ public static class SocietyDiplomacy
             case "propose_agreement":
             case "offer_peace":
                 var offered = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
-                if (offered.ProposedBy is not null)
+                var terms = parameters["terms"]?.GetValue<string>() ?? "none";
+                if (offered.ProposedBy is not null || (policy.ActionType == "offer_peace"
+                    ? !offered.AtWar || !SocietyWar.PeaceTerms.Contains(terms) : offered.AtWar))
                     return false;
                 offered.ProposedBy = nation.Id;
                 offered.ProposalKind = policy.ActionType == "offer_peace" ? "peace" : "trade";
+                offered.ProposalTerms = offered.ProposalKind == "peace" ? terms : null;
                 offered.ProposalExpiresTick = world.Tick + 60;
                 world.Emit("diplomatic_offer", "rule", [nation.Id, offered.Id], new
                 {
-                    offered.ProposalKind, offered.ProposalExpiresTick, offered.ProposedBy
+                    offered.ProposalKind, offered.ProposalTerms, offered.ProposalExpiresTick, offered.ProposedBy
                 }, policy.CauseId);
                 return true;
             case "respond_agreement":
@@ -173,41 +177,45 @@ public static class SocietyDiplomacy
                 if (parameters["accept"]!.GetValue<bool>())
                 {
                     if (relationship.ProposalKind == "peace")
-                        relationship.AtWar = false;
+                        SocietyWar.EndWar(world, relationship, world.Society!.Nations[relationship.ProposedBy], nation,
+                            relationship.ProposalTerms ?? "none", "accepted_offer");
                     else if (!relationship.AtWar)
                         relationship.TradeAgreement = true;
-                    relationship.Tension = Math.Max(0, relationship.Tension - 25);
+                    relationship.Score = Math.Min(100, relationship.Score + 25);
                 }
                 else
                 {
-                    relationship.Tension = Math.Min(100, relationship.Tension + 5);
+                    relationship.Score = Math.Max(-100, relationship.Score - 5);
                     relationship.DiplomacyFailedTick = world.Tick;
                 }
                 relationship.ProposedBy = null;
                 relationship.ProposalKind = null;
+                relationship.ProposalTerms = null;
                 world.Emit("diplomatic_response", "rule", [relationship.Id], new
                 {
                     accept = parameters["accept"]!.GetValue<bool>(), relationship.AtWar,
-                    relationship.TradeAgreement, relationship.Tension
+                    relationship.TradeAgreement, relationship.Score
                 }, policy.CauseId);
                 return true;
             case "declare_conflict":
                 var opponent = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
-                if (SocietyBank.Liquid(world, government) < 5000 || opponent.Tension < 60 || opponent.AtWar || opponent.DiplomacyFailedTick < 0)
+                if (SocietyBank.Liquid(world, government) < 5000 || opponent.Score > SocietyWar.WarBelow || opponent.AtWar || opponent.DiplomacyFailedTick < 0)
                     return false;
                 SocietyEconomy.PaySoldiers(world, nation, government, 5000);
                 opponent.AtWar = true;
                 opponent.TradeAgreement = false;
-                opponent.Tension = 100;
+                opponent.Score = -100;
+                opponent.Aggressor = nation.Id;
+                SocietyWar.Condemn(world, nation, world.Society!.Nations[parameters["country_id"]!.GetValue<string>()], 10);
                 world.Emit("conflict_started", "rule", [opponent.Id, nation.Id], new
                 {
                     opponent.First, opponent.Second,
-                    scope = "abstract economic conflict: borders, inventory losses and funded upkeep",
+                    scope = "weekly strength contests, tribute, wounds and funded upkeep",
                     no_territorial_conquest = true
                 }, policy.CauseId);
                 return true;
             default:
-                return false;
+                return SocietyWar.Enact(world, nation, policy);
         }
     }
 
@@ -227,6 +235,7 @@ public static class SocietyDiplomacy
             relation.DiplomacyFailedTick = world.Tick;
             relation.ProposedBy = null;
             relation.ProposalKind = null;
+            relation.ProposalTerms = null;
         }
         foreach (var nation in world.Society.Nations.Values)
         {
@@ -260,10 +269,10 @@ public static class SocietyDiplomacy
                 reason = "synthetic drought"
             });
             var relationship = Relation(world, "dune", "haven");
-            relationship.Tension = Math.Min(100, relationship.Tension + 20);
+            relationship.Score = Math.Max(-100, relationship.Score - 20);
             world.Emit("diplomatic_tension", "scenario", [relationship.Id], new
             {
-                relationship.Tension, reason = "synthetic resource-access dispute"
+                relationship.Score, reason = "synthetic resource-access dispute"
             });
         }
     }

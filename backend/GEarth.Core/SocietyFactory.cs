@@ -52,7 +52,7 @@ public static class SocietyFactory
     }
 
     // A forked timeline's one change: the country switches regime overnight and starts from the new profile's default policies.
-    public static void ChangeGovernment(World world, string countryId, string profileId)
+    public static void ChangeGovernment(World world, string countryId, string profileId, string reason = "timeline_fork")
     {
         if (world.Society?.Nations.GetValueOrDefault(countryId) is not { } nation)
             throw new ArgumentException($"Unknown country {countryId}");
@@ -80,7 +80,7 @@ public static class SocietyFactory
             planner.UnemployedSinceTick = world.Tick;
             planner.Goal = CitizenGoal(planner.Occupation);
         }
-        world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason = "timeline_fork" });
+        world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason });
     }
 
     public static World Create(string id, bool live, int population, int seed = 20261010, int rotation = 0)

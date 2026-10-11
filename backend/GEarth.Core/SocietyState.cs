@@ -117,11 +117,18 @@ public sealed class Relationship
     public string Id { get; set; } = "";
     public string First { get; set; } = "";
     public string Second { get; set; } = "";
-    public int Tension { get; set; }
+    public int Score { get; set; }
+    // Code compatibility for older callers; new saves and observations use Score.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int Tension { get => Math.Clamp(40 - Score, 0, 100); set => Score = Math.Clamp(40 - value, -100, 100); }
+    [System.Text.Json.Serialization.JsonPropertyName("tension")]
+    public int LegacyTension { set => Tension = value; }
     public bool TradeAgreement { get; set; }
     public bool AtWar { get; set; }
+    public string? Aggressor { get; set; }
     public string? ProposedBy { get; set; }
     public string? ProposalKind { get; set; }
+    public string? ProposalTerms { get; set; }
     public int ProposalExpiresTick { get; set; }
     // When an offer between the two last expired or was refused (-1: never); conflict is offered only after that.
     public int DiplomacyFailedTick { get; set; } = -1;

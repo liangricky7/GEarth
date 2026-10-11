@@ -57,3 +57,31 @@ Public report reads are bounded and read-only. Report publication is an operator
 An earlier isolated Neon → Databricks → cached-report pilot used 160 agents and eight ticks. All four notebooks executed, repeating the import preserved row counts, and daily balances reconciled. See [the earlier evidence](evidence/analytics-pipeline-20261010.json) for source pins and job links.
 
 Public-services verification used actual RULE runs of 170 agents for 35 days and 360 agents for seven days. The pipeline retained 24,151 records, registered six new state firms before funding, and verified two numeric planner choices in Delta. All four notebooks and replay checks passed; 13 existing tables retained their original rows and facts. Both cached reports exactly matched their Databricks files. Backend tests passed 147 with four banking skips; Python tests passed 214 after integrating current main’s worker fixes. See [the public-services evidence](evidence/public-services-analytics-20261010.json). These pilots do not qualify 50,000 agents, a full-year import or live model performance.
+
+
+## Read-only run-data explorer
+
+`/data.html?run_id=RUN_ID` inspects committed storage without importing or
+running inference. Older runs stay selectable. Saved weekly replay frames,
+Neon save markers and daily audit rows are distinct; a checkpoint marker does
+not imply a complete historical world can be replayed. New committed runs
+appear through lightweight catalog polling.
+
+Finished-run full-row browsing is optional and operator-published. Run
+`ops/analyze_run.py ... --analytics-browse` on the observer host / shared persistent
+cache volume. The import notebook qualifies actual Delta data, commits its Gold
+receipt, then exports actual run-filtered rows and schemas through distributed
+JSON staging and bounded gzip chunks. The catalog separates available empty
+Tables from missing Tables, and original JSON presence from nullable typed
+columns. An offline report alone cannot establish actual Databricks capture.
+
+The immutable browse manifest pins run, revision, sequence and source hash.
+The report's optional `dataset_catalog` pins the exact browse-manifest SHA256.
+Transport downloads/validates manifest before chunks and checks row/schema/payload
+coverage and gzip bounds before publication. Cached dataset endpoints never
+contact Databricks. Report-only workflows remain supported. Old simulations
+without a cache require explicit publication and are labelled unavailable,
+not zero. A newly added nullable column does not prove older rows captured it.
+
+See [analytics operator runbook](../../analytics/README.md#run-data-explorer-and-actual-databricks-rows)
+for cache placement, field-inventory limits and live qualification limits.

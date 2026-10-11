@@ -37,7 +37,7 @@ Review before executing; the code creates managed Delta tables/views.
    Validates hashes, row/sequence coverage, opening/day/final state coverage and
    duplicate semantic identities; inserts Bronze and typed Silver; writes
    `report-<first12charactersofmanifestSHA256>.json` beside the export and a Gold
-   `import_receipts` row last. A receipt certifies import coverage, not that every
+   `import_receipts` row before optional actual-row export. A receipt certifies import coverage, not that every
    economic check passed. Reconciliation failures and unknown checks remain visible.
    Before emitting report/receipt, scalar Delta aggregates verify stored Bronze
    count/distinct sequence/range and kind counts against the manifest; every Silver
@@ -217,3 +217,72 @@ opening/final snapshots, decisions, effects, events and every transfer leg.
 Measure a short pilot's compressed bytes, import/query time and memory before a
 full-year batch. Databricks Free Edition quotas are not assumed sufficient.
 Tests are labeled synthetic and do not prove a real Neon or Databricks import.
+
+## Run-data explorer and actual Databricks rows
+
+Open `/data.html` on the observer to browse committed runs, saved checkpoints,
+daily audit records, complete cached report sections and published Databricks rows.
+New run discovery refreshes while the page is visible. It never starts an import.
+Tick 0 is the opening; days 1–7 are Week 1. A save marker is not a replayable world:
+weekly renderer frames and daily audit records are shown as different evidence.
+
+To publish full actual-row data, run the existing operator workflow **on the target
+observer host**, with its persistent `.data` directory and operational storage
+configuration, adding:
+
+```sh
+python3 ops/analyze_run.py RUN_ID /tmp/gearth-export-RUN_ID \
+  --api http://localhost:5080 --storage neon --analytics-browse
+```
+
+This explicit command submits Databricks work and may use workspace compute.
+The notebook widget `publish_browse` defaults to `false`, preserving old report-only
+workflows. With `true`, actual run-filtered Delta schemas, non-null counts, original
+payload field presence and complete table/view rows are exported after Delta
+qualification and the actual Gold import receipt write. Offline `build_report()`
+does not claim actual Delta evidence. Older imports need an explicit new import /
+publication to gain this cache; a missing cache is labelled unavailable.
+
+Browse output is `browse-<manifestprefix>/browse-manifest.json` beside the finished
+export, with relative gzip NDJSON chunks. It covers Bronze audit, every Silver audit
+kind plus options/event edges, and available Gold daily/latest/service views and
+import receipts. Missing tables are `availability=unavailable`, `row_count=null`;
+a verified typed empty table is `availability=available`, `row_count=0`.
+All queries filter `run_id` and reject conflicting source-manifest identities.
+Schemas come from Spark, not current Python projection defaults. Original payload
+JSON remains accessible, including new fields without typed columns.
+
+Spark writes distributed JSON staging; the driver streams one bounded row at a
+time into chunks of at most 2,000 rows / 4 MiB. One larger row may use its own chunk,
+up to **8,000,000 bytes**, reserving API envelope space. Larger rows fail explicitly.
+The manifest is capped at 16 MiB; actual schemas at 2,048 columns. JSON Pointer
+inventory examines objects to depth 4, at most 4,096 paths; arrays are leaves.
+Limits and any truncation are explicit. Absent, explicit null, zero/false and
+nonzero counts are separate; incomplete inventory cannot prove a missing feature.
+
+UC Volume output uses immutable content-addressed chunk files and writes the
+current manifest last, after copy verification. Prior manifests / chunks remain
+available; no atomic Volume directory rename is assumed. A failed job never
+publishes an observer cache. Driver FUSE and Spark Volume staging still need a
+live workspace pilot; fixture tests do not qualify Free Edition or 50,000-agent
+full-year capacity. See [Databricks Volume requirements](https://docs.databricks.com/aws/en/volumes/).
+
+`ops/analyze_run.py` downloads the manifest first, validates paths, downloads listed
+chunks, checks complete gzip contents/schema/payload counts and exact report
+receipt agreement, then invokes the optional publication flag:
+
+```sh
+dotnet run --project backend/GEarth.Api --no-build -- \
+  --publish-analytics-report REPORT.json --source-manifest MANIFEST.json \
+  --analytics-browse BUNDLE_DIRECTORY
+```
+
+Publication uses `GEARTH_ANALYTICS_BROWSE_DIRECTORY` (default
+`.data/analytics-browse`) **on that machine**. The observer must read the same
+persistent cache volume; publishing on a laptop does not update a remote VM.
+The workflow verifies both `/analytics/report` and `/analytics/datasets` on the
+specified observer API; provenance disagreement or a missing remote cache fails
+verification. Browser reads are cache-only and never connect to Databricks.
+The report stays small: optional `dataset_catalog` holds schemas/coverage,
+not full rows. All existing report sections are inspectable; its agent list
+remains a capped preview.

@@ -70,9 +70,9 @@ async function until(predicate) {
   throw new Error("Observer did not reach the expected state");
 }
 
-function observer(data, intercept) {
+function observer(data, intercept, query = "") {
   const dom = new JSDOM(html, {
-    url: "http://localhost",
+    url: `http://localhost/${query}`,
     runScripts: "outside-only",
   });
   const requests = [];
@@ -421,3 +421,23 @@ test(
     }
   },
 );
+
+
+test("saved-data backlink opens its selected older run even outside the latest catalog", async (t) => {
+  const current = fixture("current", 45), old = fixture("older", 12);
+  const view = observer({ current, older: old }, path => path === "/api/runs" ? response({ current_run_id: "current", run_ids: ["current"] }) : null, "?run_id=older");
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("tick").textContent === "12");
+  assert.equal(view.element("runs").value, "older");
+  assert.equal(view.element("data-explorer-link").getAttribute("href"), "/data.html?run_id=older");
+  assert.ok(view.requests.some(request => request.path === "/api/runs/older/snapshot"));
+  assert.ok(!view.requests.some(request => request.path === "/api/runs/current/snapshot"));
+});
+
+test("malformed saved-data run IDs do not override the current observer run", async (t) => {
+  const view = observer({ current: fixture("current", 45) }, null, "?run_id=../../unsafe");
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("tick").textContent === "45");
+  assert.equal(view.element("runs").value, "current");
+  assert.ok(!view.requests.some(request => request.path.includes("unsafe")));
+});

@@ -8,6 +8,7 @@
 
 # COMMAND ----------
 dbutils.widgets.text("export_directory", "/Volumes/workspace/gearth_bronze/run_exports/REPLACE_RUN_DIRECTORY")
+dbutils.widgets.dropdown("publish_browse", "false", ["false", "true"])
 dbutils.widgets.text("library_zip", "/Volumes/workspace/gearth_bronze/run_exports/_code/gearth-analytics.zip")
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ from analytics.validate import validate, read_manifest, safe_file, iter_records
 from analytics.export import canonical
 from analytics.report import build_report
 from analytics.delta_validation import qualify_delta
+from analytics.browse import export_delta_bundle
 from analytics.transform import AGENT_TYPES, COUNTRY_TYPES
 from analytics.conditions import comparison_conditions
 from analytics.schema import nullable_additions
@@ -183,6 +185,14 @@ SELECT * FROM workspace.gearth_silver.transactions WHERE transfer_kind IN
 # Local helper uses SQLite spill, keeping all-year decisions/ledger off driver RAM.
 report = build_report(manifest_path, max_agents=100, work_directory="/tmp")
 report_path = export_directory / ("report-" + manifest_hash[:12] + ".json")
+# Commit the actual import receipt before exporting its actual table rows.
+receipt = {"run_id": run["run_id"], "through_revision": run["through_revision"], "through_sequence": run["through_sequence"],
+           "source_manifest_sha256": manifest_hash, "record_sha256": manifest_hash, "analysis_version": report["analysis_version"],
+           "snapshot_complete": True, "run_complete": run["status"] == "completed", "record_count": manifest["record_count"]}
+insert_only(spark.createDataFrame([receipt]), "workspace.gearth_gold.import_receipts", ["run_id", "through_revision"])
+if dbutils.widgets.get("publish_browse") == "true":
+    report["dataset_catalog"] = export_delta_bundle(spark, manifest, manifest_hash,
+        export_directory / ("browse-" + manifest_hash[:12]), qualification)
 report_bytes = canonical(report) + b"\n"
 if report_path.exists() and report_path.read_bytes() != report_bytes:
     # Report generated_at changes between executions; facts/provenance remain stable.
@@ -190,9 +200,18 @@ if report_path.exists() and report_path.read_bytes() != report_bytes:
     previous = json.loads(report_path.read_text())
     if any(previous[key] != report[key] for key in ("run_id", "through_revision", "through_sequence", "source_manifest_sha256")):
         raise ValueError("Existing cached report has conflicting source provenance")
+    if "dataset_catalog" not in report and "dataset_catalog" in previous:
+        # Preserve a verified same-source row-cache pointer across report versions.
+        report["dataset_catalog"] = previous["dataset_catalog"]
+        report_bytes = canonical(report) + b"\n"
     if previous["analysis_version"] == report["analysis_version"]:
         if any(previous[key] != report[key] for key in ("summary", "checks", "completeness", "agents", "countries", "government_comparison", "public_services", "evidence_refs")):
             raise ValueError("Existing cached report has conflicting analysis at the same version")
+        if "dataset_catalog" in report:
+            report_path.write_bytes(report_bytes)
+        elif "dataset_catalog" in previous:
+            # A report-only replay must not silently lose the previous verified cache.
+            report["dataset_catalog"] = previous["dataset_catalog"]
     else:
         import re
         previous_version = previous["analysis_version"]
@@ -207,9 +226,5 @@ if report_path.exists() and report_path.read_bytes() != report_bytes:
         report_path.write_bytes(report_bytes)
 else:
     report_path.write_bytes(report_bytes)
-receipt = {"run_id": run["run_id"], "through_revision": run["through_revision"], "through_sequence": run["through_sequence"],
-           "source_manifest_sha256": manifest_hash, "record_sha256": manifest_hash, "analysis_version": report["analysis_version"],
-           "snapshot_complete": True, "run_complete": run["status"] == "completed", "record_count": manifest["record_count"]}
-insert_only(spark.createDataFrame([receipt]), "workspace.gearth_gold.import_receipts", ["run_id", "through_revision"])
 display(spark.createDataFrame([(check["name"], check["status"]) for check in report["checks"]], ["check", "status"]))
 print("Cached report:", report_path)

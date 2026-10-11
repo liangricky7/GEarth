@@ -24,16 +24,21 @@ public sealed record AuditContext(string? DecisionId = null, string? EventId = n
     string? GroupId = null, string? Good = null, int? Quantity = null, long? UnitPriceMinor = null);
 
 public sealed class AnalyticsTimelineException() : InvalidOperationException(
-    "Analytics capture for resumed/forked timelines requires a distinct dataset identity and is not supported by audit v1; start a fresh analytics run or fork a run captured without analytics.");
+    "Analytics capture for resumed/forked timelines requires a distinct dataset identity and is not supported by audit v1; start a fresh analytics run or resume with analytics disabled.");
 
 public static class RunAudit
 {
     public const int SchemaVersion = 1;
 
-    public static void ValidateResume(World world, bool enableAnalytics)
+    public static void PrepareResume(World world, bool enableAnalytics)
     {
-        if (world.AnalyticsEnabled || enableAnalytics)
+        if (enableAnalytics)
             throw new AnalyticsTimelineException();
+        if (world.PendingAudit.Count > 0)
+            throw new InvalidOperationException("Resume requires a committed checkpoint without pending audit records");
+        // A branch inherits its parent's audit prefix, but cannot append using the same dataset identity.
+        // Keep the cursor and coverage boundary intact so exporters can identify the incomplete capture.
+        world.AnalyticsEnabled = false;
     }
 
     public static void Enable(World world, object? metadata = null)

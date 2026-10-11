@@ -208,16 +208,40 @@ public sealed class AuditTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void ResumeCannotReuseTheParentAnalyticsDatasetIdentity(bool inherited, bool requested)
+    public void ResumeDisablesInheritedCaptureAndRejectsExplicitAnalytics(bool inherited, bool requested)
     {
         var world = SocietyFactory.Create("audit_resume", false, 160);
-        world.AnalyticsEnabled = inherited;
+        if (inherited)
+        {
+            RunAudit.Enable(world);
+            SocietyEngine.Advance(world);
+            RunAudit.Day(world);
+            world = Wire.Copy(world);
+        }
         var before = JsonSerializer.Serialize(world, Wire.Json);
-        if (inherited || requested)
-            Assert.Throws<AnalyticsTimelineException>(() => RunAudit.ValidateResume(world, requested));
+        if (requested)
+        {
+            Assert.Throws<AnalyticsTimelineException>(() => RunAudit.PrepareResume(world, requested));
+            Assert.Equal(before, JsonSerializer.Serialize(world, Wire.Json));
+        }
         else
-            RunAudit.ValidateResume(world, requested);
-        Assert.Equal(before, JsonSerializer.Serialize(world, Wire.Json));
+        {
+            RunAudit.PrepareResume(world, requested);
+            Assert.False(world.AnalyticsEnabled);
+            var expected = JsonNode.Parse(before)!.AsObject();
+            expected["analytics_enabled"] = false;
+            Assert.True(JsonNode.DeepEquals(expected, Wire.Node(world)));
+        }
+    }
+
+    [Fact]
+    public void ResumeCannotDiscardUncommittedAuditRecords()
+    {
+        var world = SocietyFactory.Create("audit_resume_pending", false, 160);
+        RunAudit.Enable(world);
+        Assert.Throws<InvalidOperationException>(() => RunAudit.PrepareResume(world, false));
+        Assert.True(world.AnalyticsEnabled);
+        Assert.NotEmpty(world.PendingAudit);
     }
 
     [Fact]

@@ -149,7 +149,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         {
             // A forked timeline: continue a saved run (on its own Neon branch) from a week-boundary checkpoint.
             world = await store.Load(resumeId, cancellationToken) ?? throw new InvalidOperationException("Resume run missing");
-            RunAudit.ValidateResume(world, Environment.GetEnvironmentVariable("FAULTLINE_ANALYTICS") == "true");
+            RunAudit.PrepareResume(world, Environment.GetEnvironmentVariable("FAULTLINE_ANALYTICS") == "true");
             if (world.Society is null || world.Status != "running"
                 || (world.Tick != 0 && (world.Tick + 1) % SocietyLabor.DaysPerWeek != 0))
                 throw new InvalidOperationException("Resume needs a running week-boundary checkpoint");

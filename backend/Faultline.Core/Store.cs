@@ -413,14 +413,17 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
     public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null)
     {
         var state = serialized ?? JsonSerializer.Serialize(world, Wire.Json);
-        if (!world.AnalyticsEnabled && Encoding.UTF8.GetByteCount(state) > 16 * 1024 * 1024)
+        // Ordinary forks retain their inherited audit prefix after capture is disabled.
+        // They still need cursor validation and bounded transport for a potentially large parent checkpoint.
+        var hasAuditState = world.AnalyticsEnabled || world.AuditSequence > 0;
+        if (!hasAuditState && Encoding.UTF8.GetByteCount(state) > 16 * 1024 * 1024)
             throw new InvalidOperationException("Legacy Neon checkpoint exceeds the application's 16 MiB request safety limit; enable analytics for bounded checkpoint transport");
-        var heads = world.AnalyticsEnabled
+        var heads = hasAuditState
             ? await Query("SELECT revision,COALESCE(audit_sequence,(state->>'audit_sequence')::bigint) FROM faultline.stage1_runs WHERE run_id=$1", [world.Id], cancellationToken)
             : new JsonArray();
         var previousRevision = heads.Count == 0 ? 0 : long.Parse(heads[0]![0]!.GetValue<string>());
         var previousAuditSequence = heads.Count == 0 ? 0 : long.Parse(heads[0]![1]?.GetValue<string>() ?? "0");
-        if (world.AnalyticsEnabled && previousRevision == world.Revision
+        if (hasAuditState && previousRevision == world.Revision
             && LocalStore.SameCheckpoint(await Load(world.Id, cancellationToken), world))
         {
             if (world.PendingAudit.Count > 0)
@@ -434,7 +437,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
             world.PendingAudit.Clear();
             return;
         }
-        if (world.AnalyticsEnabled)
+        if (hasAuditState)
         {
             if (previousRevision != expectedRevision || world.Revision != expectedRevision + 1)
                 throw new InvalidOperationException("Revision conflict");
@@ -450,7 +453,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
                 """, [world.Id, world.Revision.ToString(), digest, JsonSerializer.Serialize(batch, Wire.Json)], cancellationToken);
         string? checkpointDigest = null;
         var partCount = 0;
-        if (world.AnalyticsEnabled)
+        if (hasAuditState)
         {
             checkpointDigest = AuditPersistence.CheckpointDigest(state);
             foreach (var part in AuditPersistence.CheckpointParts(state))

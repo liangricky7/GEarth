@@ -65,6 +65,49 @@ public sealed class NeonAuditTests
     }
 
     [Fact]
+    public async Task OrdinaryForkKeepsItsInheritedAuditPrefixAndBoundedCheckpointTransport()
+    {
+        var handler = new AuditHandler();
+        using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
+        var parent = SocietyFactory.Create("neon_fork", false, 160);
+        RunAudit.Enable(parent);
+        SocietyEngine.Advance(parent);
+        RunAudit.Day(parent);
+        parent.Agents.Values.First().Goal = new string('x', 17 * 1024 * 1024);
+        parent.Revision = 1;
+        await store.Save(parent, 0, CancellationToken.None);
+        var prefix = JsonSerializer.Serialize(await store.ReadAudit(parent.Id, 0, 10000, CancellationToken.None), Wire.Json);
+        var auditBatchCount = handler.AuditBatchSizes.Count;
+        var fork = (await store.Load(parent.Id, CancellationToken.None))!;
+        RunAudit.PrepareResume(fork, false);
+        fork.Emit("timeline_forked", "rule", [fork.Id], new { from_tick = fork.Tick });
+        SocietyEngine.Advance(fork);
+        RunAudit.Day(fork);
+        fork.Status = "completed";
+        RunAudit.Day(fork, terminal: true);
+        fork.Revision++;
+        await store.Save(fork, 1, CancellationToken.None);
+        await store.Save(fork, 1, CancellationToken.None);
+
+        Assert.True(handler.UsedChunkedCheckpoint);
+        Assert.All(handler.CheckpointPartSizes, size => Assert.InRange(size, 1, 512 * 1024));
+        Assert.Equal(auditBatchCount, handler.AuditBatchSizes.Count);
+        Assert.Empty(fork.PendingAudit);
+        Assert.Equal(prefix, JsonSerializer.Serialize(await store.ReadAudit(parent.Id, 0, 10000, CancellationToken.None), Wire.Json));
+        var head = (await store.ReadAuditHead(fork.Id, CancellationToken.None))!;
+        Assert.False(head.AnalyticsEnabled);
+        Assert.Equal(2, head.Revision);
+        Assert.Equal(parent.AuditSequence, head.AuditSequence);
+        var loaded = (await store.Load(fork.Id, CancellationToken.None))!;
+        Assert.False(loaded.AnalyticsEnabled);
+        Assert.Equal(parent.AuditDailyThroughTick, loaded.AuditDailyThroughTick);
+        Assert.Equal(parent.Agents.Values.First().Goal, loaded.Agents.Values.First().Goal);
+        loaded.Revision++;
+        loaded.AuditSequence++;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.Save(loaded, 2, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task RetryingAfterInterruptedLsnRegistrationRepairsTheCheckpointMarker()
     {
         var handler = new AuditHandler { FailCheckpointRegistrationOnce = true };

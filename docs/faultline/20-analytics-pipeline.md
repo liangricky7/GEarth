@@ -14,7 +14,7 @@ For an approved Neon run, use `--storage neon` and the existing private `DATABAS
 
 Capture preserves opening balances, daily and final states, original decision contexts and menus, accepted/rejected/fallback/canceled outcomes, individual transfer legs, events and immediate engine-linked effects. Money is integer minor units. Proposed policies and enacted policies are separate events. Unknown links and model metadata remain unknown. The launcher records the engine commit only when source is clean.
 
-This version supports normal runs. Neon forks keep the original run ID; combining them would mix timelines. Analytics capture/export therefore refuses forks until a separate timeline identity and lineage contract are added. Ordinary forks without analytics retain main's behavior.
+This version supports normal runs. Neon forks keep the original run ID; combining them would mix timelines. Analytics capture/export therefore refuses forks until a separate timeline identity and lineage contract are added. Ordinary forks resume with analytics disabled, including when their parent captured analytics. They retain a frozen inherited audit prefix, and export marks their capture incomplete.
 
 An audit revision becomes visible only with its successful checkpoint commit. Export accepts committed completed, stopped or failed runs. Stopped/failed runs retain a complete captured snapshot but remain partial runs.
 
@@ -45,3 +45,7 @@ Neon checkpoint transport uses bounded parts, but retains historical checkpoint 
 The ledger reconciles every recorded daily/final account balance, including escrow, against opening balances and ordered transfers. A second comparison against the optional legacy verbose daily-flow buffer remains unavailable because its frame boundary differs from the audit boundary; the report labels that check `unknown`. Each individual transfer remains available. The upstream full-year economic calibration test remains failing and is separate from pipeline verification.
 
 Public report reads are bounded and read-only. Report publication is an operator command with private database configuration; no unauthenticated write endpoint is exposed. Do not put credentials in notebooks, exports, Git or screenshots.
+
+## Verification evidence
+
+An isolated Neon → Databricks → cached-report pilot used 160 agents and eight ticks. All four notebooks executed, repeating the import preserved row counts, and daily balances reconciled. See [the recorded evidence](evidence/analytics-pipeline-20261010.json) for source pins and job links. This does not qualify the planned full-size workload.

@@ -57,4 +57,6 @@ Adding columns to Delta does not create missing historical facts. Older payloads
 
 No central-bank feature is claimed by this capture upgrade. Commercial bank settings are separate. Fork comparisons and 50,000-agent capacity remain separate work.
 
-This document describes the operator procedure. It does not establish that production has deployed or that any particular run has passed a live import.
+## Verification
+
+The [real-run evidence](evidence/complete-data-capture-pilot-20261011.json) records Neon-to-Databricks imports, original-value checks, historical null preservation and browser verification. These are bounded RULE pilots, not a 50,000-agent capacity qualification. Future production runs still require deploying this code with analytics enabled from the start and publishing the dataset cache on the observer host.

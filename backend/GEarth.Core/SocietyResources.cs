@@ -61,11 +61,11 @@ public static class SocietyResources
         return checked((long)Math.Ceiling((FixedShippingMinor + quantity * ShippingRatePerDistance * path.CostMinor) * (1 - discount)));
     }
 
+    // Per unit after the currency adjustment, freight and tariff.
     public static double LandedUnitCost(World world, Agent buyer, Agent seller, PathPlan path, int quantity)
     {
-        var value = checked((long)quantity * seller.PriceMinor);
-        return seller.PriceMinor + (ShippingCost(world, buyer, path, quantity)
-            + SocietyTrade.Tariff(world, buyer, seller, value)) / (double)quantity;
+        var paid = SocietyTrade.Price(world, buyer, seller, quantity).Paid;
+        return (paid + ShippingCost(world, buyer, path, quantity) + SocietyTrade.Tariff(world, buyer, seller, paid)) / (double)quantity;
     }
 
     // Current replacement cost: buy locally first, otherwise include freight and tariff from a reachable
@@ -74,16 +74,23 @@ public static class SocietyResources
     {
         var local = SocietyEconomy.Offers(world, world.Society!.Nations[firm.CountryId], good)
             .Where(offer => offer.Seller != firm).FirstOrDefault();
-        if (local is not null)
-            return local.PriceMinor;
-        var quotes = world.Agents.Values.Where(seller => seller.Role == "business" && seller.CountryId != firm.CountryId
-            && SocietyLabor.SectorOf(seller.Specialty!).Good == good && seller.Inventory[good] > 0
-            && !SocietyDiplomacy.Relation(world, firm.CountryId, seller.CountryId).AtWar)
-            .Select(seller => (Seller: seller, Path: SocietyTrade.Path(world, seller.LocationId, firm.LocationId, "cheapest")))
-            .Where(offer => offer.Path is not null)
-            .Select(offer => LandedUnitCost(world, firm, offer.Seller, offer.Path!, Math.Max(1, Math.Min(quantity, offer.Seller.Inventory[good]))));
-        return quotes.DefaultIfEmpty(SocietyFactory.BasePrice(good)).Min();
+        return local is not null ? local.PriceMinor : ImportQuote(world, firm, good, quantity) ?? SocietyFactory.BasePrice(good);
     }
+
+    // The cheapest landed cost per unit from a reachable foreign seller with stock, or null when none can ship.
+    public static double? ImportQuote(World world, Agent buyer, string good, int quantity) =>
+        Quotes(world, buyer, good, 1).Select(quote => (double?)LandedUnitCost(world, buyer, quote.Seller, quote.Path,
+            Math.Max(1, Math.Min(quantity, SocietyTrade.ExportableStock(world, quote.Seller, good))))).Min();
+
+    // Reachable foreign sellers holding at least the quantity, with their routes. Route search is costly, so
+    // only the few cheapest at the dock are priced. ponytail: cheapest 4 by price; widen if far sellers matter
+    public static (Agent Seller, PathPlan Path)[] Quotes(World world, Agent buyer, string good, int quantity) =>
+        world.Agents.Values.Where(seller => seller.Role == "business" && seller.CountryId != buyer.CountryId
+                && SocietyLabor.SectorOf(seller.Specialty!).Good == good && SocietyTrade.ExportableStock(world, seller, good) >= quantity
+                && !SocietyDiplomacy.Relation(world, buyer.CountryId, seller.CountryId).AtWar)
+            .OrderBy(seller => SocietyTrade.ImportUnitPrice(world, buyer, seller)).ThenBy(seller => seller.Id, StringComparer.Ordinal).Take(4)
+            .Select(seller => (Seller: seller, Path: SocietyTrade.Path(world, seller.LocationId, buyer.LocationId, "cheapest")))
+            .Where(quote => quote.Path is not null).Select(quote => (quote.Seller, quote.Path!)).ToArray();
 
     public static double InputCostPerOutput(World world, Agent firm) => Inputs(firm.Specialty!).Sum(input =>
         InputUnitCost(world, firm, input.Good, Math.Max(1, firm.LastWeekUnitsSold / input.OutputsPerInput)) / input.OutputsPerInput);

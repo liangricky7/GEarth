@@ -38,9 +38,9 @@ public sealed class EconomicLoopTests
             Assert.True(residents.Average(resident => resident.Wellbeing) > 60, $"{nation.Id} quality of life");
             // With no decisions, a monarchy paying no unemployment benefit idles up to a fifth of its factory workers.
             Assert.True(nation.Unemployed < residents.Length * 0.2, $"{nation.Id} unemployed {nation.Unemployed}");
-            // A poor raw deposit may close and be replaced by imports: extraction is a market
-            // opportunity, not an essential domestic sector. Still require all the original sectors.
-            foreach (var sector in SocietyLabor.Sectors.Where(sector => sector.Id is not ("freight" or "mine" or "well")))
+            // A poor raw deposit or a pharma may close and be replaced by imports: those follow comparative
+            // advantage. Still require every sector households buy from at home.
+            foreach (var sector in SocietyLabor.Sectors.Where(sector => sector.Id != "freight" && !SocietyLabor.Importable.Contains(sector.Id)))
                 Assert.True(SocietyLabor.Firms(world, nation.Id, sector.Id).Any(), $"{nation.Id} has no {sector.Id} firm");
             var lastWeek = world.Events.Last(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(nation.Id));
             Assert.True(lastWeek.Payload["wages_paid_minor"]!.GetValue<long>() > 0, $"{nation.Id} wages");

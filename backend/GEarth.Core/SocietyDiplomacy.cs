@@ -75,6 +75,21 @@ public static class SocietyDiplomacy
         }
     }
 
+    // A budget lever set to the level already in force changes nothing: it is a hold, not a policy.
+    public static bool Unchanged(Nation nation, ActionProposal action)
+    {
+        int? Value(string key) => action.Params[key] is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
+        return action.ActionType switch
+        {
+            "adjust_tax" => Value("income_tax_percent") * 100 == nation.TaxBasisPoints,
+            "set_unemployment_benefit" => Value("amount_minor") == nation.UnemploymentBenefitMinor,
+            "set_welfare" => Value("amount_minor") == nation.WelfareMinor,
+            "set_sales_tax" => Value("sales_tax_basis_points") == nation.SalesTaxBasisPoints,
+            "fund_services" => Value("amount_minor") == nation.ServiceBudgetPerResidentMinor,
+            _ => false
+        };
+    }
+
     private static bool Enact(World world, Nation nation, PolicyProposal policy)
     {
         var government = world.Agents[nation.Id + "_government"];

@@ -11,9 +11,10 @@ public sealed class CoordinatorAuditCollection;
 public sealed class CoordinatorAuditTests
 {
     [Theory]
-    [InlineData("local", 1)]
-    [InlineData("neon_https", 6)]
-    public async Task CancellationAfterCommitResponseWasLostPreservesStoppedFinalData(string kind, int interruptedTick)
+    // A Neon week-boundary upload runs in the background during the next tick, so that tick finishes before the stop.
+    [InlineData("local", 1, 1)]
+    [InlineData("neon_https", 6, 7)]
+    public async Task CancellationAfterCommitResponseWasLostPreservesStoppedFinalData(string kind, int interruptedTick, int stoppedTick)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -40,9 +41,9 @@ public sealed class CoordinatorAuditTests
             var final = Assert.IsType<World>(coordinator.Current);
             runId = final.Id;
             Assert.Equal("stopped", final.Status);
-            Assert.Equal(interruptedTick, final.Tick);
+            Assert.Equal(stoppedTick, final.Tick);
             Assert.Equal(3, final.Revision);
-            Assert.Equal(interruptedTick, final.AuditDailyThroughTick);
+            Assert.Equal(stoppedTick, final.AuditDailyThroughTick);
             var persisted = (await backing.Load(runId, CancellationToken.None))!;
             Assert.Equal(final.AuditSequence, persisted.AuditSequence);
             // Pages are bounded by bytes as well as rows; richer agent facts can reach the byte cap.
@@ -59,7 +60,7 @@ public sealed class CoordinatorAuditTests
             Assert.Equal(final.AuditSequence, records.Count);
             var daily = records.Where(row => row.Kind == "agent_day" && row.Payload["frame_kind"]!.GetValue<string>() == "day");
             var terminal = records.Where(row => row.Kind == "agent_day" && row.Payload["frame_kind"]!.GetValue<string>() == "end");
-            Assert.Equal(final.Agents.Count * interruptedTick, daily.Count());
+            Assert.Equal(final.Agents.Count * stoppedTick, daily.Count());
             Assert.Equal(final.Agents.Count, terminal.Count());
             Assert.Contains(records, row => row.Kind == "event" && row.Payload["event_type"]!.GetValue<string>() == "run_stopped");
             Assert.Contains(records, row => row.Kind == "decision_request");

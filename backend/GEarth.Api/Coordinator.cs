@@ -185,23 +185,46 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             ? new HistoryWriter(HistoryWriter.PathFor(Environment.GetEnvironmentVariable("GEARTH_TIMELINE") is { Length: > 0 } timeline
                 ? timeline : world.Id), world) : null;
         history?.Day(world);
+        // A background checkpoint upload and the checkpoint it carries until the store confirms it.
+        var saving = Task.CompletedTask;
+        (World World, string Json)? unsaved = null;
 
-        async Task Commit(CancellationToken? token = null)
+        // A Neon upload takes seconds, so in-loop commits can run in the background while the next tick
+        // dispatches decisions; the tick awaits it before ending. A background upload saves the API copy
+        // (holding the pending audit rows), never the live world.
+        async Task Commit(CancellationToken? token = null, bool background = false)
         {
+            await saving;
             world.UpdatedAt = DateTimeOffset.UtcNow;
             SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, world.UpdatedAt);
             world.Revision = revision + 1;
             // One serialization feeds both the store and the API's read-only copy.
             var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
-            await store.Save(world, revision, token ?? cancellationToken, serialized);
-            revision = world.Revision;
+            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+            var target = world;
+            if (background)
+            {
+                copy.PendingAudit.AddRange(world.PendingAudit);
+                world.PendingAudit.Clear();
+                target = copy;
+            }
+            unsaved = (target, serialized);
+            saving = Save(target, serialized, copy, token ?? cancellationToken, pending.Count);
+            if (!background)
+                await saving;
             history?.Flush();
             world.Events = world.Events.TakeLast(512).ToList();
-            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+        }
+
+        async Task Save(World target, string serialized, World copy, CancellationToken token, int pendingCount)
+        {
+            await store.Save(target, target.Revision - 1, token, serialized);
+            revision = target.Revision;
+            unsaved = null;
             copy.Events = copy.Events.TakeLast(512).ToList();
             current = copy;
             logger.LogInformation("World tick {Tick}: {Coverage}/{Population} model coverage, {Pending} pending",
-                world.Tick, world.Agents.Values.Count(agent => agent.ModelDecisions > 0), world.Agents.Count, pending.Count);
+                copy.Tick, copy.Agents.Values.Count(agent => agent.ModelDecisions > 0), copy.Agents.Count, pendingCount);
         }
 
         void ApplyCompleted()
@@ -300,7 +323,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     await DrainWeek();
                     // Analytics commits below include the same drained boundary. Other runs keep the fork checkpoints.
                     if (!world.AnalyticsEnabled && tick > firstTick)
-                        await Commit();
+                        await Commit(background: store.Kind == "neon_https");
                 }
                 if (world.AnalyticsEnabled && world.Tick > 0)
                 {
@@ -308,7 +331,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     // Retain every day and transfer, but persist Neon audit batches at the drained
                     // week boundary. Completion and graceful shutdown flush the remaining days.
                     if (store.Kind != "neon_https" || weekBoundary)
-                        await Commit();
+                        await Commit(background: store.Kind == "neon_https");
                 }
                 SocietyEngine.Advance(world);
                 // Capture the actual seven-day endpoint after payroll, before next week's model turns.
@@ -346,6 +369,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     ApplyCompleted();
                     Dispatch();
                 }
+                await saving;
             }
             await DrainWeek();
             RunAudit.Day(world);
@@ -364,10 +388,19 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         {
             // Cancellation can arrive after the database committed but before its response reached us.
             // Resolve that exact revision first, then write the stopped status as a new revision.
-            if (world.Revision > revision)
+            try
             {
-                await store.Save(world, revision, CancellationToken.None);
-                revision = world.Revision;
+                await saving;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            saving = Task.CompletedTask;
+            if (unsaved is { } checkpoint)
+            {
+                await store.Save(checkpoint.World, revision, CancellationToken.None, checkpoint.Json);
+                revision = checkpoint.World.Revision;
+                unsaved = null;
             }
             var abandoned = await pending.CancelAndDrainRequests();
             foreach (var job in abandoned)
@@ -395,6 +428,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         }
         finally
         {
+            // Let an upload still in flight after a failure finish; its own error was already observed or is moot.
+            await Task.WhenAny(saving);
             history?.End(world);
         }
     }

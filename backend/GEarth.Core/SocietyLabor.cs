@@ -155,15 +155,17 @@ public static class SocietyLabor
 
     // A gap worth a founder's money, as in a real market: incumbents charge well above what a unit costs to
     // make, buyers go without at today's prices (priced out or turned away, shelves under a week of sales, a
-    // service near capacity), and someone out of work could staff a new firm. An empty sector is always a gap.
+    // service near capacity), and someone out of work could staff a new firm. Demand is read across the whole
+    // market: one seller turning a buyer away while its rivals sit on stock is not a gap. An empty sector is a
+    // gap unless it makes something the country can import well below what it would cost to make at home.
     public static bool HasGap(World world, Nation nation, string sector)
     {
         var incumbents = Firms(world, nation.Id, sector).ToArray();
         if (incumbents.Length == 0)
-            return true;
+            return !ImportsCheaper(world, nation, sector);
         var spec = SectorOf(sector);
         var sold = incumbents.Sum(firm => firm.LastWeekUnitsSold);
-        var turnedAway = incumbents.Sum(firm => firm.LastWeekTurnedAway) > 0;
+        var turnedAway = incumbents.Sum(firm => firm.LastWeekTurnedAway) * 10 >= Math.Max(1, sold);
         var capacity = spec.Good is not null ? 0 : spec.Id == "school" ? incumbents.Sum(firm => Seats(world, firm))
             : incumbents.Sum(firm => ServiceCapacity(world, firm));
         var utilization = spec.Id == "school" ? incumbents.Sum(firm => Students(world, firm).Length) : sold;
@@ -178,6 +180,24 @@ public static class SocietyLabor
             && (person.Occupation == spec.Occupation || CanSwitch(person.Occupation, spec.Occupation)
                 && world.Tick - person.UnemployedSinceTick >= RelatedJobAfterDays));
         return margin && demand && idle;
+    }
+
+    // Households buy food, energy and household goods only from local sellers, so those sectors always keep
+    // one; raw materials and medicine (bought by firms and clinics, which import) follow comparative advantage.
+    public static readonly string[] Importable = ["mine", "well", "medicine"];
+
+    // Imports land for less than a new local firm would need to charge (its unit cost plus the entry markup).
+    public static bool ImportsCheaper(World world, Nation nation, string sector)
+    {
+        var spec = SectorOf(sector);
+        if (!Importable.Contains(sector) || spec.Good is not { } good)
+            return false;
+        var buyer = world.Agents[nation.Id + "_government"];
+        if (SocietyResources.ImportQuote(world, buyer, good, 1) is not { } landed)
+            return false;
+        var local = TableWage[spec.Occupation] / (spec.DailyOutput * DaysPerWeek * SocietyEconomy.OutputMultiplier(world, nation, good))
+            + SocietyResources.Inputs(sector).Sum(input => SocietyResources.InputUnitCost(world, buyer, input.Good, 1) / input.OutputsPerInput);
+        return landed < EntryMarkup * local;
     }
 
     // A skilled business needs someone qualified to do the work: the founder or a resident free to hire.
@@ -204,7 +224,7 @@ public static class SocietyLabor
         var cost = StartupCost(sector);
         return founder.Role == "citizen" && !IsStudent(founder) && !IsPlanned(nation) && StartableSectors().Contains(sector)
             && SocietyBank.Liquid(world, founder) + loan >= cost && loan <= SocietyBank.StartupLoan(world, founder, cost)
-            && (!Firms(world, nation.Id, sector).Any() || HasGap(world, nation, sector)) && CanStaff(world, founder, sector);
+            && HasGap(world, nation, sector) && CanStaff(world, founder, sector);
     }
 
     // A startup grant: the treasury pays the whole startup cost (in the planned economy the state opens the firm).
@@ -335,12 +355,22 @@ public static class SocietyLabor
             dividends += dividend;
         }
         var raisePct = reviewCost is { } cost ? Math.Round(Math.Max(0, cost / reviewBefore - 1) * IndexationShare * 100, 2) : (double?)null;
+        double? benefitRaisePct = null;
         if (reviewCost is { } completedCost)
+        {
+            // Benefits are indexed by law to the full rise in the cost of living (never cut when it falls),
+            // so they keep their buying power.
+            var rise = Math.Max(1, completedCost / reviewBefore);
+            nation.UnemploymentBenefitMinor = (int)Math.Round(nation.UnemploymentBenefitMinor * rise);
+            nation.WelfareMinor = (int)Math.Round(nation.WelfareMinor * rise);
+            benefitRaisePct = Math.Round((rise - 1) * 100, 2);
             nation.LivingCostAtReview = completedCost;
+        }
         SocietyMetrics.Labor(world, nation);
         world.Emit("labor_market", "rule", [nation.Id], new
         {
-            hires, layoffs, job_switches = quits, pay_cuts = payCuts, cost_of_living_raise_pct = raisePct, unemployed = nation.Unemployed,
+            hires, layoffs, job_switches = quits, pay_cuts = payCuts, cost_of_living_raise_pct = raisePct,
+            benefit_indexation_pct = benefitRaisePct, unemployed = nation.Unemployed,
             nation.EmployedResidents, nation.LaborForce, nation.Nonparticipants, nation.JoblessResidents, nation.Students,
             dividends_minor = dividends,
             overtime_offers = firms.Count(firm => firm.Role == "business" && firm.OvertimeOffered),
@@ -380,7 +410,8 @@ public static class SocietyLabor
         foreach (var sector in Essential)
         {
             var firms = Firms(world, nation.Id, sector).ToArray();
-            if (firms.Any(firm => Workers(world, firm).Length > 0))
+            // Medicine the country imports for less is not refounded on a grant.
+            if (firms.Any(firm => Workers(world, firm).Length > 0) || firms.Length == 0 && ImportsCheaper(world, nation, sector))
             {
                 nation.NeededSince.Remove(sector);
                 continue;

@@ -21,6 +21,9 @@ public static class SocietyPlanning
     public static int? Quota(World world, Nation nation, Agent firm) =>
         Applies(nation, firm) ? (Share(world, nation, firm) + SocietyLabor.DaysPerWeek - 1) / SocietyLabor.DaysPerWeek : null;
 
+    // A state firm's share of its sector's weekly quota, or 0 where no plan applies.
+    public static int WeekQuota(World world, Nation nation, Agent firm) => Applies(nation, firm) ? Share(world, nation, firm) : 0;
+
     // Visits or sessions a state service may deliver over the given days, capped by the plan.
     public static int Cap(World world, Nation nation, Agent firm, int capacity, int days) =>
         Applies(nation, firm) ? Math.Min(capacity, (Share(world, nation, firm) * days + SocietyLabor.DaysPerWeek - 1) / SocietyLabor.DaysPerWeek) : capacity;

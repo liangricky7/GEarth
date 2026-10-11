@@ -200,6 +200,7 @@ public sealed class ResourcesTests
         var world = Create();
         var buyer = world.Agents["aster_tools"];
         var seller = world.Agents["cinder_mine"];
+        world.Society!.Nations["cinder"].Plan["mine"] = 0; // a state mine exports only stock above a week of its quota
         var path = SocietyTrade.Path(world, seller.LocationId, buyer.LocationId, "cheapest")!;
         var quantity = 20;
         var shipping = SocietyResources.ShippingCost(world, buyer, path, quantity);
@@ -332,6 +333,7 @@ public sealed class ResourcesTests
             }
         }
         var owner = world.Agents[world.Agents["aster_tools"].OwnerId!];
+        world.Agents["aster_mine"].PriceMinor = 45; // dear local ore, so imports land cheaper and are offered
         var observed = SocietyEngine.Observe(world, owner.Id, DateTimeOffset.UtcNow);
         Assert.Contains(observed.Candidates, option => option.ActionType == "import_goods" && option.Params["good"]!.GetValue<string>() == "ore");
         SocietyEconomy.AssertConservation(world);
@@ -365,7 +367,7 @@ public sealed class ResourcesTests
     {
         var world = Create();
         var buyer = world.Agents["aster_tools"];
-        var seller = world.Agents["cinder_mine"];
+        var seller = world.Agents["dune_mine"]; // a market mine: a state mine would export at the world price of 100
         WithdrawSupply(world, "ore", "aster");
         foreach (var mine in world.Agents.Values.Where(agent => agent.Specialty == "mine"))
             mine.PriceMinor = 100;
@@ -390,6 +392,7 @@ public sealed class ResourcesTests
         var buyer = world.Agents["aster_tools"];
         var owner = world.Agents[buyer.OwnerId!];
         owner.LocationId = "beryl_city"; // the firm's freight quote follows its factory, not its owner
+        world.Agents["aster_mine"].PriceMinor = 45; // dear local ore, so imports land cheaper and are offered
         var job = SocietyEngine.Observe(world, owner.Id, DateTimeOffset.UtcNow);
         var offer = job.Observation["import_offers"]!.AsArray().First(node => node!["good"]!.GetValue<string>() == "ore")!;
         var sellerId = offer["seller_id"]!.GetValue<string>();

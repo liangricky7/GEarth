@@ -59,6 +59,24 @@ public sealed class RunNotesTests
     }
 
     [Fact]
+    public void NotesReportWorkerLatencyAndTimeoutsPerBackend()
+    {
+        var world = Create();
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (agent, latency, category) in new[] {
+            ("aster_citizen_00001", 2000.0, (string?)null), ("aster_citizen_00002", 4000.0, null),
+            ("aster_citizen_00003", 20000.0, "model_timeout") })
+        {
+            var job = SocietyEngine.Observe(world, agent, now);
+            SocietyEngine.Apply(world, job, new(job.RequestId, new("hold", new JsonObject(), "Wait.", []),
+                category is null ? "model" : "rule_fallback", "m", latency, Backend: "spark_a", ErrorCategory: category), now);
+        }
+        var notes = RunAnalysis.Create(world, world.Events);
+        Assert.Contains(notes.Observations, item => item.Category == "latency"
+            && item.Text == "spark_a: worker latency p50 4.0s, p95 20.0s, max 20.0s over 3 decisions; 1 timed out.");
+    }
+
+    [Fact]
     public void SavedProviderMetadataPreservesRoleAssignmentAndReadsLegacyRecords()
     {
         var legacy = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider>(

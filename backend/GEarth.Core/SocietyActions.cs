@@ -251,7 +251,7 @@ public static class SocietyActions
         }
         var relationships = society.Relations.Values.Where(relation => relation.First == nation.Id || relation.Second == nation.Id)
             .OrderByDescending(relation => relation.ProposedBy is not null && relation.ProposedBy != nation.Id)
-            .ThenByDescending(relation => relation.AtWar).ThenByDescending(relation => relation.Tension).Take(4);
+            .ThenByDescending(relation => relation.AtWar).ThenBy(relation => relation.Score).Take(4);
         foreach (var relation in relationships)
         {
             var countryId = relation.First == nation.Id ? relation.Second : relation.First;
@@ -263,16 +263,19 @@ public static class SocietyActions
             else if (relation.ProposedBy is null)
             {
                 if (relation.AtWar)
-                    options.Add(Make("offer_peace", new { country_id = countryId }));
+                    foreach (var terms in SocietyWar.PeaceTerms)
+                        options.Add(Make("offer_peace", new { country_id = countryId, terms }));
                 else if (!relation.TradeAgreement)
                     options.Add(Make("propose_agreement", new { country_id = countryId }));
             }
-            if (!relation.AtWar && relation.Tension >= 60 && agent.CashMinor >= 5000)
+            if (!relation.AtWar && relation.Score <= SocietyWar.WarBelow && agent.CashMinor >= 5000
+                && SocietyWar.OffersWar(world, nation, society.Nations[countryId]))
                 options.Add(Make("declare_conflict", new { country_id = countryId }));
         }
         foreach (var route in world.Routes.Values.Where(route => route.ControllerCountryId == nation.Id)
             .OrderBy(route => route.Open).ThenBy(route => route.Id).Take(2))
             options.Add(Make("set_border", new { edge_id = route.Id, open = !route.Open }));
+        SocietyWar.AddOptions(world, nation, agent, options);
         SocietyPayments.AddOptions(world, agent, options);
     }
 

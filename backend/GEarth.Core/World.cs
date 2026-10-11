@@ -97,6 +97,7 @@ public sealed class Agent
     public long LastWeekInMinor { get; set; }
     public long LastWeekOutMinor { get; set; }
     public bool SupportsLeadership { get; set; } = true;
+    public double WarWeariness { get; set; } // phase 3: share of the security part of quality of life lost to war
     public int LastAttemptTick { get; set; } = -1;
     public int LastDecisionTick { get; set; } = -1;
     public long ModelDecisions { get; set; }

@@ -23,7 +23,7 @@ public static class Governments
     public static GovernmentProfile Get(string id) => Profiles.Single(profile => profile.Id == id);
 }
 
-public sealed class Nation
+public sealed partial class Nation
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
@@ -106,11 +106,16 @@ public sealed class Relationship
     public string Id { get; set; } = "";
     public string First { get; set; } = "";
     public string Second { get; set; } = "";
-    public int Tension { get; set; }
+    // Relations from -100 (hostile) to 100 (close); see SocietyWar. Tension is read only from old saves and the
+    // starting draw: tension t (0-100) becomes relations 40 - t, so the old war line of tension 60 is -20.
+    public int Score { get; set; }
+    public int Tension { set => Score = Math.Clamp(40 - value, -100, 100); }
     public bool TradeAgreement { get; set; }
     public bool AtWar { get; set; }
+    public string? Aggressor { get; set; }
     public string? ProposedBy { get; set; }
     public string? ProposalKind { get; set; }
+    public string? ProposalTerms { get; set; } // peace offers: what the offering side demands (none, reparations, cede_<good>)
     public int ProposalExpiresTick { get; set; }
     public long DeliveredUnits { get; set; }
     public long DeliveredValueMinor { get; set; }

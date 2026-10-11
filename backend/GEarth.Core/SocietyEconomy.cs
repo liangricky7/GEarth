@@ -12,7 +12,8 @@ public static class SocietyEconomy
     public const int HealthDecayDays = 4; // health falls 1 point every this many days
     public const int SickBelow = 30; // below this, too sick to work (and unpaid)
     public const double DailyIllnessChance = 0.01;
-    public const double HungerOutputFactor = 0.01; // someone who missed their last meal produces 99% less
+    public const double HungerOutputFactor = 0.01; // prolonged starvation, without killing/replacing agents
+    public const int StarvationDays = 21; // calibration: cumulative missed meals, recovered two per fed day
 
     // Quality of life (stored as Wellbeing, 0-100) is scored from outcomes, each with diminishing returns:
     // needs met today, health, discretionary goods and services bought last week, security (a job or
@@ -27,8 +28,26 @@ public static class SocietyEconomy
     public static bool TooSick(Agent person) => person.Health < SickBelow;
 
     // Sick people still do some work (until too sick to work at all); output scales from 25% at zero health
-    // to 100% when healthy, and drops 99% after a missed meal until the next one.
-    public static double Capacity(Agent citizen) => (0.25 + 0.75 * citizen.Health / 100.0) * (citizen.Hungry ? HungerOutputFactor : 1);
+    // to 100% when healthy. Nutrition deteriorates gradually to near-incapacitation.
+    public static double Capacity(Agent citizen) => (0.25 + 0.75 * citizen.Health / 100.0) * NutritionFactor(citizen);
+
+    public static double NutritionFactor(Agent person) => Math.Max(HungerOutputFactor,
+        1 - 0.99 * Math.Max(person.NutritionDebtDays, person.Hungry ? 1 : 0) / StarvationDays);
+
+    public static void RecordMeal(Agent person, bool fed) => person.NutritionDebtDays =
+        Math.Clamp(person.NutritionDebtDays + (fed ? -2 : 1), 0, StarvationDays);
+
+    // One integer calculation per existing weekly agent pass; no inventory-age records or model calls.
+    public static void SpoilFood(World world, Agent holder)
+    {
+        var stock = holder.Inventory.GetValueOrDefault("food");
+        var numerator = (long)stock + holder.FoodSpoilageRemainder; // 1% of stored food per week
+        var lost = (int)(numerator / 100);
+        holder.FoodSpoilageRemainder = stock == 0 ? 0 : (int)(numerator % 100);
+        holder.Inventory["food"] = stock - lost;
+        world.Society!.LostGoods["food"] += lost;
+        world.Society.Nations[holder.CountryId].LostUnits += lost;
+    }
 
     // The week's pay for days actually worked (sick days are unpaid; a part-time student earns half), less food
     // already taken as pay in kind.
@@ -67,7 +86,7 @@ public static class SocietyEconomy
         ["needs"] = 100 * NeedsWeight * needsMet / 2.0,
         ["health"] = HealthPoints(resident.Health),
         ["comfort"] = 100 * ComfortWeight * Comfort(resident.GoodsBoughtLastWeek, resident.ServicesBoughtLastWeek),
-        ["security"] = 100 * SecurityWeight * Security(resident, SocietyBank.Savings(resident)),
+        ["security"] = 100 * SecurityWeight * Security(resident, SocietyBank.Savings(resident)) * (1 - resident.WarWeariness),
         ["free_time"] = 100 * LeisureWeight * (overtime ? 0.5 : 1)
     };
 
@@ -102,7 +121,8 @@ public static class SocietyEconomy
                 SocietyResources.SchoolDay(world, school);
             foreach (var clinic in firms.Where(firm => firm.Specialty == "clinic"))
             {
-                var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek), 1);
+                var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek * (1 + PhaseContracts.Boost(nation, "clinic_capacity"))), 1);
+                nation.ClinicCapacityThisWeek += capacity;
                 society.VisitsServedToday[clinic.Id] = -capacity; // counts up to zero as visits are served
                 AcquireInput(world, clinic, "medicine", Math.Max(0, capacity * 2 - clinic.Inventory["medicine"]));
             }
@@ -153,6 +173,7 @@ public static class SocietyEconomy
                     && !Visit(world, nation, resident, resident, true)
                     && !(TooSick(resident) && Visit(world, nation, resident, null, false)))
                     TakeMedicine(world, resident);
+                if (resident.Health < resident.HealthThreshold) nation.UntreatedPatientDaysThisWeek++;
                 if (TooSick(resident))
                     resident.SickDays++;
                 var met = 0;
@@ -166,7 +187,10 @@ public static class SocietyEconomy
                         nation.FulfilledNeedsLastCycle++;
                         met++;
                         if (good == "food")
+                        {
                             resident.Hungry = false;
+                            RecordMeal(resident, true);
+                        }
                     }
                     else
                     {
@@ -175,6 +199,7 @@ public static class SocietyEconomy
                         if (good == "food")
                         {
                             resident.Hungry = resident.HungryThisWeek = true;
+                            RecordMeal(resident, false);
                             resident.PricedOutThisWeek |= foodOnShelves;
                         }
                     }
@@ -196,12 +221,14 @@ public static class SocietyEconomy
     public static void Week(World world)
     {
         var society = world.Society!;
+        SocietyTrade.ReviewCurrencies(world);
         // Each country's agents are listed before any country's weekly changes, as one snapshot.
         var byCountry = society.Nations.Keys.ToDictionary(id => id,
             id => world.InCountry(id).Where(agent => agent.Role != "defunct").ToArray());
         foreach (var nation in society.Nations.Values)
         {
             var agents = byCountry[nation.Id];
+            foreach (var holder in agents) SpoilFood(world, holder);
             var residents = agents.Where(SocietyLabor.IsResident).ToArray();
             var government = world.Agents[nation.Id + "_government"];
             // Daily activity (visits, purchases) counts toward the week, so deltas run from last week's totals.
@@ -211,9 +238,10 @@ public static class SocietyEconomy
             if (SocietyLabor.IsPlanned(nation) && SocietyBank.Liquid(world, government) < government.LastWeekOutMinor)
                 SocietyBank.BorrowForTreasury(world, nation, government.LastWeekOutMinor - SocietyBank.Liquid(world, government));
             // The state owns every firm in a planned economy, and the school everywhere: it takes surplus above four
-            // weeks of payroll and covers shortfalls. The state bank is left alone: its cash is depositors' reserves.
+            // weeks of payroll and covers shortfalls (the contractor settles in SocietyInfrastructure). The state bank
+            // is left alone: its cash is depositors' reserves.
             foreach (var firm in agents.Where(agent => agent.Role == "business" && !SocietyBank.IsBank(agent) && agent.OwnerId is null
-                         && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
+                         && agent.Specialty != PhaseContracts.Construction && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
                 {
                     var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
                     var operations = payroll + SocietyResources.InputWorkingCapital(world, nation, firm);
@@ -279,6 +307,7 @@ public static class SocietyEconomy
             if (tensions.Length > 0)
                 ConflictCosts(world, nation, government, agents.Where(agent => agent.Role == "business").ToArray(), tensions.Length);
 
+            SocietyGovernmentDecisions.CloseClinicWeek(world, nation);
             nation.UnmetNeeds += nation.UnmetNeedsLastCycle;
             world.UnmetNeeds += nation.UnmetNeedsLastCycle;
             world.Emit("economy_cycle", "rule", [nation.Id], new
@@ -299,6 +328,7 @@ public static class SocietyEconomy
                 government_income_minor = government.WeekInMinor, government_spending_minor = government.WeekOutMinor,
                 funded_welfare_per_person_minor = welfare,
                 production_units = nation.ProducedUnits,
+                currency_index = Math.Round(nation.CurrencyIndex, 3),
                 period = "week"
             });
             nation.WeekStartTotals = new()
@@ -371,9 +401,9 @@ public static class SocietyEconomy
             {
                 var spendable = SocietyBank.Liquid(world, resident) - essentials; // savings in the bank can be spent too
                 var shop = PickOffer(shops.Where(offer => offer.Seller.Inventory["tools"] > 0 && offer.PriceMinor <= spendable).ToArray(),
-                    world.Seed, $"{resident.Id}:{world.Tick}:tools:{round}");
+                    world.Seed, $"{resident.Id}:{world.Tick}:tools:{round}", SocietyFactory.BasePrice("tools"));
                 var venue = PickSeller(venues.Where(seller => seats[seller.Id] > 0 && SocietyResources.CanPowerSession(world, seller) && seller.PriceMinor <= spendable).ToArray(),
-                    world.Seed, $"{resident.Id}:{world.Tick}:entertainment:{round}");
+                    world.Seed, $"{resident.Id}:{world.Tick}:entertainment:{round}", basePrice);
                 var goodsGain = shop is null ? 0 : Net(goods, shop.PriceMinor);
                 var serviceGain = venue is null ? 0 : Net(services, venue.PriceMinor);
                 if (venue is null && spendable >= basePrice && Net(services, basePrice) > 0)
@@ -408,35 +438,60 @@ public static class SocietyEconomy
 
     // Shoppers favour cheaper sellers without all going to the cheapest: location, habit and search costs
     // spread custom. Weight falls with the fourth power of the price ratio (10% dearer: 0.68, 50%: 0.20).
-    public static Agent? PickSeller(Agent[] sellers, int seed, string key)
+    // Above a reference of PriceLeanAbove x the base price, shoppers also lean hard away from each seller
+    // (another PriceLeanPower power of reference/price), so undercutting a dear market wins most of the custom.
+    // ponytail: 1.3 and 8 are arbitrary; tune after runs
+    public const double PriceLeanAbove = 1.3;
+    public const int PriceLeanPower = 8;
+
+    public static double ShopperWeight(int price, int cheapest, int basePrice)
+    {
+        var weight = Math.Pow(cheapest / (double)Math.Max(1, price), 4);
+        var reference = PriceLeanAbove * basePrice;
+        return basePrice > 0 && price > reference ? weight * Math.Pow(reference / price, PriceLeanPower) : weight;
+    }
+
+    public static Agent? PickSeller(Agent[] sellers, int seed, string key, int basePrice = 0)
     {
         if (sellers.Length <= 1)
             return sellers.FirstOrDefault();
         var cheapest = sellers.Min(seller => seller.PriceMinor);
-        var weights = sellers.Select(seller => Math.Pow(cheapest / (double)Math.Max(1, seller.PriceMinor), 4)).ToArray();
-        var draw = SocietyFactory.Sample(seed, key, "seller") * weights.Sum();
-        for (var index = 0; index < sellers.Length; index++)
-        {
-            draw -= weights[index];
-            if (draw <= 0)
-                return sellers[index];
-        }
-        return sellers[^1];
+        return Pick(sellers, sellers.Select(seller => ShopperWeight(seller.PriceMinor, cheapest, basePrice)).ToArray(), seed, key);
     }
 
-    private static DomesticOffer? PickOffer(DomesticOffer[] offers, int seed, string key)
+    private static DomesticOffer? PickOffer(DomesticOffer[] offers, int seed, string key, int basePrice)
     {
         if (offers.Length <= 1)
             return offers.FirstOrDefault();
         var cheapest = offers.Min(offer => offer.PriceMinor);
-        var weights = offers.Select(offer => Math.Pow(cheapest / (double)offer.PriceMinor, 4)).ToArray();
+        return Pick(offers, offers.Select(offer => ShopperWeight(offer.PriceMinor, cheapest, basePrice)).ToArray(), seed, key);
+    }
+
+    private static T Pick<T>(T[] items, double[] weights, int seed, string key)
+    {
         var draw = SocietyFactory.Sample(seed, key, "seller") * weights.Sum();
-        for (var index = 0; index < offers.Length; index++)
+        for (var index = 0; index < items.Length; index++)
         {
             draw -= weights[index];
-            if (draw <= 0) return offers[index];
+            if (draw <= 0)
+                return items[index];
         }
-        return offers[^1];
+        return items[^1];
+    }
+
+    // What an owner can expect to sell in a week at a new price if competitors hold theirs: last week's
+    // market split by the shopper weights, capped by what the firm has and can make (or serve) in a week.
+    public static int ExpectedUnits(World world, Agent firm, int price)
+    {
+        var spec = SocietyLabor.SectorOf(firm.Specialty!);
+        var rivals = SocietyLabor.Firms(world, firm.CountryId, spec.Id).Where(other => other != firm).ToArray();
+        var market = firm.LastWeekUnitsSold + rivals.Sum(other => other.LastWeekUnitsSold);
+        var cheapest = rivals.Select(other => other.PriceMinor).Append(price).Min();
+        var own = ShopperWeight(price, cheapest, spec.BasePrice);
+        var share = own / (own + rivals.Sum(other => ShopperWeight(other.PriceMinor, cheapest, spec.BasePrice)));
+        var capacity = SocietyLabor.ServiceCapacity(world, firm) * (spec.Good is { } good
+            ? OutputMultiplier(world, world.Society!.Nations[firm.CountryId], good) : 1) + (spec.Good is { } made ? firm.Inventory[made] : 0);
+        return (int)Math.Round(Math.Min(market * share, capacity));
     }
 
     // Domestic sellers of a good, cheapest first.
@@ -460,7 +515,7 @@ public static class SocietyEconomy
         var nation = world.Society!.Nations[buyer.CountryId];
         var bought = 0;
         var offers = Offers(world, nation, good).Where(offer => offer.Seller != buyer).ToArray();
-        if (household && wanted > 0 && PickOffer(offers, world.Seed, $"{buyer.Id}:{world.Tick}:{good}") is { } first)
+        if (household && wanted > 0 && PickOffer(offers, world.Seed, $"{buyer.Id}:{world.Tick}:{good}", SocietyFactory.BasePrice(good)) is { } first)
             offers = [first, .. offers.Where(offer => offer != first)];
         var subsidyPct = household && good == "food" ? nation.FoodSubsidyPct : 0;
         var government = world.Agents[nation.Id + "_government"];
@@ -602,6 +657,11 @@ public static class SocietyEconomy
     {
         using var auditGroup = RunAudit.Group(world);
         Transfer(world, employer, worker, wage, "wage");
+        if (wage > 0 && employer.Role == "government" && worker.Occupation == "soldier")
+        {
+            worker.MilitaryPayMinor = worker.MilitaryPaidTick == world.Tick ? worker.MilitaryPayMinor + wage : wage;
+            worker.MilitaryPaidTick = world.Tick;
+        }
         var tax = wage * nation.TaxBasisPoints / 10000;
         Transfer(world, worker, government, tax, "income_tax");
         nation.TaxesCollectedMinor += tax;
@@ -621,6 +681,7 @@ public static class SocietyEconomy
         };
         if (nation.CrisisUntilTick > world.Tick && nation.CrisisGood == good)
             multiplier *= 0.35;
+        multiplier *= 1 + PhaseContracts.Boost(nation, good);
         return multiplier * nation.Productivity;
     }
 
@@ -630,8 +691,12 @@ public static class SocietyEconomy
         if (sector.Good is not { } good)
             return;
         // Health drives output; wellbeing (morale) has a milder effect.
-        var potential = (int)(workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker) * worker.Weights.Productivity)
-            * sector.DailyOutput * OutputMultiplier(world, nation, good));
+        var exactPotential = workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker) * worker.Weights.Productivity)
+            * sector.DailyOutput * OutputMultiplier(world, nation, good);
+        // Preserve sub-unit effort in near-incapacitated crews without changing normal batch rounding.
+        var carried = exactPotential < 1 ? exactPotential + producer.ProductionRemainder : exactPotential;
+        var potential = (int)carried;
+        producer.ProductionRemainder = exactPotential < 1 ? carried - potential : 0;
         // Firms plan output toward two weeks of their own recent sales, below the three-week glut line; a
         // planned economy's state firms make their share of the plan's quota instead, whatever is selling.
         var stockLimit = Math.Max(residents / 4, 2 * producer.LastWeekUnitsSold);
@@ -660,16 +725,9 @@ public static class SocietyEconomy
 
     private static void ConflictCosts(World world, Nation nation, Agent government, Agent[] businesses, int conflicts)
     {
-        PaySoldiers(world, nation, government, 1000L * conflicts);
-        foreach (var business in businesses.Where(business => SocietyLabor.SectorOf(business.Specialty!).Good is not null))
-        {
-            var good = SocietyLabor.SectorOf(business.Specialty!).Good!;
-            var destroyed = Math.Min(business.Inventory[good], Math.Max(1, nation.Population / 40) * conflicts);
-            business.Inventory[good] -= destroyed;
-            nation.LostUnits += destroyed;
-            world.Society!.LostGoods[good] += destroyed;
-        }
-        world.Emit("conflict_costs", "rule", [nation.Id], new { conflicts, nation.LostUnits });
+        var funded = SocietyWar.Soldiers(world, nation).Length == 0 ? 0 : Math.Min(1000L * conflicts, SocietyBank.Liquid(world, government));
+        PaySoldiers(world, nation, government, funded);
+        world.Emit("conflict_costs", "rule", [nation.Id], new { conflicts, funded_upkeep_minor = funded });
     }
 
     public static void UpdateMetrics(World world)

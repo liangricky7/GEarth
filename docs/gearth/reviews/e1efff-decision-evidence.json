@@ -1,0 +1,867 @@
+{
+  "through_seq": 93533,
+  "services": {
+    "aster_government": {
+      "count": 9,
+      "reversals": 7,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 34,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 69,
+          "amount": 100,
+          "reason": "Reduce clinic funding to free up resources for other needs"
+        },
+        {
+          "tick": 111,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 153,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 167,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 223,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 237,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 251,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget and avoid treasury depletion"
+        }
+      ]
+    },
+    "beryl_government": {
+      "count": 6,
+      "reversals": 4,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Support construction to improve infrastructure and economic growth"
+        },
+        {
+          "tick": 20,
+          "amount": 150,
+          "reason": "Boost services to improve health and quality of life"
+        },
+        {
+          "tick": 34,
+          "amount": 100,
+          "reason": "Reduce service funding to balance budget and address treasury surplus"
+        },
+        {
+          "tick": 48,
+          "amount": 150,
+          "reason": "Increase service funding to improve health and quality of life"
+        },
+        {
+          "tick": 167,
+          "amount": 100,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 181,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        }
+      ]
+    },
+    "cinder_government": {
+      "count": 26,
+      "reversals": 18,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 13,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 27,
+          "amount": 100,
+          "reason": "Reduce clinic funding to align with current health quality of life."
+        },
+        {
+          "tick": 34,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 48,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 55,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 76,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 83,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 97,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 104,
+          "amount": 50,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 111,
+          "amount": 100,
+          "reason": "Increase clinic funding to improve health quality and offset budget deficit"
+        },
+        {
+          "tick": 118,
+          "amount": 150,
+          "reason": "Increase clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 125,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 132,
+          "amount": 150,
+          "reason": "Increase clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 139,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 146,
+          "amount": 50,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 153,
+          "amount": 100,
+          "reason": "Increase clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 160,
+          "amount": 150,
+          "reason": "Increase clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 167,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 174,
+          "amount": 50,
+          "reason": "Reduce clinic funding to lower budget deficit while maintaining health quality."
+        },
+        {
+          "tick": 181,
+          "amount": 100,
+          "reason": "Increase clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 188,
+          "amount": 150,
+          "reason": "Increase clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 195,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 202,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and offset budget deficit"
+        },
+        {
+          "tick": 209,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 223,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and offset budget deficit"
+        }
+      ]
+    },
+    "dune_government": {
+      "count": 18,
+      "reversals": 11,
+      "choices": [
+        {
+          "tick": 69,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 97,
+          "amount": 50,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 104,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 111,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 118,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 125,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 132,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 139,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 146,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 153,
+          "amount": 50,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 160,
+          "amount": 0,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 167,
+          "amount": 50,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 174,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 181,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 195,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget while maintaining health support"
+        },
+        {
+          "tick": 209,
+          "amount": 50,
+          "reason": "Reduce clinic funding to balance budget while maintaining health support"
+        },
+        {
+          "tick": 230,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 251,
+          "amount": 50,
+          "reason": "Reduce clinic funding to balance budget and address health needs"
+        }
+      ]
+    },
+    "ember_government": {
+      "count": 29,
+      "reversals": 15,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 13,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 27,
+          "amount": 100,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 34,
+          "amount": 50,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 41,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 48,
+          "amount": 50,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 55,
+          "amount": 0,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 62,
+          "amount": 50,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 69,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 90,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 97,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget and address unemployment"
+        },
+        {
+          "tick": 104,
+          "amount": 50,
+          "reason": "Reduce clinic funding to balance budget and address unemployment"
+        },
+        {
+          "tick": 111,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 118,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 139,
+          "amount": 100,
+          "reason": "Reduce clinic funding to lower spending and improve budget balance"
+        },
+        {
+          "tick": 146,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 153,
+          "amount": 100,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 160,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 167,
+          "amount": 100,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 181,
+          "amount": 50,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 188,
+          "amount": 0,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 195,
+          "amount": 50,
+          "reason": "Boost health quality of life by increasing clinic services"
+        },
+        {
+          "tick": 202,
+          "amount": 100,
+          "reason": "Boost health quality of life by increasing clinic services"
+        },
+        {
+          "tick": 209,
+          "amount": 50,
+          "reason": "Reduce clinic funding to improve budget balance"
+        },
+        {
+          "tick": 216,
+          "amount": 100,
+          "reason": "Boost health quality of life by increasing clinic services"
+        },
+        {
+          "tick": 223,
+          "amount": 150,
+          "reason": "Boost health quality of life by increasing clinic services"
+        },
+        {
+          "tick": 237,
+          "amount": 100,
+          "reason": "Reduce clinic spending to free up funds for other priorities"
+        },
+        {
+          "tick": 244,
+          "amount": 50,
+          "reason": "Reduce clinic spending to free up funds for other priorities"
+        },
+        {
+          "tick": 251,
+          "amount": 0,
+          "reason": "Reduce clinic spending to free up funds for other priorities"
+        }
+      ]
+    },
+    "fjord_government": {
+      "count": 10,
+      "reversals": 5,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 34,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 62,
+          "amount": 100,
+          "reason": "Reduce clinic spending to improve budget balance"
+        },
+        {
+          "tick": 76,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 90,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget while maintaining health support"
+        },
+        {
+          "tick": 111,
+          "amount": 50,
+          "reason": "Boost clinic funding to improve public health and quality of life"
+        },
+        {
+          "tick": 125,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve public health and quality of life"
+        },
+        {
+          "tick": 139,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve public health and quality of life"
+        },
+        {
+          "tick": 216,
+          "amount": 100,
+          "reason": "Reduce clinic spending to free up funds for other needs"
+        },
+        {
+          "tick": 230,
+          "amount": 50,
+          "reason": "Reduce clinic spending to free up funds for other needs"
+        }
+      ]
+    },
+    "grove_government": {
+      "count": 6,
+      "reversals": 4,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health quality of life"
+        },
+        {
+          "tick": 34,
+          "amount": 150,
+          "reason": "Invest to boost long-term productivity and economic growth"
+        },
+        {
+          "tick": 104,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget and address treasury issues"
+        },
+        {
+          "tick": 139,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 195,
+          "amount": 100,
+          "reason": "Reduce clinic funding to free up treasury for other needs"
+        },
+        {
+          "tick": 223,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health quality of life"
+        }
+      ]
+    },
+    "haven_government": {
+      "count": 24,
+      "reversals": 20,
+      "choices": [
+        {
+          "tick": 13,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 20,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 34,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget and prioritize other needs."
+        },
+        {
+          "tick": 41,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 55,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget and prioritize other needs."
+        },
+        {
+          "tick": 69,
+          "amount": 50,
+          "reason": "Reduce clinic funding to balance budget and prioritize other needs."
+        },
+        {
+          "tick": 76,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 90,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 97,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 104,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 111,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 118,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 139,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 153,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 160,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 167,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 188,
+          "amount": 100,
+          "reason": "Reduce clinic funding to balance budget"
+        },
+        {
+          "tick": 195,
+          "amount": 150,
+          "reason": "Restore clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 202,
+          "amount": 100,
+          "reason": "Reduce clinic funding to align with current budget constraints."
+        },
+        {
+          "tick": 209,
+          "amount": 150,
+          "reason": "Restore clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 216,
+          "amount": 100,
+          "reason": "Reduce clinic funding to align with current budget constraints"
+        },
+        {
+          "tick": 223,
+          "amount": 150,
+          "reason": "Restore clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 230,
+          "amount": 100,
+          "reason": "Reduce clinic funding to align with current budget constraints"
+        },
+        {
+          "tick": 244,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        }
+      ]
+    },
+    "ionia_government": {
+      "count": 2,
+      "reversals": 0,
+      "choices": [
+        {
+          "tick": 6,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        },
+        {
+          "tick": 20,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life."
+        }
+      ]
+    },
+    "jade_government": {
+      "count": 12,
+      "reversals": 8,
+      "choices": [
+        {
+          "tick": 13,
+          "amount": 100,
+          "reason": "Proposing agreement to improve trade relations with aster"
+        },
+        {
+          "tick": 20,
+          "amount": 150,
+          "reason": "Boost services to improve health and quality of life"
+        },
+        {
+          "tick": 125,
+          "amount": 100,
+          "reason": "Reduce clinic spending to improve budget"
+        },
+        {
+          "tick": 139,
+          "amount": 150,
+          "reason": "Increase clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 153,
+          "amount": 100,
+          "reason": "Reduce clinic funding to address budget constraints"
+        },
+        {
+          "tick": 174,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 195,
+          "amount": 100,
+          "reason": "Reduce clinic funding to free up resources for other needs"
+        },
+        {
+          "tick": 209,
+          "amount": 50,
+          "reason": "Reduce clinic funding to free up resources for other needs"
+        },
+        {
+          "tick": 216,
+          "amount": 100,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 223,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        },
+        {
+          "tick": 237,
+          "amount": 100,
+          "reason": "Reduce clinic funding to address budget deficit"
+        },
+        {
+          "tick": 244,
+          "amount": 150,
+          "reason": "Boost clinic funding to improve health and quality of life"
+        }
+      ]
+    }
+  },
+  "offers": [
+    {
+      "id": "world_20261011_113650_e1efff:e5743",
+      "tick": 22,
+      "from": "grove",
+      "to": "dune",
+      "expires": 82,
+      "accepted_recipient_turns": 7,
+      "choices": {
+        "set_unemployment_benefit": 1,
+        "propose_agreement": 1,
+        "subsidize_food": 4,
+        "fund_services": 1
+      }
+    },
+    {
+      "id": "world_20261011_113650_e1efff:e8186",
+      "tick": 34,
+      "from": "dune",
+      "to": "ionia",
+      "expires": 94,
+      "accepted_recipient_turns": 8,
+      "choices": {
+        "subsidize_food": 7,
+        "set_unemployment_benefit": 1
+      }
+    },
+    {
+      "id": "world_20261011_113650_e1efff:e21346",
+      "tick": 70,
+      "from": "jade",
+      "to": "dune",
+      "expires": 130,
+      "accepted_recipient_turns": 7,
+      "choices": {
+        "subsidize_food": 2,
+        "fund_services": 5
+      }
+    },
+    {
+      "id": "world_20261011_113650_e1efff:e24084",
+      "tick": 77,
+      "from": "jade",
+      "to": "cinder",
+      "expires": 137,
+      "accepted_recipient_turns": 8,
+      "choices": {
+        "fund_services": 7,
+        "build_infrastructure": 1
+      }
+    },
+    {
+      "id": "world_20261011_113650_e1efff:e26773",
+      "tick": 84,
+      "from": "jade",
+      "to": "fjord",
+      "expires": 144,
+      "accepted_recipient_turns": 8,
+      "choices": {
+        "fund_services": 4,
+        "hold": 4
+      }
+    },
+    {
+      "id": "world_20261011_113650_e1efff:e34090",
+      "tick": 100,
+      "from": "aster",
+      "to": "haven",
+      "expires": 160,
+      "accepted_recipient_turns": 8,
+      "choices": {
+        "fund_services": 6,
+        "build_infrastructure": 1,
+        "hold": 1
+      }
+    },
+    {
+      "id": "world_20261011_113650_e1efff:e60962",
+      "tick": 175,
+      "from": "ember",
+      "to": "fjord",
+      "expires": 235,
+      "accepted_recipient_turns": 8,
+      "choices": {
+        "hold": 4,
+        "set_border": 1,
+        "adjust_tax": 1,
+        "fund_services": 2
+      }
+    }
+  ],
+  "limits": "Event history records decisions but not complete offered menus; recipient turn counts are not proof response choices were visible."
+}

@@ -3,6 +3,9 @@ let selectedRun = null;
 let selectedAgent = null;
 let lastSequence = 0;
 let displayedEvents = [];
+let routineEvents = [];
+let eventSnapshot = null;
+let hiddenEventTypes = new Set();
 let busy = false;
 let agentOffset = 0;
 let agentTotal = 0;
@@ -164,6 +167,7 @@ const SHOWN_ACTIONS = new Set(["set_price", "set_wage", "set_headcount", "set_de
 const HIDDEN_EVENTS = new Set([
   "decision_requested", "decision_canceled", "decision_accounting_started", "goods_purchased",
   "payment_sent", "policy_proposed", "shipment_delivered", "labor_market",
+  "bank_ledger",
 ]);
 
 function newsworthy(event) {
@@ -368,7 +372,7 @@ function describe(event, labor) {
       return { country: place, alert: true, text: `${(p.reason ?? "crisis").toUpperCase()}: ${p.good} output falls to ${Math.round(p.production_multiplier * 100)}% until day ${p.until_tick}` };
     case "diplomatic_tension": {
       const [a, b] = String(ids[0]).split(":");
-      return { country: countryName(a), text: `Tension between ${countryName(a)} and ${countryName(b)} rises to ${p.tension}`, body: p.reason };
+      return { country: countryName(a), text: p.score != null ? `Relations between ${countryName(a)} and ${countryName(b)} fall to ${p.score}` : `Tension between ${countryName(a)} and ${countryName(b)} rises to ${p.tension}`, body: p.reason };
     }
     case "diplomatic_offer":
       return { country: place, text: `${countryName(p.proposed_by ?? ids[0])} offers ${p.proposal_kind === "peace" ? "peace" : "a trade agreement"}` };
@@ -377,7 +381,32 @@ function describe(event, labor) {
     case "conflict_started":
       return { country: countryName(p.first), alert: true, text: `CONFLICT: ${countryName(p.first)} and ${countryName(p.second)} are at war` };
     case "conflict_costs":
-      return { country: place, alert: true, text: `War costs this week (${plural(p.conflicts ?? 0, "conflict")}), ${p.lost_units ?? 0} units of goods lost so far` };
+      return { country: place, alert: true, text: p.funded_upkeep_minor != null ? `Soldiers receive ${wld(p.funded_upkeep_minor)} in war upkeep (${plural(p.conflicts ?? 0, "conflict")})` : `War costs this week (${plural(p.conflicts ?? 0, "conflict")}), ${p.lost_units ?? 0} units of goods lost so far` };
+    case "war_week":
+      return { country: countryName(p.winner), alert: true, text: `${countryName(p.winner)} wins the weekly contest against ${countryName(p.loser)}`,
+        body: `Tribute ${wld(p.tribute_minor)} and ${Object.entries(p.tribute_goods ?? {}).map(([good, units]) => `${units} ${good}`).join(", ")}; ${plural(p.wounded ?? 0, "soldier")} wounded` };
+    case "war_ended":
+      return { country: countryName(p.winner), text: `War ends with ${countryName(p.loser)}: ${String(p.terms).replaceAll("_", " ")}`, body: p.reason };
+    case "gift_sent":
+      return { country: place, text: `${countryName(ids[0])} sends ${p.kind === "cash" ? wld(p.amount) : `${p.amount} ${p.kind}`} to ${countryName(ids[1])}`,
+        body: `Relations +${p.relation_gain}, now ${p.score}` };
+    case "missile_ready":
+      return { country: place, text: `Missile completed; ${p.missiles} in stock` };
+    case "missile_strike":
+      return { country: countryName(p.target), alert: true, text: `${countryName(p.attacker)} launches a missile: ${p.hit ? p.damaged ? `${p.damaged} condition falls to ${p.condition}` : "hits, but no completed project can be damaged" : "intercepted"}` };
+    case "soldiers_recruited":
+    case "soldiers_discharged":
+      return { country: place, text: `${p.recruited ?? p.discharged} soldiers ${event.event_type === "soldiers_recruited" ? "recruited" : "discharged"}; ${p.soldiers} total` };
+    case "unrest_started":
+      return { country: place, alert: true, text: `Unrest begins: average quality of life ${p.average_quality_of_life}, below ${p.threshold}` };
+    case "early_election_called":
+      return { country: place, alert: true, text: `Unrest calls an early election on day ${p.next_election_tick}` };
+    case "revolution":
+      return { country: place, alert: true, text: `Revolution changes government from ${p.from} to ${p.to}`, body: `${p.paid_soldiers} paid soldiers for ${p.residents} residents` };
+    case "revolution_deferred":
+      return { country: place, alert: true, text: "Revolution deferred: ownership transition is unsupported", body: p.reason };
+    case "unrest_suppressed":
+      return { country: place, alert: true, text: `Unrest suppressed by ${p.paid_soldiers} paid soldiers` };
     case "border_changed":
       return { country: "", text: `Border ${p.edge_id} ${p.open ? "opens" : "closes"}` };
     case "loan_requested":
@@ -414,15 +443,22 @@ function describe(event, labor) {
       return { country: place, alert: true, text: `Bank cannot pay ${wld(p.unmet_withdrawals_minor)} of withdrawals this week`, body: `Reserves ${wld(p.reserves_minor)}, deposits ${wld(p.deposits_minor)}, loans ${wld(p.loans_minor)}` };
     case "bank_failed":
       return { country: place, alert: true, text: `BANK FAILURE: the state takes over the bank`, body: `Deposits ${wld(p.deposits_minor)}, equity ${wld(p.equity_minor)}` };
+    case "bank_ledger":
+      return {
+        country: place, text: `Bank records ${wld(p.amount_minor)}: ${(p.kind ?? "transfer").replaceAll("_", " ")}`,
+        body: `${p.from ?? "Bank"} → ${p.to ?? "Bank"}`,
+        key: `${countryOf(p.bank_id)}:${p.kind}`,
+        many: (events) => `${countryName(p.bank_id)} bank records ${events.length} ${(p.kind ?? "transfer").replaceAll("_", " ")} entries totaling ${wld(events.reduce((sum, item) => sum + Number(item.payload?.amount_minor ?? 0), 0))}`,
+      };
     default:
       return { country: "", text: cap(event.event_type.replaceAll("_", " ")), body: p.reason ?? "" };
   }
 }
 
 function showEvents(snapshot) {
+  eventSnapshot = snapshot;
   const list = element("events");
   list.replaceChildren();
-  element("event-count").textContent = `${snapshot.seq} events`;
   countryNames = new Map((snapshot.countries ?? []).map((country) => [country.id, country.name]));
   const labor = new Map(
     displayedEvents.filter((event) => event.event_type === "labor_market")
@@ -431,8 +467,19 @@ function showEvents(snapshot) {
   // Newest first; same-day events with the same key collapse into one line.
   const lines = [];
   const groups = new Map();
-  for (const event of displayedEvents.filter((item) => item.event_type !== "labor_market").reverse()) {
+  const country = element("event-country").value;
+  const search = element("event-search").value.trim().toLowerCase();
+  const showRoutine = element("event-routine").checked;
+  const history = [...displayedEvents, ...routineEvents].sort((a, b) => b.seq - a.seq);
+  let matching = 0;
+  for (const event of history) {
+    if ((!showRoutine && !newsworthy(event)) || hiddenEventTypes.has(event.event_type)
+        || (!showRoutine && event.event_type === "labor_market")) continue;
+    if (country && !(event.entity_ids ?? []).some((id) => countryOf(id) === country)
+        && ![event.payload?.from, event.payload?.to, event.payload?.country_id].some((id) => countryOf(id) === country)) continue;
     const line = describe(event, labor.get(`${event.tick}:${event.entity_ids?.[0]}`));
+    if (search && !`${line.text} ${line.body ?? ""} ${JSON.stringify(event)}`.toLowerCase().includes(search)) continue;
+    matching += 1;
     const groupKey = line.key && `${event.tick}:${event.event_type}:${line.key}`;
     if (groupKey && groups.has(groupKey)) {
       groups.get(groupKey).events.push(event);
@@ -441,9 +488,11 @@ function showEvents(snapshot) {
     const entry = { line, events: [event] };
     if (groupKey) groups.set(groupKey, entry);
     lines.push(entry);
-    if (lines.length === 60) break;
   }
-  for (const { line, events } of lines) {
+  element("event-count").textContent = `${matching} matching · ${snapshot.seq.toLocaleString()} recorded`;
+  element("event-scope").textContent = `Recent history: ${displayedEvents.filter((event) => event.event_type !== "labor_market").length} highlights and ${routineEvents.length} routine events retained. Showing up to 60 grouped entries. Routine activity includes bank ledger entries and decision bookkeeping.`;
+  if (!lines.length) list.append(textNode("li", "No events match these filters in the retained recent history.", "muted"));
+  for (const { line, events } of lines.slice(0, 60)) {
     const event = events[0];
     const grouped = events.length > 1;
     const item = document.createElement("li");
@@ -458,6 +507,46 @@ function showEvents(snapshot) {
     item.append(raw);
     list.append(item);
   }
+}
+
+function showEventFilters(snapshot) {
+  const select = element("event-country");
+  const country = select.value;
+  select.replaceChildren(textNode("option", "All countries"));
+  select.firstChild.value = "";
+  for (const nation of snapshot.countries ?? []) {
+    const option = textNode("option", nation.name);
+    option.value = nation.id;
+    select.append(option);
+  }
+  select.value = country;
+  const counts = new Map();
+  for (const event of [...displayedEvents, ...routineEvents]) counts.set(event.event_type, (counts.get(event.event_type) ?? 0) + 1);
+  const types = element("event-types");
+  types.replaceChildren();
+  for (const [type, count] of [...counts].sort(([a], [b]) => a.localeCompare(b))) {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = type;
+    checkbox.checked = !hiddenEventTypes.has(type);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) hiddenEventTypes.delete(type); else hiddenEventTypes.add(type);
+      saveEventFilters();
+      showEvents(eventSnapshot);
+    });
+    label.append(checkbox, textNode("span", `${cap(type.replaceAll("_", " "))} (${count})`));
+    types.append(label);
+  }
+}
+
+function saveEventFilters() {
+  try {
+    localStorage.setItem("gearth.eventFilters", JSON.stringify({
+      hidden: [...hiddenEventTypes], routine: element("event-routine").checked,
+      search: element("event-search").value,
+    }));
+  } catch { /* Filtering still works when browser storage is unavailable. */ }
 }
 
 function showAgents(agents) {
@@ -655,11 +744,17 @@ function selectRun(runId, cancelRefresh = true) {
   if (cancelRefresh) refreshController?.abort();
   viewGeneration += 1;
   selectedRun = runId;
+  document.dispatchEvent(new CustomEvent("gearth-run-selected", {detail:{runId}}));
   selectedAgent = null;
   agentOffset = 0;
   agentTotal = 0;
   lastSequence = 0;
   displayedEvents = [];
+  routineEvents = [];
+  eventSnapshot = null;
+  element("event-country").value = "";
+  element("event-types").replaceChildren();
+  element("event-scope").textContent = "";
   notesCache = null;
   analyticsReport = null;
   element("country-filter").value = "";
@@ -729,6 +824,7 @@ async function refresh() {
     ]);
     if (!isCurrent()) return;
     displayedEvents = history.events;
+    routineEvents = history.routine;
     lastSequence = history.sequence;
     notesCache = notes;
     analyticsReport = analysis.report;
@@ -753,6 +849,7 @@ async function refresh() {
       : "No active medicine route plan.";
     element("message").textContent = paused ? health.error ?? "" : "";
     drawMap(snapshot);
+    showEventFilters(snapshot);
     showEvents(snapshot);
     showWorld(snapshot);
     showRunNotes(runId, notes);
@@ -763,6 +860,10 @@ async function refresh() {
       clearRunView();
       lastSequence = 0;
       displayedEvents = [];
+      routineEvents = [];
+      eventSnapshot = null;
+      element("event-types").replaceChildren();
+      element("event-scope").textContent = "";
       notesCache = null;
       element("connection").textContent = "Connection interrupted";
       element("message").textContent = error.message;
@@ -780,6 +881,7 @@ async function loadEvents(path, snapshot, signal) {
   if (sequence === 0 && snapshot.run.stage === 2)
     sequence = Math.max(0, snapshot.seq - 2000); // a few weeks back once the noise is filtered, so the first view has weekly summaries
   let history = displayedEvents.slice();
+  let routine = routineEvents.slice();
   let page;
   do {
     page = await getJson(
@@ -790,10 +892,34 @@ async function loadEvents(path, snapshot, signal) {
       (event) => event.seq > sequence && event.seq <= snapshot.seq,
     );
     history.push(...page.filter(newsworthy));
+    routine.push(...page.filter((event) => !newsworthy(event)));
     if (page.length) sequence = page.at(-1).seq;
   } while (page.length === 500 && sequence < snapshot.seq);
-  return { events: history.slice(-500), sequence };
+  return { events: history.slice(-500), routine: routine.slice(-2000), sequence };
 }
+
+try {
+  const filters = JSON.parse(localStorage.getItem("gearth.eventFilters") ?? "null");
+  if (filters) {
+    hiddenEventTypes = new Set(Array.isArray(filters.hidden) ? filters.hidden.filter((type) => typeof type === "string") : []);
+    element("event-routine").checked = filters.routine === true;
+    element("event-search").value = typeof filters.search === "string" ? filters.search : "";
+  }
+} catch { /* Ignore missing or invalid saved preferences. */ }
+for (const id of ["event-country", "event-search", "event-routine"]) {
+  element(id).addEventListener(id === "event-search" ? "input" : "change", () => {
+    saveEventFilters();
+    if (eventSnapshot) showEvents(eventSnapshot);
+  });
+}
+element("event-reset").addEventListener("click", () => {
+  hiddenEventTypes.clear();
+  element("event-country").value = "";
+  element("event-search").value = "";
+  element("event-routine").checked = false;
+  saveEventFilters();
+  if (eventSnapshot) { showEventFilters(eventSnapshot); showEvents(eventSnapshot); }
+});
 
 element("runs").addEventListener("change", () => {
   followCurrent = false;
@@ -976,7 +1102,7 @@ function showWorld(snapshot) {
     relations.append(
       textNode(
         "p",
-        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · tension ${relation.tension}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
+        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · relations ${relation.score ?? (40 - Number(relation.tension ?? 40))}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
         relation.at_war ? "event-rejected" : "",
       ),
     );

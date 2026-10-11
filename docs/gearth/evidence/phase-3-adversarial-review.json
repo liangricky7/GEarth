@@ -1,0 +1,192 @@
+{
+  "review_date": "2026-10-11",
+  "baseline_commit": "6528738",
+  "historical_war_commit": "9ad6be5",
+  "production_changes": false,
+  "consensus": {
+    "participants": [
+      "parent reviewer",
+      "adversarial subagent challenge_phase3_review"
+    ],
+    "explicit_agreement": true,
+    "items": {
+      "E1": {
+        "outcome": "uphold",
+        "resolution": "Funding stall reproduced; use current procurement."
+      },
+      "E2": {
+        "outcome": "narrow",
+        "resolution": "Missile surrender defect confirmed; health recovery depends on treatment and duration is a choice."
+      },
+      "E3": {
+        "outcome": "narrow",
+        "resolution": "Striking and unpaid participation confirmed; arrears provenance is shared civilian debt modeling."
+      },
+      "E4": {
+        "outcome": "narrow",
+        "resolution": "Cross-war reset confirmed; snapshot order is not inherently defective, front allocation optional."
+      },
+      "E5": {
+        "outcome": "reclassify",
+        "resolution": "Cheap restoration is explicit Phase 2 behavior; distinct combat repairs require a decision."
+      },
+      "E6": {
+        "outcome": "narrow",
+        "resolution": "Preserve current guard and all-war peace access; LIVE readiness is spec compliant, truces optional."
+      },
+      "E7": {
+        "outcome": "narrow",
+        "resolution": "Permissions/view disagreement confirmed; bilateral versus route embargo semantics must be chosen."
+      },
+      "E8": {
+        "outcome": "uphold",
+        "resolution": "Required affordability/shortage observation omitted; add decision consequences."
+      },
+      "E9": {
+        "outcome": "reclassify",
+        "resolution": "Fiscal exposure useful; approved tribute stacking does not justify mandatory caps."
+      },
+      "E10": {
+        "outcome": "narrow",
+        "resolution": "Gift source and quantity/report mismatch confirmed; zero relations gain follows formula."
+      },
+      "E11": {
+        "outcome": "narrow",
+        "resolution": "Ownership mismatch confirmed; resolve daily/weekly and election semantics explicitly."
+      },
+      "E12": {
+        "outcome": "withdraw_defect_claim",
+        "resolution": "Initial bounds are not postwar invariants; retain signed cession by default."
+      },
+      "E13": {
+        "outcome": "uphold",
+        "resolution": "Meaningful military event descriptions and relation compatibility needed."
+      }
+    }
+  },
+  "parent_harness": {
+    "source": "phase-3-adversarial/parent-probes.cs",
+    "scratch_project": "/private/tmp/gearth-phase3-debate/Debate.csproj",
+    "assertions_passed": 5,
+    "scope": "Actual historical SocietyWar with copied current Core; required compatibility fields and historical border threshold only. No complete restoration of historical diplomacy/menu/engine hooks.",
+    "compatibility_changes": [
+      "Relationship.Score and legacy Tension getter/setter",
+      "Relationship.Aggressor",
+      "Agent.WarWeariness",
+      "SocietyDiplomacy.BorderPermits checks Score > EmbargoBelow"
+    ],
+    "results": [
+      {
+        "probe": "multiwar_surrender",
+        "first_war": false,
+        "second_war": true,
+        "NoFitSoldierWeeks": 0,
+        "ended": [
+          [
+            "aster:beryl",
+            "beryl",
+            "aster"
+          ]
+        ]
+      },
+      {
+        "probe": "missile_prevents_surrender",
+        "fit_soldiers": 0,
+        "Missiles": 1,
+        "NoFitSoldierWeeks": 0,
+        "at_war": true
+      },
+      {
+        "probe": "embargo_route_bypass",
+        "path": [
+          "dune_to_grove",
+          "grove_to_cinder"
+        ],
+        "can_import": true,
+        "buyer_country": "cinder",
+        "seller_country": "dune"
+      },
+      {
+        "probe": "gift_rounding",
+        "requested": 10,
+        "delivered": 9,
+        "reported": 10,
+        "sources": [
+          {
+            "Id": "aster_tools",
+            "OwnerId": "aster_citizen_00006",
+            "removed": 3
+          },
+          {
+            "Id": "aster_tools_2",
+            "OwnerId": "aster_citizen_00007",
+            "removed": 3
+          },
+          {
+            "Id": "aster_mine",
+            "OwnerId": "aster_citizen_00008",
+            "removed": 3
+          }
+        ]
+      },
+      {
+        "probe": "persistent_voluntary_strike",
+        "before": 3,
+        "after": 3,
+        "effort": 0
+      }
+    ]
+  },
+  "independent_challenger_probes": {
+    "source": "phase-3-adversarial/challenger-probes.cs",
+    "scratch_project": "/private/tmp/gearth-phase3-challenge/Challenge.csproj",
+    "scope": "Current compiled Core only; logs inspected by challenger and parent; numerical tribute/cession entries are calculations, not full war runs.",
+    "results": [
+      {
+        "probe": "wound_treatment_dependency",
+        "clinicAccess": true,
+        "Health": 60,
+        "fit": true
+      },
+      {
+        "probe": "wound_treatment_dependency",
+        "clinicAccess": false,
+        "Health": 20,
+        "fit": false
+      },
+      {
+        "probe": "striker_paid_predicate",
+        "cash_change": 0,
+        "ArrearsMinor": 0,
+        "old_paid": true,
+        "day_effort": 0
+      },
+      {
+        "probe": "existing_civilian_hire_inherits_arrears",
+        "originalEmployer": "dune_food",
+        "new_employer": "dune_construction",
+        "ArrearsMinor": 500,
+        "ArrearsWeeks": 1
+      },
+      {
+        "probe": "signed_cession_rule",
+        "initial": 0.25,
+        "after5": 0.059326171875,
+        "after100": 8.01800546345376e-14,
+        "initialRangeIsInvariant": false
+      },
+      {
+        "probe": "multiwar_goods_share",
+        "fiveLossesRemainingFraction": 0.5904900000000001,
+        "fiveLossesSeizedFraction": 0.40950999999999993,
+        "cashTaxBaseSeizedFraction": 0.5
+      }
+    ]
+  },
+  "limitations": [
+    "No production implementation or approved model changes.",
+    "No live model run or restored integrated Phase 3 year.",
+    "Temporary harnesses are targeted counterexamples, not workload frequency estimates.",
+    "Full baseline suites were run in the initial review; they were not rerun for documentation-only debate changes."
+  ]
+}

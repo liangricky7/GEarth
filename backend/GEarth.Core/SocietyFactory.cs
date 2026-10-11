@@ -52,7 +52,7 @@ public static class SocietyFactory
     }
 
     // A forked timeline's one change: the country switches regime overnight and starts from the new profile's default policies.
-    public static void ChangeGovernment(World world, string countryId, string profileId)
+    public static void ChangeGovernment(World world, string countryId, string profileId, string reason = "timeline_fork")
     {
         if (world.Society?.Nations.GetValueOrDefault(countryId) is not { } nation)
             throw new ArgumentException($"Unknown country {countryId}");
@@ -80,7 +80,7 @@ public static class SocietyFactory
             planner.UnemployedSinceTick = world.Tick;
             planner.Goal = CitizenGoal(planner.Occupation);
         }
-        world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason = "timeline_fork" });
+        world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason });
     }
 
     public static World Create(string id, bool live, int population, int seed = 20261010, int rotation = 0)
@@ -148,8 +148,8 @@ public static class SocietyFactory
                 world.Agents.Add(resident.Id, resident);
                 return resident;
             }
-            if (!planned) // the school is state-owned everywhere
-                foreach (var firm in firms.Values.SelectMany(group => group).Where(firm => firm.Specialty != "school").Take(citizensPerCountry))
+            if (!planned) // the school and the construction contractor are state-owned everywhere
+                foreach (var firm in firms.Values.SelectMany(group => group).Where(firm => firm.Specialty is not ("school" or PhaseContracts.Construction)).Take(citizensPerCountry))
                 {
                     var sector = SocietyLabor.SectorOf(firm.Specialty!);
                     var owner = NewResident("entrepreneur", 2 * SocietyLabor.TableWage[sector.Occupation]);

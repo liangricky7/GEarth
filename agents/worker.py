@@ -163,6 +163,8 @@ def decision_group(job: DecisionJob) -> str:
 
 
 CITIZEN_TEMPERATURE = 0.5
+CITIZEN_MAX_TOKENS = 128
+CITIZEN_REASON_CHARACTERS = 40
 
 WORLD_INSTRUCTIONS = (
     "You are one autonomous resident or institution in a fictional world. "
@@ -216,12 +218,24 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
         rules = job.observation.get("note")
         has_ranges = any(is_range(value) for candidate in job.candidates for value in candidate["params"].values())
         output_instructions = RANGED_CHOICE_INSTRUCTIONS if has_ranges else FIXED_CHOICE_INSTRUCTIONS
+        citizen = decision_group(job) == "citizen"
+        government_guidance = (
+            " For a government, review pending diplomatic offers and their response deadlines before routine budget changes. "
+            "Choose accept or reject according to the stated consequences; ignoring an offer allows it to expire. "
+            "Clinic funding pays clinics, not construction. Compare treatment demand, actual funding and recent funding history; "
+            "a recent increase alone is not evidence that another increase or immediate reversal helps. Holding is valid while outcomes develop."
+            if job.observation.get("self", {}).get("role") == "government" else ""
+        )
+        if citizen:
+            output_instructions = output_instructions.replace(
+                "at most 100 characters", f"at most {CITIZEN_REASON_CHARACTERS} characters"
+            ) + "Give one brief reason phrase; do not narrate your deliberation. "
         return {
             "model": model,
             "messages": [
                 {
                     "role": "system",
-                    "content": WORLD_INSTRUCTIONS + output_instructions
+                    "content": WORLD_INSTRUCTIONS + output_instructions + government_guidance
                     + (f"\n\nWorld rules: {rules}" if rules else ""),
                 },
                 {
@@ -240,8 +254,8 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
             ],
             # Citizens with near-identical views must not all act in the same week (for example, a whole
             # country withdrawing its savings at once), so their choices get some randomness.
-            "temperature": CITIZEN_TEMPERATURE if decision_group(job) == "citizen" else 0,
-            "max_tokens": 512,
+            "temperature": CITIZEN_TEMPERATURE if citizen else 0,
+            "max_tokens": CITIZEN_MAX_TOKENS if citizen else 512,
             **model_request_settings(model),
             "response_format": {"type": "json_object"},
         }
@@ -295,7 +309,9 @@ def build_values_prompt(job, choice, reason, model=MODEL, correction=None):
                 "fields": fields, "correction": correction,
             }, separators=(",", ":"))},
         ],
-        "temperature": 0, "max_tokens": 512, **model_request_settings(model),
+        "temperature": 0,
+        "max_tokens": CITIZEN_MAX_TOKENS if decision_group(job) == "citizen" else 512,
+        **model_request_settings(model),
         "response_format": {"type": "json_schema", "json_schema": {
             "name": "action_values", "strict": True, "schema": schema,
         }},
@@ -362,6 +378,11 @@ def health():
         "model": MODEL,
         "active_requests": active_requests,
         "capacity": CAPACITY,
+        "citizen_generation": {
+            "max_tokens": CITIZEN_MAX_TOKENS,
+            "reason_max_characters": CITIZEN_REASON_CHARACTERS,
+            "qwen_thinking": False,
+        },
         "providers": provider_pool.snapshot(time.monotonic()),
     }
 

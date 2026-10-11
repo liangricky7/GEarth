@@ -26,10 +26,14 @@ public static class WorkerClient
         var started = Stopwatch.GetTimestamp();
         try
         {
-            using var response = await worker.PostAsJsonAsync("http://127.0.0.1:8100/decide", job,
-                Wire.Json, cancellationToken);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var remaining = job.Deadline - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                throw new OperationCanceledException("Decision deadline elapsed");
+            deadline.CancelAfter(remaining);
+            using var response = await SendWhenAvailable(worker, job, deadline.Token);
             response.EnsureSuccessStatusCode();
-            var result = await response.Content.ReadFromJsonAsync<DecisionResult>(Wire.Json, cancellationToken);
+            var result = await response.Content.ReadFromJsonAsync<DecisionResult>(Wire.Json, deadline.Token);
             if (result is null || result.RequestId != job.RequestId
                 || result.Source is not ("model" or "rule_fallback")
                 || result.Action is null || result.Action.Params is null
@@ -61,6 +65,30 @@ public static class WorkerClient
                 "rule_fallback", "none", 0, exception.GetType().Name,
                 CoordinatorLatencyMs: Stopwatch.GetElapsedTime(started).TotalMilliseconds,
                 ErrorCategory: category, ErrorHttpStatus: status);
+        }
+    }
+
+    private static async Task<HttpResponseMessage> SendWhenAvailable(HttpClient worker, DecisionJob job,
+        CancellationToken cancellationToken)
+    {
+        var attempt = 0;
+        while (true)
+        {
+            var response = await worker.PostAsJsonAsync("http://127.0.0.1:8100/decide", job,
+                Wire.Json, cancellationToken);
+            // A busy worker has not acquired a provider or run inference. Keep the same job and
+            // deadline while waiting for capacity; authentication and other failures stay explicit.
+            if (response.StatusCode != System.Net.HttpStatusCode.TooManyRequests)
+                return response;
+            var retry = response.Headers.RetryAfter;
+            var delay = retry?.Delta ?? (retry?.Date is { } date ? date - DateTimeOffset.UtcNow
+                : TimeSpan.FromMilliseconds(Math.Min(2000, 250 * Math.Pow(2, Math.Min(attempt++, 3)))
+                    + Random.Shared.Next(25, 100)));
+            delay = TimeSpan.FromMilliseconds(Math.Clamp(delay.TotalMilliseconds, 250, 2000));
+            if (DateTimeOffset.UtcNow + delay >= job.Deadline)
+                return response;
+            response.Dispose();
+            await Task.Delay(delay, cancellationToken);
         }
     }
 }

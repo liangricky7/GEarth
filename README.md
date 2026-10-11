@@ -6,7 +6,7 @@ An observable AI society for KnightHacks 2026: ten fictional countries, five ins
 
 Main combines the daily labor-market economy, entrepreneurs, quality of life, clinics, public services, trade and diplomacy with shared Spark/AMD routing, seeded endowments, bounded scheduling, observer consistency and automatic run reports. One tick is one day; payroll runs every seven ticks. Institutions and entrepreneurs decide weekly, and citizens rotate over eight weeks. Weekly decisions finish before payroll.
 
-The [shared cloud simulation](https://8-34-212-187.sslip.io/) runs continuously and saves worlds to Neon. Both Sparks provide Qwen3-8B institution decisions and Qwen3-4B resident decisions; AMD supplements residents with Qwen3-4B. All five providers have completed live requests. The configured pool has 97 slots (16/16/32/32 on the Sparks plus one on AMD); this is not a measured throughput result. The Google Cloud VM runs the world engine, so the owner's laptop can close.
+The [shared cloud simulation](https://8-34-212-187.sslip.io/) runs continuously and saves worlds to Neon. Both Sparks provide Qwen3-8B institution decisions and Qwen3-4B resident decisions; AMD supplements residents with Qwen3-4B. All five providers have completed live requests. The configured worker pool has 128 slots (16/16/32/32 on the Sparks plus 32 on AMD). The [AMD batch optimization](docs/gearth/25-amd-batch-optimization.md) uses a 90% average utilization target and passed 192/192 public requests at 2.77 valid citizen choices/second; slots are admission limits, not throughput. Brief dashboard readings can still exceed 95%. The preserved running world's engine admission and provider labels retain their startup values until the next run. The Google Cloud VM runs the world engine, so the owner's laptop can close.
 
 Group members can open the website and unlock controls using the shared team password provided privately by the owner. Stop finishes in-flight decisions, saves and pauses the current world; Start resumes it. Reset saves the current run and starts a fresh world, retaining history. Everyone shares the same world, and closing a browser does not stop it. See the [cloud runbook](docs/gearth/22-google-cloud-deployment.md) for operation and access details.
 
@@ -51,13 +51,19 @@ To fork a Neon world run into a what-if timeline on its own Neon branch (needs `
 .venv/bin/python ops/fork_run.py YOUR_RUN_ID --day 14 --country aster --government dictatorship
 ```
 
+The website experiment feature adds checkpoint previews, one agent/country edit,
+queued control/changed timelines, and comparison charts. The first release uses
+deterministic rule decisions. It is disabled by default; see the
+[design and operation guide](docs/gearth/26-timeline-experiments.md) for enabling
+it with server-side Neon branch credentials and for the local verification commands.
+
 ## Verify
 
 For unattended simulation experiments while developing locally, see the [Google Cloud deployment runbook](docs/gearth/22-google-cloud-deployment.md).
 
 ```bash
 dotnet test GEarth.sln
-.venv/bin/python -m pytest agents ops/test_amd_model_server.py ops/test_compute_config.py ops/test_spark_qwen.py -q
+.venv/bin/python -m pytest agents ops/test_amd_model_server.py ops/test_amd_batch_server.py ops/test_compute_config.py ops/test_spark_qwen.py -q
 npm ci
 npm run test:observer
 .venv/bin/python docs/gearth/validate_design.py

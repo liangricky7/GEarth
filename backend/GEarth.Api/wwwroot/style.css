@@ -182,8 +182,15 @@ select {
   color: var(--muted);
 }
 .timeline {
-  max-height: 620px;
+  max-height: 820px;
 }
+.event-filters { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; }
+.event-filters label { display: flex; align-items: center; gap: 6px; }
+.event-filters details { flex-basis: 100%; }
+.event-filters summary { cursor: pointer; }
+#event-types { display: flex; flex-wrap: wrap; gap: 8px 14px; padding-top: 10px; max-height: 130px; overflow: auto; }
+#event-scope { flex-basis: 100%; margin: 0; }
+.event-filters button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px; cursor: pointer; font: inherit; }
 #events {
   list-style: none;
   padding: 0;

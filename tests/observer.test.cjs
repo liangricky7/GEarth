@@ -97,7 +97,7 @@ function observer(data, intercept) {
       const after = Number(url.searchParams.get("after_seq"));
       const through = Number(url.searchParams.get("through_seq"));
       return response(
-        run.events.filter((event) => event.seq > after && event.seq <= through),
+        run.events.filter((event) => event.seq > after && event.seq <= through).slice(0, Number(url.searchParams.get("limit"))),
       );
     }
     if (resource === "agents" && agentId) return response(run.agent_detail);
@@ -145,6 +145,42 @@ test("policy strings and action objects render together; optional parameters are
   assert.match(view.element("run-notes").textContent, /Observations for first/);
 });
 
+test("war outcomes, gifts and unrest render as safe text with old and new relations", async (t) => {
+  const run = fixture("war");
+  const events = [
+    ["war_week", { winner: "aster", loser: "beryl", tribute_minor: 1200, tribute_goods: { ore: 4, fuel: 2 }, wounded: 3 }],
+    ["war_ended", { winner: "aster", loser: "beryl", terms: "cede_ore", reason: "surrender" }],
+    ["gift_sent", { kind: "ore", amount: 10, relation_gain: 0, score: -12 }],
+    ["missile_strike", { attacker: "aster", target: "beryl", hit: true, damaged: "roads", condition: 50 }],
+    ["revolution_deferred", { reason: '<img src=x onerror="alert(1)">' }],
+    ["early_election_called", { next_election_tick: 43 }],
+    ["diplomatic_tension", { tension: 70, reason: "historical" }],
+    ["diplomatic_tension", { score: -30, reason: "current" }],
+    ["conflict_costs", { conflicts: 1, funded_upkeep_minor: 1000 }],
+    ["conflict_costs", { conflicts: 1, lost_units: 9 }],
+  ];
+  run.events = events.map(([event_type, payload], index) => ({
+    event_type, payload, tick: index + 1, seq: run.snapshot.seq - events.length + index + 1,
+    entity_ids: event_type === "diplomatic_tension" ? ["aster:beryl"] : ["aster", "beryl"], source: "rule",
+  }));
+  run.snapshot.relationships = [
+    { first: "aster", second: "beryl", at_war: true, score: -95 },
+    { first: "aster", second: "cinder", trade_agreement: true, tension: 60 },
+  ];
+  const view = observer({ war: run });
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("connection").textContent.startsWith("Connected"));
+  const shown = view.element("events").textContent;
+  for (const expected of [/wins the weekly contest/, /Tribute 12.00 WLD and 4 ore, 2 fuel; 3 soldiers wounded/,
+    /War ends.*cede ore/, /sends 10 ore/, /Relations \+0, now -12/, /roads condition falls to 50/,
+    /Revolution deferred/, /early election on day 43/, /Tension.*rises to 70/, /Relations.*fall to -30/,
+    /Soldiers receive 10.00 WLD/, /9 units of goods lost/]) assert.match(shown, expected);
+  assert.match(shown, /<img src=x/);
+  assert.equal(view.element("events").querySelector("img"), null);
+  assert.match(view.element("relations").textContent, /relations -95/);
+  assert.match(view.element("relations").textContent, /relations -20/);
+});
+
 test("feed drops noise, writes sentences and groups same-day repeats", async (t) => {
   const run = fixture("feed");
   const seq = run.snapshot.seq;
@@ -179,6 +215,56 @@ test("feed drops noise, writes sentences and groups same-day repeats", async (t)
   ]);
   const shown = [...view.element("events").querySelectorAll(".event-title, .event-body")].map((node) => node.textContent).join("\n");
   assert.doesNotMatch(shown, /decision requested|INSTITUTIONAL/);
+});
+
+test("bank ledger noise stays available without crowding out highlights", async (t) => {
+  const run = fixture("noise");
+  run.snapshot.seq = 1500;
+  run.events = [{ event_type: "policy_enacted", tick: 7, seq: 1, entity_ids: ["aster"], payload: { action: "set_tax" } }];
+  for (let seq = 2; seq <= 1500; seq++) run.events.push({
+    event_type: "bank_ledger", tick: 7, seq, entity_ids: ["aster_bank"],
+    payload: { bank_id: "aster_bank", kind: "wages", amount_minor: 100 },
+  });
+  const view = observer({ noise: run });
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("connection").textContent.startsWith("Connected"));
+  assert.match(view.element("events").textContent, /set_tax/);
+  assert.doesNotMatch(view.element("events").textContent, /Bank records|bank records/);
+  assert.match(view.element("event-count").textContent, /^1 matching/);
+  const requestCount = view.requests.length;
+  view.element("event-routine").checked = true;
+  view.element("event-routine").dispatchEvent(new view.window.Event("change"));
+  assert.match(view.element("events").textContent, /1499 wages entries totaling 1,499.00 WLD/);
+  assert.match(view.element("event-count").textContent, /^1500 matching/);
+  assert.equal(view.requests.length, requestCount);
+  const ledger = view.element("event-types").querySelector('input[value="bank_ledger"]');
+  ledger.checked = false;
+  ledger.dispatchEvent(new view.window.Event("change"));
+  await view.window.eval("refresh()");
+  assert.doesNotMatch(view.element("events").textContent, /wages entries/);
+  assert.equal(view.element("event-types").querySelector('input[value="bank_ledger"]').checked, false);
+  assert.deepEqual(JSON.parse(view.window.localStorage.getItem("gearth.eventFilters")).hidden, ["bank_ledger"]);
+});
+
+test("event country and search filters combine and reset without changing agent filters", async (t) => {
+  const run = fixture("filters");
+  const view = observer({ filters: run });
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("connection").textContent.startsWith("Connected"));
+  view.element("event-country").value = "aster";
+  view.element("event-country").dispatchEvent(new view.window.Event("change"));
+  view.element("event-search").value = "ASTER_JOURNALIST";
+  view.element("event-search").dispatchEvent(new view.window.Event("input"));
+  assert.match(view.element("events").textContent, /A policy update/);
+  assert.doesNotMatch(view.element("events").textContent, /set_tax/);
+  assert.equal(view.element("country-filter").value, "");
+  view.element("event-search").value = "nothing matches";
+  view.element("event-search").dispatchEvent(new view.window.Event("input"));
+  assert.match(view.element("events").textContent, /No events match/);
+  view.element("event-reset").click();
+  assert.match(view.element("events").textContent, /set_tax/);
+  assert.equal(view.element("event-search").value, "");
+  assert.equal(view.element("event-country").value, "");
 });
 
 test("late run responses cannot overwrite the selected run", async (t) => {

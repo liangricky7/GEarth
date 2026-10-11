@@ -34,6 +34,9 @@ public sealed class Agent
     public int TargetStock { get; set; } = 8;
     public int Wellbeing { get; set; } = 100;
     public int Health { get; set; } = 100;
+    public double WarWeariness { get; set; }
+    public int MilitaryPaidTick { get; set; } = -1;
+    public long MilitaryPayMinor { get; set; }
     public int HealthThreshold { get; set; } = 70;
     // Labor market: residents hold a salary with an employer (null employer = unemployed).
     public long SalaryMinor { get; set; }
@@ -63,6 +66,7 @@ public sealed class Agent
     public string? EstateBeneficiaryId { get; set; }
     public List<string> EstateCreditIds { get; set; } = [];
     public bool EstateFinalized { get; set; }
+    public long EstateUnreportedPayoutMinor { get; set; } // paid out since the last weekly estate_settled event
     public int OvertimeDays { get; set; }
     // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
     public int GoodsBoughtLastWeek { get; set; }
@@ -71,6 +75,9 @@ public sealed class Agent
     // Health and hunger: days too sick to work this week (unpaid), whether the last meal was missed (output
     // falls 99% until the next one) and food taken from a farm employer, owed back from the next wage.
     public int SickDays { get; set; }
+    public int NutritionDebtDays { get; set; }
+    public double ProductionRemainder { get; set; }
+    public int FoodSpoilageRemainder { get; set; }
     public bool Hungry { get; set; }
     public int NeedsMet { get; set; } = 2;
     public bool HungryThisWeek { get; set; }

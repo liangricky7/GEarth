@@ -81,11 +81,12 @@ public sealed class RealismFixesTests
     public void LeversShowTheCurrentLevelAndConflictComesOnlyAfterFailedDiplomacy()
     {
         var world = NewWorld();
+        world.Mode = "LIVE"; // Phase 3 rule governments also require a blocked input need and superior strength.
         var government = world.Agents["aster_government"];
-        var benefit = Assert.Single(SocietyActions.Available(world, government), candidate => candidate.ActionType == "set_unemployment_benefit")
-            .Params["amount_minor"]!;
-        Assert.Equal([0, 900, world.Society!.Nations["aster"].UnemploymentBenefitMinor],
-            new[] { benefit["min"]!.GetValue<int>(), benefit["max"]!.GetValue<int>(), benefit["default"]!.GetValue<int>() });
+        var level = world.Society!.Nations["aster"].UnemploymentBenefitMinor;
+        var benefits = SocietyActions.Available(world, government).Where(candidate => candidate.ActionType == "set_unemployment_benefit")
+            .Select(candidate => candidate.Params["amount_minor"]!.GetValue<int>()).Order().ToArray();
+        Assert.Equal(new[] { Math.Max(0, level - 300), Math.Min(900, level + 300) }.Where(amount => amount != level).Distinct(), benefits);
 
         var relation = SocietyDiplomacy.Relation(world, "aster", "ionia");
         relation.Tension = 99;
@@ -266,22 +267,24 @@ public sealed class RealismFixesTests
     }
 
     [Theory]
-    [InlineData("set_unemployment_benefit", "amount_minor", 900)]
-    [InlineData("set_welfare", "amount_minor", 200)]
-    [InlineData("set_sales_tax", "sales_tax_basis_points", 1000)]
-    [InlineData("fund_services", "amount_minor", 150)]
-    public void GovernmentRangesAcceptTheirBoundsAndRejectValuesOutside(string actionType, string field, int maximum)
+    [InlineData("set_unemployment_benefit", "amount_minor")]
+    [InlineData("set_welfare", "amount_minor")]
+    [InlineData("set_sales_tax", "sales_tax_basis_points")]
+    [InlineData("fund_services", "amount_minor")]
+    public void GovernmentLeversAcceptOnlyTheOfferedMovesAndEnactThem(string actionType, string field)
     {
         var world = NewWorld();
         var nation = world.Society!.Nations["aster"];
         var government = world.Agents["aster_government"];
         var now = DateTimeOffset.UtcNow;
         var job = SocietyEngine.Observe(world, government.Id, now);
-        var candidate = Assert.Single(job.Candidates, item => item.ActionType == actionType);
-        Assert.True(SocietyActions.Matches(candidate, actionType, new JsonObject { [field] = 0 }));
-        Assert.False(SocietyActions.Matches(candidate, actionType, new JsonObject { [field] = -1 }));
-        Assert.False(SocietyActions.Matches(candidate, actionType, new JsonObject { [field] = maximum + 1 }));
-        var result = new DecisionResult(job.RequestId, new(actionType, new JsonObject { [field] = maximum }, "test", []), "model", "test", 0);
+        var offered = job.Candidates.Where(item => item.ActionType == actionType).ToArray();
+        Assert.NotEmpty(offered);
+        var move = offered.MaxBy(item => item.Params[field]!.GetValue<int>())!;
+        var chosen = move.Params[field]!.GetValue<int>();
+        var bare = new JsonObject { [field] = chosen };
+        Assert.DoesNotContain(job.Candidates, item => SocietyActions.Matches(item, actionType, bare)); // the effect is part of the move
+        var result = new DecisionResult(job.RequestId, new(actionType, (JsonObject)move.Params.DeepClone(), "test", []), "model", "test", 0);
         Assert.True(SocietyEngine.Apply(world, job, result, now).Accepted);
         world.Tick += Governments.Get(nation.GovernmentId).PolicyDelay;
         SocietyDiplomacy.ProcessPolicies(world);
@@ -292,6 +295,6 @@ public sealed class RealismFixesTests
             "set_sales_tax" => nation.SalesTaxBasisPoints,
             _ => nation.ServiceBudgetPerResidentMinor
         };
-        Assert.Equal(maximum, value);
+        Assert.Equal(chosen, value);
     }
 }

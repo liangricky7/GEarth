@@ -172,7 +172,7 @@ public sealed class ResourcesTests
     }
 
     [Fact]
-    public void ShippingScalesWithQuantityDistanceAndCompletedPortCondition()
+    public void ShippingScalesWithQuantityAndDistanceButNotPorts()
     {
         var world = Create();
         var buyer = world.Agents["aster_tools"];
@@ -181,16 +181,8 @@ public sealed class ResourcesTests
         Assert.Equal(30, SocietyResources.ShippingCost(world, buyer, shortPath, 10));
         Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
         Assert.Equal(40, SocietyResources.ShippingCost(world, buyer, longPath, 10));
-        var project = new Project { Type = "port", Level = 1 };
-        world.Society!.Nations["aster"].Infrastructure.Add(project);
-        Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
-        project.Complete = true;
-        Assert.Equal(90, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
-        project.Condition = 0;
-        Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
-        project.Condition = 100;
-        project.Level = 2;
-        Assert.Equal(72, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
+        world.Society!.Nations["aster"].Infrastructure.Add(new Project { Type = "port", Level = 2, Complete = true });
+        Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100)); // a port speeds cargo instead
         Assert.Throws<ArgumentOutOfRangeException>(() => SocietyResources.ShippingCost(world, buyer, shortPath, 0));
     }
 
@@ -200,6 +192,7 @@ public sealed class ResourcesTests
         var world = Create();
         var buyer = world.Agents["aster_tools"];
         var seller = world.Agents["cinder_mine"];
+        world.Society!.Nations["cinder"].Plan["mine"] = 0; // a state mine exports only stock above a week of its quota
         var path = SocietyTrade.Path(world, seller.LocationId, buyer.LocationId, "cheapest")!;
         var quantity = 20;
         var shipping = SocietyResources.ShippingCost(world, buyer, path, quantity);
@@ -216,6 +209,28 @@ public sealed class ResourcesTests
         Assert.Equal(0, SocietyTrade.Tariff(world, buyer, seller, value));
         Assert.Equal((value + shipping) / (double)quantity, SocietyResources.LandedUnitCost(world, buyer, seller, path, quantity));
         SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void CompletedPortCutsImportTransitTime()
+    {
+        int Arrival(bool port)
+        {
+            var world = Create();
+            world.Society!.Nations["cinder"].Plan["mine"] = 0;
+            if (port)
+                world.Society.Nations["aster"].Infrastructure.Add(new Project { Type = "port", Level = 3, Complete = true });
+            SocietyTrade.Dispatch(world, world.Agents["aster_tools"], world.Agents["cinder_mine"], "ore", 20, "cheapest", null);
+            var cargo = world.Society.Cargo.Last();
+            while (cargo.Status == "in_transit")
+            {
+                world.Tick++;
+                SocietyTrade.Advance(world);
+            }
+            Assert.Equal("delivered", cargo.Status);
+            return world.Tick;
+        }
+        Assert.True(Arrival(true) < Arrival(false));
     }
 
     [Fact]
@@ -332,6 +347,7 @@ public sealed class ResourcesTests
             }
         }
         var owner = world.Agents[world.Agents["aster_tools"].OwnerId!];
+        world.Agents["aster_mine"].PriceMinor = 45; // dear local ore, so imports land cheaper and are offered
         var observed = SocietyEngine.Observe(world, owner.Id, DateTimeOffset.UtcNow);
         Assert.Contains(observed.Candidates, option => option.ActionType == "import_goods" && option.Params["good"]!.GetValue<string>() == "ore");
         SocietyEconomy.AssertConservation(world);
@@ -365,7 +381,7 @@ public sealed class ResourcesTests
     {
         var world = Create();
         var buyer = world.Agents["aster_tools"];
-        var seller = world.Agents["cinder_mine"];
+        var seller = world.Agents["dune_mine"]; // a market mine: a state mine would export at the world price of 100
         WithdrawSupply(world, "ore", "aster");
         foreach (var mine in world.Agents.Values.Where(agent => agent.Specialty == "mine"))
             mine.PriceMinor = 100;
@@ -390,6 +406,7 @@ public sealed class ResourcesTests
         var buyer = world.Agents["aster_tools"];
         var owner = world.Agents[buyer.OwnerId!];
         owner.LocationId = "beryl_city"; // the firm's freight quote follows its factory, not its owner
+        world.Agents["aster_mine"].PriceMinor = 45; // dear local ore, so imports land cheaper and are offered
         var job = SocietyEngine.Observe(world, owner.Id, DateTimeOffset.UtcNow);
         var offer = job.Observation["import_offers"]!.AsArray().First(node => node!["good"]!.GetValue<string>() == "ore")!;
         var sellerId = offer["seller_id"]!.GetValue<string>();

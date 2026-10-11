@@ -29,13 +29,23 @@ public static class SocietyEstates
             && estate.Inventory.Values.All(quantity => quantity == 0)
             && !world.Society!.Cargo.Any(cargo => cargo.Status == "in_transit"
                 && (cargo.BuyerId == estate.Id || cargo.SellerId == estate.Id));
-        if (paid > 0)
-            world.Emit("estate_settled", "rule", [estate.Id, beneficiary.Id], new
-            {
-                payout_minor = paid, estate.EstateFinalized,
-                retained_assets_minor = estate.CashMinor + estate.DepositMinor
-            });
+        estate.EstateUnreportedPayoutMinor += paid;
         return paid;
+    }
+
+    // Late receipts are paid out as they arrive (under their own cause), but reported once a week per estate,
+    // and when it is wound up, rather than one event per sale.
+    public static void Report(World world, Agent estate)
+    {
+        if (estate.EstateUnreportedPayoutMinor == 0 || estate.EstateBeneficiaryId is not { } beneficiaryId
+            || world.Tick % SocietyLabor.DaysPerWeek != 0 && !estate.EstateFinalized)
+            return;
+        world.Emit("estate_settled", "rule", [estate.Id, beneficiaryId], new
+        {
+            payout_minor = estate.EstateUnreportedPayoutMinor, estate.EstateFinalized,
+            retained_assets_minor = estate.CashMinor + estate.DepositMinor
+        });
+        estate.EstateUnreportedPayoutMinor = 0;
     }
 }
 

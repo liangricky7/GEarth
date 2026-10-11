@@ -1,0 +1,1664 @@
+{
+  "schema": "faultline.public-services-pipeline-evidence.v1",
+  "reviewed_at": "2026-10-11T03:25:26.748574+00:00",
+  "base_main_commit": "91a6f68",
+  "source_commit": "7f2f4094a85c7bbbbe64fc6cf22606c0a803b18c",
+  "capture_contract": "faultline.public_services.v1",
+  "analysis_version": "1.2.0",
+  "neon": {
+    "project_id": "hidden-night-95238449",
+    "branch_id": "br-frosty-forest-b5oxhv6z",
+    "scope": "existing isolated test branch; production not changed",
+    "public_services_checkpoint_ticks": [
+      0,
+      6,
+      13,
+      20,
+      27,
+      34,
+      35
+    ]
+  },
+  "tests": {
+    "backend_passed": 147,
+    "backend_skipped": 4,
+    "skip_reason": "banking paused on main",
+    "python_passed": 210,
+    "review": "independent review found no blocker"
+  },
+  "pilots": [
+    {
+      "kind": "public_services",
+      "run_id": "world_20261011_030958_4237a7",
+      "mode": "RULE",
+      "initial_population": 170,
+      "final_population": 176,
+      "days": 35,
+      "through_revision": 7,
+      "through_sequence": 11366,
+      "engine_commit": "7f2f4094a85c7bbbbe64fc6cf22606c0a803b18c",
+      "source_manifest_sha256": "63d6ca473a08e42bc8a3218d98f4c8a648f6079d7becfb41b8115db413d0d91b",
+      "record_count": 11366,
+      "counts_by_kind": {
+        "action_effect": 744,
+        "agent_day": 6216,
+        "decision_request": 763,
+        "decision_result": 763,
+        "event": 1980,
+        "nation_day": 360,
+        "opening_balance": 176,
+        "run_metadata": 1,
+        "transaction": 363
+      },
+      "compressed_export_bytes": 699015,
+      "uncompressed_export_bytes": 23371531,
+      "import": {
+        "run_id": 918912297554008,
+        "url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/737259844903847/run/918912297554008",
+        "status": "success",
+        "duration_seconds": 221.909,
+        "tasks": [
+          {
+            "task_key": "import_finished_run",
+            "status": "SUCCESS"
+          }
+        ]
+      },
+      "delta_qualification": {
+        "bronze": {
+          "first_sequence": 1,
+          "kind_action_effect": 744,
+          "kind_agent_day": 6216,
+          "kind_decision_request": 763,
+          "kind_decision_result": 763,
+          "kind_event": 1980,
+          "kind_nation_day": 360,
+          "kind_opening_balance": 176,
+          "kind_run_metadata": 1,
+          "kind_transaction": 363,
+          "last_sequence": 11366,
+          "rows": 11366,
+          "unique_sequences": 11366
+        },
+        "expected_derived_counts": {
+          "decision_options": 4552,
+          "event_edges": 329
+        },
+        "run_id": "world_20261011_030958_4237a7",
+        "schema_version": "faultline.delta-qualification.v1",
+        "silver": {
+          "action_effects": {
+            "rows": 744,
+            "unique_sequences": 744
+          },
+          "agent_daily": {
+            "rows": 6216,
+            "unique_sequences": 6216
+          },
+          "country_daily": {
+            "rows": 360,
+            "unique_sequences": 360
+          },
+          "decision_options": {
+            "rows": 4552,
+            "unique_keys": 4552
+          },
+          "decision_requests": {
+            "rows": 763,
+            "unique_sequences": 763
+          },
+          "decision_results": {
+            "rows": 763,
+            "unique_sequences": 763
+          },
+          "event_edges": {
+            "rows": 329,
+            "unique_keys": 329
+          },
+          "events": {
+            "rows": 1980,
+            "unique_sequences": 1980
+          },
+          "opening_balances": {
+            "rows": 176,
+            "unique_sequences": 176
+          },
+          "runs": {
+            "rows": 1,
+            "unique_sequences": 1
+          },
+          "transactions": {
+            "rows": 363,
+            "unique_sequences": 363
+          }
+        },
+        "source_manifest_sha256": "63d6ca473a08e42bc8a3218d98f4c8a648f6079d7becfb41b8115db413d0d91b",
+        "status": "pass",
+        "through_revision": 7,
+        "through_sequence": 11366
+      },
+      "delta_checks": {
+        "bronze": {
+          "first_sequence": 1,
+          "kind_action_effect": 744,
+          "kind_agent_day": 6216,
+          "kind_decision_request": 763,
+          "kind_decision_result": 763,
+          "kind_event": 1980,
+          "kind_nation_day": 360,
+          "kind_opening_balance": 176,
+          "kind_run_metadata": 1,
+          "kind_transaction": 363,
+          "last_sequence": 11366,
+          "rows": 11366,
+          "unique_sequences": 11366
+        },
+        "daily_account_reconciliation": {
+          "details": {
+            "mismatches": 0,
+            "snapshots": 6216,
+            "unknown_openings": 0
+          },
+          "status": "pass"
+        },
+        "expected_derived_counts": {
+          "decision_options": 4552,
+          "event_edges": 329
+        },
+        "gold": {
+          "agent_days": {
+            "available": true,
+            "rows": 6040
+          },
+          "agent_latest": {
+            "available": true,
+            "rows": 176
+          },
+          "agent_timeline": {
+            "available": true,
+            "rows": 763
+          },
+          "country_days": {
+            "available": true,
+            "rows": 350
+          },
+          "import_receipts": {
+            "available": true,
+            "rows": 1
+          },
+          "public_service_days": {
+            "available": true,
+            "rows": 350
+          },
+          "public_service_transfers": {
+            "available": true,
+            "rows": 6
+          }
+        },
+        "run_id": "world_20261011_030958_4237a7",
+        "schema_version": "faultline.delta-qualification.v1",
+        "silver": {
+          "action_effects": {
+            "rows": 744,
+            "unique_sequences": 744
+          },
+          "agent_daily": {
+            "rows": 6216,
+            "unique_sequences": 6216
+          },
+          "country_daily": {
+            "rows": 360,
+            "unique_sequences": 360
+          },
+          "decision_options": {
+            "rows": 4552,
+            "unique_keys": 4552
+          },
+          "decision_requests": {
+            "rows": 763,
+            "unique_sequences": 763
+          },
+          "decision_results": {
+            "rows": 763,
+            "unique_sequences": 763
+          },
+          "event_edges": {
+            "rows": 329,
+            "unique_keys": 329
+          },
+          "events": {
+            "rows": 1980,
+            "unique_sequences": 1980
+          },
+          "opening_balances": {
+            "rows": 176,
+            "unique_sequences": 176
+          },
+          "runs": {
+            "rows": 1,
+            "unique_sequences": 1
+          },
+          "transactions": {
+            "rows": 363,
+            "unique_sequences": 363
+          }
+        },
+        "source_manifest_sha256": "63d6ca473a08e42bc8a3218d98f4c8a648f6079d7becfb41b8115db413d0d91b",
+        "status": "pass",
+        "through_revision": 7,
+        "through_sequence": 11366
+      },
+      "report_checks": [
+        {
+          "details": {
+            "records": 11366
+          },
+          "evidence_refs": [],
+          "name": "manifest_integrity",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "examples": [],
+            "mismatched_accounts": 0,
+            "missing_final_balances": 0,
+            "missing_openings": 0
+          },
+          "evidence_refs": [],
+          "name": "ledger_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "agent_snapshots": 6216,
+            "basis": "opening plus running ledger net at each snapshot audit sequence",
+            "escrow_snapshots": 0,
+            "examples": [],
+            "mismatches": 0,
+            "unknown_openings": 0
+          },
+          "evidence_refs": [
+            {
+              "kind": "agent_day",
+              "run_id": "world_20261011_030958_4237a7",
+              "sequence": 575
+            },
+            {
+              "kind": "agent_day",
+              "run_id": "world_20261011_030958_4237a7",
+              "sequence": 576
+            }
+          ],
+          "name": "daily_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "initial_cash_minor": 1820000,
+            "latest_minor": 1820000,
+            "ledger_net_minor": 0,
+            "opening_minor": 1820000
+          },
+          "evidence_refs": [],
+          "name": "cash_plus_escrow_conservation",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "accepted_without_offered_index": 0,
+            "ambiguous_matches": 0,
+            "bounded_integer_choices": 0,
+            "invalid_indices": 0,
+            "matching_rule": "exact fixed JSON params and inclusive int32 bounded values; original menu unchanged",
+            "missing_context": 0,
+            "request_count": 763,
+            "result_count": 763,
+            "unfinished_requests": 0
+          },
+          "evidence_refs": [],
+          "name": "offered_choice_index",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "reason": "Daily aggregate flow records are not part of audit.v1; individual transfers retained."
+          },
+          "evidence_refs": [],
+          "name": "daily_flow_reconciliation",
+          "status": "unknown"
+        }
+      ],
+      "public_services": {
+        "coverage": {
+          "agent_snapshot_count": 6216,
+          "agent_snapshots_with_public_services_fields": 6216,
+          "status": "pass"
+        },
+        "metadata": {
+          "active_features": [
+            "public_services",
+            "school",
+            "planner_quotas",
+            "bounded_integer_choices"
+          ],
+          "banking_paused": true,
+          "capture_contract_version": "faultline.public_services.v1",
+          "economy_configuration": {
+            "accounting": {
+              "bank_capture_scope": "cash_transfers_and_daily_claim_balances; loan_lifecycle_events_only",
+              "conserved_money": "agent_cash_plus_cargo_escrow",
+              "deposit_minor": "claim_on_bank_cash_not_additional_money",
+              "in_kind_minor": "wage_deduction_owed_not_money_transfer"
+            },
+            "banking": {
+              "cash_buffer_weeks": 2,
+              "deposit_rates": [
+                1,
+                3,
+                5
+              ],
+              "lending_standards": {
+                "loose": {
+                  "down_payment_pct": 10,
+                  "revenue_share_pct": 35
+                },
+                "normal": {
+                  "down_payment_pct": 25,
+                  "revenue_share_pct": 20
+                },
+                "strict": {
+                  "down_payment_pct": 50,
+                  "revenue_share_pct": 10
+                }
+              },
+              "loan_rates": [
+                6,
+                10,
+                14
+              ],
+              "loan_weeks": 26,
+              "loans_per_banker": 10,
+              "missed_payments_to_default": 3,
+              "paused": true,
+              "reserve_ratio_pct": 10,
+              "weeks_per_year": 52
+            },
+            "health": {
+              "daily_illness_chance": 0.01,
+              "health_decay_days": 4,
+              "hunger_output_factor": 0.01,
+              "medicine_health_gain": 15,
+              "sick_below": 30,
+              "visit_health_gain": 40
+            },
+            "planning": {
+              "planned_sectors": [
+                "food",
+                "energy",
+                "tools",
+                "medicine",
+                "clinic",
+                "entertainment"
+              ],
+              "planning_weeks": 4
+            },
+            "quality_of_life": {
+              "adjustment_divisor": 4,
+              "comfort_units_at_full": 40,
+              "comfort_weight": 0.2,
+              "health_bonus": 0.2,
+              "leisure_weight": 0.1,
+              "needs_weight": 0.35,
+              "parts_basis": "snapshot_state_recomputed",
+              "savings_horizon_weeks": 12,
+              "security_weeks_of_pay": 8,
+              "security_weight": 0.15,
+              "sick_penalty": 0.5,
+              "wellbeing_basis": "engine_smoothed_score"
+            },
+            "school": {
+              "course_days": 28,
+              "graduate_output_boost": 1.25,
+              "seeking_better_job_days": 28,
+              "students_per_teacher": 5
+            }
+          },
+          "features": {
+            "bounded_integer_choices": "v1",
+            "public_services": "v1"
+          }
+        },
+        "snapshot_summary": {
+          "denominator": "resident agents with role citizen, entrepreneur or planner",
+          "graduates": {
+            "eligible_known_count": 10,
+            "missing_count": 0,
+            "observed_count": 0
+          },
+          "hungry": {
+            "eligible_known_count": 10,
+            "missing_count": 0,
+            "observed_count": 10
+          },
+          "job_seekers": {
+            "eligible_known_count": 10,
+            "missing_count": 0,
+            "observed_count": 0
+          },
+          "latest_agent_count": 176,
+          "resident_count": 10,
+          "students": {
+            "eligible_known_count": 10,
+            "missing_count": 0,
+            "observed_count": 0
+          }
+        },
+        "transfers_by_kind": [
+          {
+            "amount_minor": 2440,
+            "count": 10,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2206
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2236
+              }
+            ],
+            "kind": "income_tax"
+          },
+          {
+            "amount_minor": 242000,
+            "count": 242,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 313
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 340
+              }
+            ],
+            "kind": "payment"
+          },
+          {
+            "amount_minor": 474,
+            "count": 9,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2185
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2186
+              }
+            ],
+            "kind": "profit_tax"
+          },
+          {
+            "amount_minor": 1500,
+            "count": 1,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 1636
+              }
+            ],
+            "kind": "public_investment"
+          },
+          {
+            "amount_minor": 1116,
+            "count": 10,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2002
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2785
+              }
+            ],
+            "kind": "purchase"
+          },
+          {
+            "amount_minor": 55,
+            "count": 10,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2003
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2786
+              }
+            ],
+            "kind": "sales_tax"
+          },
+          {
+            "amount_minor": 121600,
+            "count": 6,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 6513
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 6516
+              }
+            ],
+            "kind": "startup_grant"
+          },
+          {
+            "amount_minor": 6000,
+            "count": 6,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 6511
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 6536
+              }
+            ],
+            "kind": "state_subsidy"
+          },
+          {
+            "amount_minor": 432828,
+            "count": 42,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2184
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2189
+              }
+            ],
+            "kind": "state_surplus"
+          },
+          {
+            "amount_minor": 9714,
+            "count": 10,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2205
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2235
+              }
+            ],
+            "kind": "wage"
+          },
+          {
+            "amount_minor": 10000,
+            "count": 2,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 4943
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 9318
+              }
+            ],
+            "kind": "war_declaration"
+          },
+          {
+            "amount_minor": 8000,
+            "count": 8,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 6525
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 6553
+              }
+            ],
+            "kind": "war_upkeep"
+          },
+          {
+            "amount_minor": 900,
+            "count": 7,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2208
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_030958_4237a7",
+                "sequence": 2238
+              }
+            ],
+            "kind": "welfare"
+          }
+        ]
+      },
+      "report_bytes": 714678,
+      "reimport_tested": false,
+      "delta_facts_unchanged": true
+    },
+    {
+      "kind": "planner",
+      "run_id": "world_20261011_031219_499159",
+      "mode": "RULE",
+      "initial_population": 360,
+      "final_population": 360,
+      "days": 7,
+      "through_revision": 3,
+      "through_sequence": 12785,
+      "engine_commit": "7f2f4094a85c7bbbbe64fc6cf22606c0a803b18c",
+      "source_manifest_sha256": "9bd8c000409b1295ea049c09c9ec4230c8663997ea3a414d7be09ecf9bf1d2bc",
+      "record_count": 12785,
+      "counts_by_kind": {
+        "action_effect": 178,
+        "agent_day": 2880,
+        "decision_request": 159,
+        "decision_result": 159,
+        "event": 433,
+        "nation_day": 80,
+        "opening_balance": 360,
+        "run_metadata": 1,
+        "transaction": 8535
+      },
+      "compressed_export_bytes": 479266,
+      "uncompressed_export_bytes": 13347264,
+      "import": {
+        "run_id": 546976602530802,
+        "url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/725839015149712/run/546976602530802",
+        "status": "success",
+        "duration_seconds": 162.824,
+        "tasks": [
+          {
+            "task_key": "import_finished_run",
+            "status": "SUCCESS"
+          }
+        ]
+      },
+      "delta_qualification": {
+        "bronze": {
+          "first_sequence": 1,
+          "kind_action_effect": 178,
+          "kind_agent_day": 2880,
+          "kind_decision_request": 159,
+          "kind_decision_result": 159,
+          "kind_event": 433,
+          "kind_nation_day": 80,
+          "kind_opening_balance": 360,
+          "kind_run_metadata": 1,
+          "kind_transaction": 8535,
+          "last_sequence": 12785,
+          "rows": 12785,
+          "unique_sequences": 12785
+        },
+        "expected_derived_counts": {
+          "decision_options": 3305,
+          "event_edges": 80
+        },
+        "run_id": "world_20261011_031219_499159",
+        "schema_version": "faultline.delta-qualification.v1",
+        "silver": {
+          "action_effects": {
+            "rows": 178,
+            "unique_sequences": 178
+          },
+          "agent_daily": {
+            "rows": 2880,
+            "unique_sequences": 2880
+          },
+          "country_daily": {
+            "rows": 80,
+            "unique_sequences": 80
+          },
+          "decision_options": {
+            "rows": 3305,
+            "unique_keys": 3305
+          },
+          "decision_requests": {
+            "rows": 159,
+            "unique_sequences": 159
+          },
+          "decision_results": {
+            "rows": 159,
+            "unique_sequences": 159
+          },
+          "event_edges": {
+            "rows": 80,
+            "unique_keys": 80
+          },
+          "events": {
+            "rows": 433,
+            "unique_sequences": 433
+          },
+          "opening_balances": {
+            "rows": 360,
+            "unique_sequences": 360
+          },
+          "runs": {
+            "rows": 1,
+            "unique_sequences": 1
+          },
+          "transactions": {
+            "rows": 8535,
+            "unique_sequences": 8535
+          }
+        },
+        "source_manifest_sha256": "9bd8c000409b1295ea049c09c9ec4230c8663997ea3a414d7be09ecf9bf1d2bc",
+        "status": "pass",
+        "through_revision": 3,
+        "through_sequence": 12785
+      },
+      "delta_checks": {
+        "bronze": {
+          "first_sequence": 1,
+          "kind_action_effect": 178,
+          "kind_agent_day": 2880,
+          "kind_decision_request": 159,
+          "kind_decision_result": 159,
+          "kind_event": 433,
+          "kind_nation_day": 80,
+          "kind_opening_balance": 360,
+          "kind_run_metadata": 1,
+          "kind_transaction": 8535,
+          "last_sequence": 12785,
+          "rows": 12785,
+          "unique_sequences": 12785
+        },
+        "daily_account_reconciliation": {
+          "details": {
+            "mismatches": 0,
+            "snapshots": 3039,
+            "unknown_openings": 0
+          },
+          "status": "pass"
+        },
+        "expected_derived_counts": {
+          "decision_options": 3305,
+          "event_edges": 80
+        },
+        "gold": {
+          "agent_days": {
+            "available": true,
+            "rows": 2520
+          },
+          "agent_latest": {
+            "available": true,
+            "rows": 360
+          },
+          "agent_timeline": {
+            "available": true,
+            "rows": 159
+          },
+          "country_days": {
+            "available": true,
+            "rows": 70
+          },
+          "import_receipts": {
+            "available": true,
+            "rows": 1
+          },
+          "public_service_days": {
+            "available": true,
+            "rows": 70
+          },
+          "public_service_transfers": {
+            "available": true,
+            "rows": 10
+          }
+        },
+        "run_id": "world_20261011_031219_499159",
+        "schema_version": "faultline.delta-qualification.v1",
+        "silver": {
+          "action_effects": {
+            "rows": 178,
+            "unique_sequences": 178
+          },
+          "agent_daily": {
+            "rows": 2880,
+            "unique_sequences": 2880
+          },
+          "country_daily": {
+            "rows": 80,
+            "unique_sequences": 80
+          },
+          "decision_options": {
+            "rows": 3305,
+            "unique_keys": 3305
+          },
+          "decision_requests": {
+            "rows": 159,
+            "unique_sequences": 159
+          },
+          "decision_results": {
+            "rows": 159,
+            "unique_sequences": 159
+          },
+          "event_edges": {
+            "rows": 80,
+            "unique_keys": 80
+          },
+          "events": {
+            "rows": 433,
+            "unique_sequences": 433
+          },
+          "opening_balances": {
+            "rows": 360,
+            "unique_sequences": 360
+          },
+          "runs": {
+            "rows": 1,
+            "unique_sequences": 1
+          },
+          "transactions": {
+            "rows": 8535,
+            "unique_sequences": 8535
+          }
+        },
+        "source_manifest_sha256": "9bd8c000409b1295ea049c09c9ec4230c8663997ea3a414d7be09ecf9bf1d2bc",
+        "status": "pass",
+        "through_revision": 3,
+        "through_sequence": 12785
+      },
+      "report_checks": [
+        {
+          "details": {
+            "records": 12785
+          },
+          "evidence_refs": [],
+          "name": "manifest_integrity",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "examples": [],
+            "mismatched_accounts": 0,
+            "missing_final_balances": 0,
+            "missing_openings": 0
+          },
+          "evidence_refs": [],
+          "name": "ledger_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "agent_snapshots": 2880,
+            "basis": "opening plus running ledger net at each snapshot audit sequence",
+            "escrow_snapshots": 159,
+            "examples": [],
+            "mismatches": 0,
+            "unknown_openings": 0
+          },
+          "evidence_refs": [
+            {
+              "kind": "agent_day",
+              "run_id": "world_20261011_031219_499159",
+              "sequence": 1575
+            },
+            {
+              "kind": "agent_day",
+              "run_id": "world_20261011_031219_499159",
+              "sequence": 1576
+            }
+          ],
+          "name": "daily_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "initial_cash_minor": 3588800,
+            "latest_minor": 3588800,
+            "ledger_net_minor": 0,
+            "opening_minor": 3588800
+          },
+          "evidence_refs": [],
+          "name": "cash_plus_escrow_conservation",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "accepted_without_offered_index": 0,
+            "ambiguous_matches": 0,
+            "bounded_integer_choices": 2,
+            "invalid_indices": 0,
+            "matching_rule": "exact fixed JSON params and inclusive int32 bounded values; original menu unchanged",
+            "missing_context": 0,
+            "request_count": 159,
+            "result_count": 159,
+            "unfinished_requests": 0
+          },
+          "evidence_refs": [],
+          "name": "offered_choice_index",
+          "status": "pass"
+        },
+        {
+          "details": {
+            "reason": "Daily aggregate flow records are not part of audit.v1; individual transfers retained."
+          },
+          "evidence_refs": [],
+          "name": "daily_flow_reconciliation",
+          "status": "unknown"
+        }
+      ],
+      "public_services": {
+        "coverage": {
+          "agent_snapshot_count": 2880,
+          "agent_snapshots_with_public_services_fields": 2880,
+          "status": "pass"
+        },
+        "metadata": {
+          "active_features": [
+            "public_services",
+            "school",
+            "planner_quotas",
+            "bounded_integer_choices"
+          ],
+          "banking_paused": true,
+          "capture_contract_version": "faultline.public_services.v1",
+          "economy_configuration": {
+            "accounting": {
+              "bank_capture_scope": "cash_transfers_and_daily_claim_balances; loan_lifecycle_events_only",
+              "conserved_money": "agent_cash_plus_cargo_escrow",
+              "deposit_minor": "claim_on_bank_cash_not_additional_money",
+              "in_kind_minor": "wage_deduction_owed_not_money_transfer"
+            },
+            "banking": {
+              "cash_buffer_weeks": 2,
+              "deposit_rates": [
+                1,
+                3,
+                5
+              ],
+              "lending_standards": {
+                "loose": {
+                  "down_payment_pct": 10,
+                  "revenue_share_pct": 35
+                },
+                "normal": {
+                  "down_payment_pct": 25,
+                  "revenue_share_pct": 20
+                },
+                "strict": {
+                  "down_payment_pct": 50,
+                  "revenue_share_pct": 10
+                }
+              },
+              "loan_rates": [
+                6,
+                10,
+                14
+              ],
+              "loan_weeks": 26,
+              "loans_per_banker": 10,
+              "missed_payments_to_default": 3,
+              "paused": true,
+              "reserve_ratio_pct": 10,
+              "weeks_per_year": 52
+            },
+            "health": {
+              "daily_illness_chance": 0.01,
+              "health_decay_days": 4,
+              "hunger_output_factor": 0.01,
+              "medicine_health_gain": 15,
+              "sick_below": 30,
+              "visit_health_gain": 40
+            },
+            "planning": {
+              "planned_sectors": [
+                "food",
+                "energy",
+                "tools",
+                "medicine",
+                "clinic",
+                "entertainment"
+              ],
+              "planning_weeks": 4
+            },
+            "quality_of_life": {
+              "adjustment_divisor": 4,
+              "comfort_units_at_full": 40,
+              "comfort_weight": 0.2,
+              "health_bonus": 0.2,
+              "leisure_weight": 0.1,
+              "needs_weight": 0.35,
+              "parts_basis": "snapshot_state_recomputed",
+              "savings_horizon_weeks": 12,
+              "security_weeks_of_pay": 8,
+              "security_weight": 0.15,
+              "sick_penalty": 0.5,
+              "wellbeing_basis": "engine_smoothed_score"
+            },
+            "school": {
+              "course_days": 28,
+              "graduate_output_boost": 1.25,
+              "seeking_better_job_days": 28,
+              "students_per_teacher": 5
+            }
+          },
+          "features": {
+            "bounded_integer_choices": "v1",
+            "public_services": "v1"
+          }
+        },
+        "snapshot_summary": {
+          "denominator": "resident agents with role citizen, entrepreneur or planner",
+          "graduates": {
+            "eligible_known_count": 200,
+            "missing_count": 0,
+            "observed_count": 0
+          },
+          "hungry": {
+            "eligible_known_count": 200,
+            "missing_count": 0,
+            "observed_count": 0
+          },
+          "job_seekers": {
+            "eligible_known_count": 200,
+            "missing_count": 0,
+            "observed_count": 0
+          },
+          "latest_agent_count": 360,
+          "resident_count": 200,
+          "students": {
+            "eligible_known_count": 200,
+            "missing_count": 0,
+            "observed_count": 0
+          }
+        },
+        "transfers_by_kind": [
+          {
+            "amount_minor": 10000,
+            "count": 10,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8757
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8960
+              }
+            ],
+            "kind": "capitation"
+          },
+          {
+            "amount_minor": 102309,
+            "count": 34,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8725
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8728
+              }
+            ],
+            "kind": "dividend"
+          },
+          {
+            "amount_minor": 37080,
+            "count": 17,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 3500
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 3502
+              }
+            ],
+            "kind": "import"
+          },
+          {
+            "amount_minor": 41400,
+            "count": 21,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 367
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 452
+              }
+            ],
+            "kind": "import_escrow"
+          },
+          {
+            "amount_minor": 26364,
+            "count": 70,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8722
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8733
+              }
+            ],
+            "kind": "income_tax"
+          },
+          {
+            "amount_minor": 59354,
+            "count": 51,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8724
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8727
+              }
+            ],
+            "kind": "owner_draw"
+          },
+          {
+            "amount_minor": 13900,
+            "count": 22,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 1339
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 1376
+              }
+            ],
+            "kind": "payment"
+          },
+          {
+            "amount_minor": 20135,
+            "count": 59,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8723
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8726
+              }
+            ],
+            "kind": "profit_tax"
+          },
+          {
+            "amount_minor": 1500,
+            "count": 1,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 4818
+              }
+            ],
+            "kind": "public_investment"
+          },
+          {
+            "amount_minor": 239481,
+            "count": 4025,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 364
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 369
+              }
+            ],
+            "kind": "purchase"
+          },
+          {
+            "amount_minor": 10880,
+            "count": 4002,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 370
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 372
+              }
+            ],
+            "kind": "sales_tax"
+          },
+          {
+            "amount_minor": 2182,
+            "count": 21,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 365
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 450
+              }
+            ],
+            "kind": "shipping"
+          },
+          {
+            "amount_minor": 190915,
+            "count": 28,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8720
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8925
+              }
+            ],
+            "kind": "state_surplus"
+          },
+          {
+            "amount_minor": 2070,
+            "count": 21,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 366
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 451
+              }
+            ],
+            "kind": "tariff"
+          },
+          {
+            "amount_minor": 6700,
+            "count": 17,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8754
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8755
+              }
+            ],
+            "kind": "unemployment_benefit"
+          },
+          {
+            "amount_minor": 118450,
+            "count": 70,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8721
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8732
+              }
+            ],
+            "kind": "wage"
+          },
+          {
+            "amount_minor": 9100,
+            "count": 66,
+            "evidence_refs": [
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8949
+              },
+              {
+                "kind": "transaction",
+                "run_id": "world_20261011_031219_499159",
+                "sequence": 8950
+              }
+            ],
+            "kind": "welfare"
+          }
+        ]
+      },
+      "report_bytes": 236023,
+      "reimport_tested": true,
+      "delta_facts_unchanged": true
+    }
+  ],
+  "final_qualification": {
+    "run_id": 830506343274055,
+    "url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/982132350275062/run/830506343274055",
+    "status": "success",
+    "duration_seconds": 343.533,
+    "tasks": [
+      {
+        "task_key": "planner_investigation",
+        "status": "SUCCESS"
+      },
+      {
+        "task_key": "government_comparison",
+        "status": "SUCCESS"
+      },
+      {
+        "task_key": "replay_import",
+        "status": "SUCCESS"
+      },
+      {
+        "task_key": "preserve_older_records",
+        "status": "SUCCESS"
+      },
+      {
+        "task_key": "public_services_checks",
+        "status": "SUCCESS"
+      },
+      {
+        "task_key": "planner_checks",
+        "status": "SUCCESS"
+      }
+    ]
+  },
+  "existing_data_preservation": {
+    "method": "count and xxhash64 XOR of all original columns, grouped by run",
+    "numeric_planner_choices_verified": 2,
+    "status": "pass",
+    "table_run_groups": 26,
+    "tables": 13
+  },
+  "existing_bronze_baseline": [
+    {
+      "fingerprint": -1488423299741759186,
+      "rows": 3346,
+      "run_id": "world_20261011_004640_7b2e7b"
+    },
+    {
+      "fingerprint": -8509081721289809001,
+      "rows": 3218,
+      "run_id": "world_20261011_010100_6ab61a"
+    }
+  ],
+  "cached_report_proof": [
+    {
+      "kind": "public_services",
+      "run_id": "world_20261011_030958_4237a7",
+      "cached_report_exact_match": true,
+      "checks": [
+        {
+          "name": "manifest_integrity",
+          "status": "pass"
+        },
+        {
+          "name": "ledger_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "name": "daily_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "name": "cash_plus_escrow_conservation",
+          "status": "pass"
+        },
+        {
+          "name": "offered_choice_index",
+          "status": "pass"
+        },
+        {
+          "name": "daily_flow_reconciliation",
+          "status": "unknown"
+        }
+      ],
+      "public_services_coverage": {
+        "agent_snapshot_count": 6216,
+        "agent_snapshots_with_public_services_fields": 6216,
+        "status": "pass"
+      }
+    },
+    {
+      "kind": "planner",
+      "run_id": "world_20261011_031219_499159",
+      "cached_report_exact_match": true,
+      "checks": [
+        {
+          "name": "manifest_integrity",
+          "status": "pass"
+        },
+        {
+          "name": "ledger_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "name": "daily_account_reconciliation",
+          "status": "pass"
+        },
+        {
+          "name": "cash_plus_escrow_conservation",
+          "status": "pass"
+        },
+        {
+          "name": "offered_choice_index",
+          "status": "pass"
+        },
+        {
+          "name": "daily_flow_reconciliation",
+          "status": "unknown"
+        }
+      ],
+      "public_services_coverage": {
+        "agent_snapshot_count": 2880,
+        "agent_snapshots_with_public_services_fields": 2880,
+        "status": "pass"
+      }
+    }
+  ],
+  "new_firm_source_proof": [
+    {
+      "id": "cinder_energy_firm21",
+      "tick": 21,
+      "balance_minor": 0,
+      "source": "state_firm"
+    },
+    {
+      "id": "cinder_clinic_firm22",
+      "tick": 21,
+      "balance_minor": 0,
+      "source": "state_firm"
+    },
+    {
+      "id": "cinder_medicine_firm23",
+      "tick": 21,
+      "balance_minor": 0,
+      "source": "state_firm"
+    },
+    {
+      "id": "haven_energy_firm24",
+      "tick": 21,
+      "balance_minor": 0,
+      "source": "state_firm"
+    },
+    {
+      "id": "haven_clinic_firm25",
+      "tick": 21,
+      "balance_minor": 0,
+      "source": "state_firm"
+    },
+    {
+      "id": "haven_medicine_firm26",
+      "tick": 21,
+      "balance_minor": 0,
+      "source": "state_firm"
+    }
+  ],
+  "planner_source_proof": [
+    {
+      "agent_id": "cinder_citizen_00020",
+      "accepted": true,
+      "match_count": 1,
+      "option_index": 1,
+      "offered_bounds": {
+        "clinic": {
+          "default": 2,
+          "max": 180,
+          "min": 0
+        },
+        "energy": {
+          "default": 144,
+          "max": 768,
+          "min": 0
+        },
+        "entertainment": {
+          "default": 90,
+          "max": 400,
+          "min": 0
+        },
+        "food": {
+          "default": 126,
+          "max": 628,
+          "min": 0
+        },
+        "medicine": {
+          "default": 4,
+          "max": 124,
+          "min": 0
+        },
+        "tools": {
+          "default": 54,
+          "max": 672,
+          "min": 0
+        }
+      },
+      "resolved_params": {
+        "clinic": 2,
+        "energy": 144,
+        "entertainment": 90,
+        "food": 126,
+        "medicine": 4,
+        "tools": 54
+      }
+    },
+    {
+      "agent_id": "haven_citizen_00020",
+      "accepted": true,
+      "match_count": 1,
+      "option_index": 1,
+      "offered_bounds": {
+        "clinic": {
+          "default": 2,
+          "max": 204,
+          "min": 0
+        },
+        "energy": {
+          "default": 144,
+          "max": 768,
+          "min": 0
+        },
+        "entertainment": {
+          "default": 90,
+          "max": 400,
+          "min": 0
+        },
+        "food": {
+          "default": 126,
+          "max": 628,
+          "min": 0
+        },
+        "medicine": {
+          "default": 3,
+          "max": 124,
+          "min": 0
+        },
+        "tools": {
+          "default": 54,
+          "max": 672,
+          "min": 0
+        }
+      },
+      "resolved_params": {
+        "clinic": 2,
+        "energy": 144,
+        "entertainment": 90,
+        "food": 126,
+        "medicine": 3,
+        "tools": 54
+      }
+    }
+  ],
+  "limitations": [
+    "These are actual RULE simulations, with no model inference calls.",
+    "School enrollment/graduation, delayed subsidy policies and malformed numeric responses are tested in focused engine/worker fixtures; not every behavior occurred in the pilots.",
+    "Daily aggregate flow reconciliation remains unknown; individual transfer legs are retained and cash reconciliation passes.",
+    "Legacy facts remain unknown where not captured; existing records were not backfilled or reconstructed.",
+    "Normal runs only; timeline forks remain rejected.",
+    "Banking remains paused; daily bank claims do not qualify the complete loan-book lifecycle.",
+    "50,000 total agents and 365 ticks are not load-qualified by these pilots.",
+    "Public production deployment remains a separate step after PR review/integration."
+  ]
+}

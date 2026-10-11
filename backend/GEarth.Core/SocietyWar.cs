@@ -148,6 +148,7 @@ public static class SocietyWar
     public static void EndWar(World world, Relationship war, Nation winner, Nation loser, string terms, string reason)
     {
         if (!PeaceTerms.Contains(terms)) throw new ArgumentException("Unsupported peace terms.", nameof(terms));
+        if (!war.AtWar) return;
         var paid = 0L;
         if (terms == "reparations")
         {
@@ -164,6 +165,7 @@ public static class SocietyWar
         }
         war.AtWar = false;
         war.Aggressor = null;
+        SocietyDiplomacy.ClearOffer(war);
         foreach (var nation in new[] { winner, loser })
             if (!RelationsOf(world, nation.Id).Any(relation => relation.AtWar))
                 nation.NoFitSoldierWeeks = 0;

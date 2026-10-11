@@ -269,6 +269,84 @@ public sealed class Phase3WarTests
         SocietyEconomy.AssertConservation(world);
     }
 
+    private static void EnactPolicy(World world, string country, string action, object parameters)
+    {
+        var policy = Policy(action, parameters);
+        policy.CountryId = country;
+        policy.EffectiveTick = world.Tick;
+        world.Society!.Policies.Add(policy);
+        SocietyDiplomacy.ProcessPolicies(world);
+    }
+
+    [Theory]
+    [InlineData("reparations")]
+    [InlineData("cede_ore")]
+    public void SettlementClearsPendingOffersAndCannotChargeTwice(string terms)
+    {
+        var world = NewWorld(true);
+        var relation = War(world, "aster", "beryl");
+        EnactPolicy(world, "beryl", "offer_peace", new { country_id = "aster", terms });
+        Assert.Equal("beryl", relation.ProposedBy);
+        var response = Assert.Single(SocietyActions.Available(world, world.Agents["aster_government"]),
+            option => option.ActionType == "respond_agreement" && (string?)option.Params["country_id"] == "beryl"
+                && option.Params["accept"]!.GetValue<bool>());
+        Assert.Contains("25%", (string?)response.Params["effect"]);
+        var winner = world.Society!.Nations["beryl"];
+        var loser = world.Society.Nations["aster"];
+        SocietyWar.EndWar(world, relation, winner, loser, terms, "surrender");
+        var cash = world.Agents["aster_government"].CashMinor;
+        var endowment = loser.Endowment["ore"];
+        Assert.Null(relation.ProposedBy);
+        Assert.Null(relation.ProposalKind);
+        Assert.Null(relation.ProposalTerms);
+
+        EnactPolicy(world, "aster", response.ActionType, response.Params);
+        SocietyWar.EndWar(world, relation, winner, loser, terms, "stale_settlement");
+        Assert.Equal(cash, world.Agents["aster_government"].CashMinor);
+        Assert.Equal(endowment, loser.Endowment["ore"]);
+        Assert.Single(world.Events, item => item.EventType == "war_ended");
+        Assert.Contains(world.Events, item => item.EventType == "policy_blocked"
+            && (string?)item.Payload["action"] == "respond_agreement");
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void DelayedPeaceResponseCannotAcceptAReplacementOffer()
+    {
+        var world = NewWorld(true);
+        var relation = War(world, "aster", "beryl");
+        EnactPolicy(world, "beryl", "offer_peace", new { country_id = "aster", terms = "none" });
+        var response = Assert.Single(SocietyActions.Available(world, world.Agents["aster_government"]),
+            option => option.ActionType == "respond_agreement" && (string?)option.Params["country_id"] == "beryl"
+                && option.Params["accept"]!.GetValue<bool>());
+        EnactPolicy(world, "aster", "respond_agreement", new { country_id = "beryl", accept = false });
+        EnactPolicy(world, "beryl", "offer_peace", new { country_id = "aster", terms = "reparations" });
+        var cash = world.Agents["aster_government"].CashMinor;
+        EnactPolicy(world, "aster", response.ActionType, response.Params);
+        Assert.True(relation.AtWar);
+        Assert.Equal(cash, world.Agents["aster_government"].CashMinor);
+        Assert.Equal("reparations", relation.ProposalTerms);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void WarDeclarationCancelsTradeOffersAndBlocksTheirStaleResponse()
+    {
+        var world = NewWorld(true);
+        var relation = SocietyDiplomacy.Relation(world, "aster", "beryl");
+        relation.Score = -100;
+        relation.DiplomacyFailedTick = 0;
+        EnactPolicy(world, "beryl", "propose_agreement", new { country_id = "aster" });
+        Assert.Equal("trade", relation.ProposalKind);
+        EnactPolicy(world, "aster", "declare_conflict", new { country_id = "beryl" });
+        Assert.True(relation.AtWar);
+        Assert.Null(relation.ProposedBy);
+        EnactPolicy(world, "aster", "respond_agreement", new { country_id = "beryl", accept = true });
+        Assert.False(relation.TradeAgreement);
+        Assert.Equal(-100, relation.Score);
+        SocietyEconomy.AssertConservation(world);
+    }
+
     [Theory]
     [InlineData(0, 40)]
     [InlineData(60, -20)]

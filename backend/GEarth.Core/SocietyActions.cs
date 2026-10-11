@@ -304,8 +304,17 @@ public static class SocietyActions
             var countryId = relation.First == nation.Id ? relation.Second : relation.First;
             if (relation.ProposedBy is not null && relation.ProposedBy != nation.Id)
             {
-                options.Add(Make("respond_agreement", new { country_id = countryId, accept = true }));
-                options.Add(Make("respond_agreement", new { country_id = countryId, accept = false }));
+                foreach (var accept in new[] { true, false })
+                    options.Add(Make("respond_agreement", new
+                    {
+                        country_id = countryId, accept, proposal_kind = relation.ProposalKind,
+                        proposal_terms = relation.ProposalTerms, proposal_expires_tick = relation.ProposalExpiresTick,
+                        effect = accept
+                            ? (relation.ProposalKind == "peace"
+                                ? SocietyWar.PeaceEffect(world, countryId, nation.Id, relation.ProposalTerms ?? "none")
+                                : "Accept trade agreement; bilateral import tariffs become zero.") + " Relations rise by 25, capped at 100."
+                            : "Reject this offer; relations fall by 5 and failed diplomacy is recorded."
+                    }));
             }
             else if (relation.ProposedBy is null)
             {

@@ -212,7 +212,7 @@ public static class SocietyLabor
     {
         var government = world.Agents[nation.Id + "_government"];
         var cost = StartupCost(sector);
-        if (government.CashMinor < cost)
+        if (SocietyBank.Liquid(world, government) < cost)
             return null;
         var occupation = SectorOf(sector).Occupation;
         var residents = world.InCountry(nation.Id).Where(person => person.Role == "citizen" && !IsStudent(person)).ToArray();
@@ -304,11 +304,14 @@ public static class SocietyLabor
         var society = world.Society!;
         var planned = IsPlanned(nation);
         var firms = world.InCountry(nation.Id).Where(agent => agent.Role == "business").ToArray();
+        // Freeze the completed week's shelf prices before next-week price adjustments.
+        var reviewCost = !planned && world.Tick % IndexationDays == 0 ? LivingCost(world, nation) : (double?)null;
+        var reviewBefore = nation.LivingCostAtReview > 0 ? nation.LivingCostAtReview
+            : DaysPerWeek * (SectorOf("food").BasePrice + SectorOf("energy").BasePrice);
         int hires = 0, layoffs = 0, quits = 0, payCuts = 0;
         var dividends = 0L;
         foreach (var firm in firms.Where(_ => !planned))
             Autopilot(world, nation, firm);
-        var raisePct = !planned && world.Tick % IndexationDays == 0 ? IndexPay(world, nation, firms) : (double?)null;
         foreach (var firm in firms.Where(_ => !planned))
             foreach (var worker in Staff(world, firm).OrderBy(SocietyEconomy.Capacity).ThenByDescending(worker => worker.SalaryMinor)
                          .Take(Math.Max(0, Staff(world, firm).Length - firm.TargetHeadcount)).ToArray())
@@ -326,11 +329,14 @@ public static class SocietyLabor
                 ReviewPrice(world, firm);
         foreach (var firm in firms)
         {
-            var (cut, laidOff, dividend) = Payroll(world, nation, government, firm, planned);
+            var (cut, laidOff, dividend) = Payroll(world, nation, government, firm, planned, reviewCost, reviewBefore);
             payCuts += cut;
             layoffs += laidOff;
             dividends += dividend;
         }
+        var raisePct = reviewCost is { } cost ? Math.Round(Math.Max(0, cost / reviewBefore - 1) * IndexationShare * 100, 2) : (double?)null;
+        if (reviewCost is { } completedCost)
+            nation.LivingCostAtReview = completedCost;
         SocietyMetrics.Labor(world, nation);
         world.Emit("labor_market", "rule", [nation.Id], new
         {
@@ -435,27 +441,22 @@ public static class SocietyLabor
             ? DaysPerWeek * AveragePrice(sellers) : DaysPerWeek * SectorOf(sector).BasePrice);
 
     // Partial indexation: when the cost of living has risen since the last review, profitable firms raise their
-    // staff's pay and their wage offers by a share of the rise. Pay never falls this way. Returns the raise in %.
-    private static double IndexPay(World world, Nation nation, Agent[] firms)
+    // staff's pay and their wage offers by a share of the rise, using completed operating cash-flow weeks.
+    private static void IndexPay(World world, Nation nation, Agent[] firms, double cost, double before)
     {
-        var cost = LivingCost(world, nation);
         // The national reference is a reporting baseline; each firm keeps its own unpaid catch-up.
-        var before = nation.LivingCostAtReview > 0 ? nation.LivingCostAtReview
-            : DaysPerWeek * (SectorOf("food").BasePrice + SectorOf("energy").BasePrice);
-        var rise = cost / before - 1;
-        nation.LivingCostAtReview = cost;
         foreach (var firm in firms.Where(firm => firm.Role == "business" && !SocietyBank.IsBank(firm)))
         {
             if (firm.WageIndexReference <= 0)
                 firm.WageIndexReference = before;
             var firmRise = cost / firm.WageIndexReference - 1;
-            if (firmRise <= 0 || !Profitable(world, firm))
+            var averageSurplus = firm.OperatingSurplusWeeksMinor.Count == 0 ? 0
+                : (long)firm.OperatingSurplusWeeksMinor.Average();
+            if (firmRise <= 0 || averageSurplus <= 0)
                 continue;
             var staff = Staff(world, firm);
             var payroll = staff.Sum(worker => worker.SalaryMinor);
-            var profit = world.Society!.PeriodRevenueMinor.GetValueOrDefault(firm.Id)
-                - world.Society.PeriodCostMinor.GetValueOrDefault(firm.Id) - payroll;
-            var spare = Math.Max(0, Math.Min(profit, SocietyBank.Liquid(world, firm) - payroll));
+            var spare = Math.Max(0, Math.Min(averageSurplus, SocietyBank.Liquid(world, firm) - payroll));
             var requested = (long)Math.Round(firmRise * IndexationShare * 10000);
             var basisPoints = payroll == 0 ? requested : Math.Min(requested, spare * 10000 / payroll);
             if (basisPoints <= 0)
@@ -471,10 +472,10 @@ public static class SocietyLabor
             {
                 raise_pct = basisPoints / 100.0, living_cost_minor = (long)Math.Ceiling(cost),
                 cost_reference_index = firm.WageIndexReference / (DaysPerWeek * (SectorOf("food").BasePrice + SectorOf("energy").BasePrice)), catch_up_pending = firm.WageIndexReference < cost,
-                employees = staff.Length
+                employees = staff.Length, effective_from_tick = world.Tick + DaysPerWeek,
+                operating_cash_surplus_average_minor = averageSurplus, observed_weeks = firm.OperatingSurplusWeeksMinor.Count
             });
         }
-        return Math.Round(Math.Max(0, rise) * IndexationShare * 100, 2);
     }
 
     private static void Autopilot(World world, Nation nation, Agent firm)
@@ -574,17 +575,14 @@ public static class SocietyLabor
         return (hires, switches);
     }
 
-    private static (int PayCuts, int Layoffs, long Dividend) Payroll(World world, Nation nation, Agent government, Agent firm, bool planned)
+    private static (int PayCuts, int Layoffs, long Dividend) Payroll(World world, Nation nation, Agent government, Agent firm, bool planned, double? reviewCost, double reviewBefore)
     {
         var society = world.Society!;
         var staff = Staff(world, firm);
         int cuts = 0, layoffs = 0;
         var revenue = society.PeriodRevenueMinor.GetValueOrDefault(firm.Id);
-        // A banking firm draws on its deposit for the week's pay; a state-run employer owes what it cannot pay.
+        // Domestic wages settle deposits directly; a state-run employer owes what it cannot pay.
         var stateRun = firm.OwnerId is null && !SocietyBank.IsBank(firm);
-        if (SocietyBank.Banks(firm))
-            SocietyBank.Draw(world, firm, staff.Sum(worker => worker.SalaryMinor)
-                + TableWage.GetValueOrDefault(firm.OwnerId is { } id ? world.Agents[id].FormerOccupation ?? "" : "", 0));
         if (!planned && !stateRun && staff.Where(worker => worker.WorkEffort > 0).Sum(worker => worker.SalaryMinor) > SocietyBank.Liquid(world, firm))
         {
             // Short of cash: lay off the most expensive workers down to a minimum crew first (employers rarely cut
@@ -625,15 +623,24 @@ public static class SocietyLabor
         }
         paid += SocietyEconomy.PayOwed(world, nation, government, firm, dues);
         // A graduate on staff earns the firm the government's hiring bonus, if one is offered.
-        var bonus = Math.Min(government.CashMinor, (long)nation.HiringBonusMinor * staff.Count(worker => worker.Graduated));
+        var bonus = Math.Min(SocietyBank.Liquid(world, government), (long)nation.HiringBonusMinor * staff.Count(worker => worker.Graduated));
         if (bonus > 0 && firm.OwnerId is not null)
-            SocietyEconomy.Transfer(world, government, firm, bonus, "hiring_bonus");
+        {
+            SocietyEconomy.Sell(world, government, firm, bonus, kind: "hiring_bonus");
+            revenue += bonus;
+        }
         var profit = revenue - society.PeriodCostMinor.GetValueOrDefault(firm.Id) - paid;
+        firm.OperatingSurplusWeeksMinor.Add(profit);
+        if (firm.OperatingSurplusWeeksMinor.Count > 4)
+            firm.OperatingSurplusWeeksMinor.RemoveAt(0);
         var profitTax = Math.Min(SocietyBank.Liquid(world, firm), Math.Max(0, profit) * nation.ProfitTaxBasisPoints / 10000);
         firm.LastWeekOperatingProfitMinor = profit - profitTax;
         SocietyEconomy.Transfer(world, firm, government, profitTax, "profit_tax");
         nation.ProfitTaxCollectedMinor += profitTax;
         nation.TaxesCollectedMinor += profitTax;
+        // Index after completed payroll, before discretionary owner distributions.
+        if (reviewCost is { } cost)
+            IndexPay(world, nation, [firm], cost, reviewBefore);
         var dividend = 0L;
         Agent? unpaidOwner = null;
         if (firm.OwnerId is { } ownerId && world.Agents[ownerId] is { Role: "entrepreneur" } owner)
@@ -646,7 +653,9 @@ public static class SocietyLabor
             {
                 var afterTax = profit - profitTax;
                 var wage = TableWage.GetValueOrDefault(owner.FormerOccupation ?? "", 0);
-                draw = Math.Min(SocietyBank.Liquid(world, firm), Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000);
+                var distributable = Math.Max(0, SocietyBank.Liquid(world, firm)
+                    - Staff(world, firm).Sum(worker => worker.SalaryMinor));
+                draw = Math.Min(distributable, Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000);
                 SocietyEconomy.Transfer(world, firm, owner, draw, "owner_draw");
             }
             // Dividends: cash and deposits beyond a buffer of several weeks' payroll go to the owner instead of idling.
@@ -722,55 +731,35 @@ public static class SocietyLabor
     // Prices stay between half and three times the sector's base price.
     public static int ClampPrice(Sector spec, int price) => Math.Clamp(price, spec.BasePrice / 2, spec.BasePrice * 3);
 
-    // Closing repays the firm's bank loans, then returns its cash to its owner; a competitor buys stock at
-    // half price, and whatever is not bought goes to the owner. Nothing is created or destroyed.
+    // Closure removes the firm from production while preserving a fixed-country liquidation estate.
     public static void Close(World world, Nation nation, Agent firm, string reason)
     {
+        if (firm.Role == "defunct")
+            return;
+        if (SocietyBank.IsBank(firm))
+            throw new InvalidOperationException("Banks continue under state takeover rather than liquidation");
         var staff = Staff(world, firm);
         foreach (var worker in staff)
             Fire(world, worker);
         var owner = firm.OwnerId is { } ownerId ? world.Agents[ownerId] : null;
-        var recovered = 0L;
-        foreach (var good in SocietyFactory.Goods)
-        {
-            var units = firm.Inventory[good];
-            if (units == 0)
-                continue;
-            var buyer = Firms(world, firm.CountryId, firm.Specialty!).Where(agent => agent != firm)
-                .OrderByDescending(agent => agent.CashMinor).FirstOrDefault();
-            var price = Math.Max(1, SocietyFactory.BasePrice(good) / 2);
-            var sold = buyer is null ? 0 : (int)Math.Min(units, buyer.CashMinor / price);
-            if (sold > 0)
-            {
-                SocietyEconomy.Transfer(world, buyer!, firm, (long)sold * price, "liquidation_sale");
-                buyer!.Inventory[good] += sold;
-            }
-            if (owner is not null)
-                owner.Inventory[good] += units - sold;
-            else if (buyer is not null)
-                buyer.Inventory[good] += units - sold;
-            else
-                continue;
-            firm.Inventory[good] = 0;
-        }
-        SocietyBank.Withdraw(world, firm, firm.DepositMinor);
+        firm.EstateBeneficiaryId = owner?.Id ?? nation.Id + "_government";
         SocietyBank.Recover(world, nation, firm);
-        if (owner is not null)
-        {
-            recovered = firm.CashMinor;
-            SocietyEconomy.Transfer(world, firm, owner, firm.CashMinor, "closure_payout");
-            ReleaseOwner(world, owner);
-        }
-        else
-            SocietyEconomy.Transfer(world, firm, world.Agents[nation.Id + "_government"], firm.CashMinor, "closure_payout");
         firm.Role = "defunct";
         firm.TargetHeadcount = 0;
+        // Start the existing recovery delay at closure, not at the next weekly scan.
+        if (Essential.Contains(firm.Specialty!) && !Firms(world, nation.Id, firm.Specialty!).Any())
+            nation.NeededSince.TryAdd(firm.Specialty!, world.Tick);
+        var recovered = SocietyEstates.Settle(world, firm);
+        if (owner is not null)
+            ReleaseOwner(world, owner);
         nation.Population--;
         nation.BusinessesClosed++;
         world.Emit("business_closed", "rule", [firm.Id, nation.Id], new
         {
             sector = firm.Specialty, owner = firm.OwnerId, reason, workers_laid_off = staff.Length,
-            invested_minor = firm.InvestedMinor, recovered_minor = recovered
+            invested_minor = firm.InvestedMinor, recovered_minor = recovered,
+            estate_beneficiary_id = firm.EstateBeneficiaryId, guaranteed_credit_ids = firm.EstateCreditIds,
+            retained_assets_minor = firm.CashMinor + firm.DepositMinor
         });
     }
 

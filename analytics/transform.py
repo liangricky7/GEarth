@@ -13,7 +13,10 @@ AGENT_FACTS = ("occupation", "specialty", "owner_id", "owned_business_id", "stud
                "deposit_rate_pct", "loan_rate_pct", "lending_standard", "unmet_withdrawals_minor", "too_sick",
                "school_seats", "enrolled_students", "planned_daily_quota", "last_week_disposable_income_minor",
                "last_week_real_income_minor", "last_week_work_days", "last_week_income_tick", "net_wealth_minor",
-               "last_week_income_constrained", "last_week_operating_profit_minor")
+               "last_week_income_constrained", "last_week_operating_profit_minor",
+               "last_week_operating_cash_surplus_minor", "operating_cash_surplus_average_minor",
+               "operating_cash_surplus_observed_weeks", "estate_beneficiary_id", "estate_finalized",
+               "deposit_interest_suspended")
 COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_residents_last_week", "priced_out_last_week",
                  "output_lost_to_hunger_pct", "food_subsidy_pct", "food_subsidy_paid_minor", "startup_grants_paid_minor",
                  "capitation_paid_minor", "tuition_subsidy_pct", "student_stipend", "hiring_bonus_minor", "doctor_visits",
@@ -26,8 +29,9 @@ COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_res
 
 AGENT_TYPES = {key: "long" for key in AGENT_FACTS}
 AGENT_TYPES.update({key: "boolean" for key in ("graduated", "is_student", "seeking_better_job", "hungry", "hungry_this_week",
-    "priced_out_this_week", "works_overtime", "keeps_savings_in_bank", "too_sick")})
-AGENT_TYPES.update({key: "string" for key in ("occupation", "specialty", "owner_id", "owned_business_id", "school_id", "lending_standard")})
+    "priced_out_this_week", "works_overtime", "keeps_savings_in_bank", "too_sick", "estate_finalized",
+    "deposit_interest_suspended")})
+AGENT_TYPES.update({key: "string" for key in ("occupation", "specialty", "owner_id", "owned_business_id", "school_id", "lending_standard", "estate_beneficiary_id")})
 AGENT_TYPES["needs_met"] = "double"
 AGENT_TYPES["last_week_work_days"] = "double"
 COUNTRY_TYPES = {key: "long" for key in COUNTRY_FACTS}
@@ -92,6 +96,8 @@ def typed_record(record):
     elif kind == "bank_ledger":
         common.update(bank_id=payload["bank_id"], sender_account_id=payload.get("from"), recipient_account_id=payload.get("to"),
                       transfer_kind=payload["kind"], amount_minor=integer(payload["amount_minor"], "amount_minor"),
+                      credit_id=payload.get("credit_id"), event_id=payload.get("event_id"),
+                      transaction_group_id=payload.get("transaction_group_id"), decision_id=payload.get("decision_id"),
                       reserves_minor=integer(payload["reserves_minor"], "reserves_minor"),
                       deposits_minor=integer(payload["deposits_minor"], "deposits_minor"),
                       loans_minor=integer(payload["loans_minor"], "loans_minor"), equity_minor=payload["equity_minor"])

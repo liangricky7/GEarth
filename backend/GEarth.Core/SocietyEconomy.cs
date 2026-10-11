@@ -125,7 +125,7 @@ public static class SocietyEconomy
                 }
 
             var start = residents.Length == 0 ? 0 : world.Tick % residents.Length;
-            var foodOnShelves = Sellers(world, nation, "food").Any();
+            var foodOnShelves = Offers(world, nation, "food").Any();
             for (var index = 0; index < residents.Length; index++)
             {
                 var resident = residents[(index + start) % residents.Length];
@@ -216,10 +216,11 @@ public static class SocietyEconomy
                          && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
                 {
                     var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
-                    if (SocietyBank.Liquid(world, firm) > payroll * 4)
-                        Transfer(world, firm, government, SocietyBank.Liquid(world, firm) - payroll * 4, "state_surplus");
-                    else if (SocietyBank.Liquid(world, firm) < payroll)
-                        Transfer(world, government, firm, Math.Min(SocietyBank.Liquid(world, government), payroll - SocietyBank.Liquid(world, firm)), "state_subsidy");
+                    var operations = payroll + SocietyResources.InputWorkingCapital(world, nation, firm);
+                    if (SocietyBank.Liquid(world, firm) > operations * 4)
+                        Transfer(world, firm, government, SocietyBank.Liquid(world, firm) - operations * 4, "state_surplus");
+                    else if (SocietyBank.Liquid(world, firm) < operations)
+                        Transfer(world, government, firm, Math.Min(SocietyBank.Liquid(world, government), operations - SocietyBank.Liquid(world, firm)), "state_subsidy");
                 }
 
             SocietyBank.Week(world, nation);
@@ -348,14 +349,14 @@ public static class SocietyEconomy
     private static void Discretionary(World world, Nation nation, Agent[] residents)
     {
         var society = world.Society!;
-        var shops = Sellers(world, nation, "tools").ToArray();
+        var shops = Offers(world, nation, "tools").ToArray();
         var venues = SocietyLabor.Firms(world, nation.Id, "entertainment").OrderBy(venue => venue.PriceMinor).ThenBy(venue => venue.Id).ToArray();
         var seats = venues.ToDictionary(venue => venue.Id, venue => SocietyPlanning.Cap(world, nation, venue, (int)SocietyLabor.ServiceCapacity(world, venue), SocietyLabor.DaysPerWeek));
         foreach (var venue in venues)
             SocietyResources.PrepareServices(world, venue, seats[venue.Id]);
         var basePrice = SocietyLabor.SectorOf("entertainment").BasePrice;
         // Necessities come first: a week of food and energy at today's cheapest prices is set aside.
-        long Cheapest(string good) => Sellers(world, nation, good).Select(seller => (long)seller.PriceMinor).DefaultIfEmpty(SocietyFactory.BasePrice(good)).First();
+        long Cheapest(string good) => Offers(world, nation, good).Select(offer => (long)offer.PriceMinor).DefaultIfEmpty(SocietyFactory.BasePrice(good)).First();
         var essentials = SocietyLabor.DaysPerWeek * (Cheapest("food") + Cheapest("energy"));
         foreach (var resident in residents)
         {
@@ -369,7 +370,7 @@ public static class SocietyEconomy
             for (var round = 0; round < 2 * ComfortUnitsAtFull; round++)
             {
                 var spendable = SocietyBank.Liquid(world, resident) - essentials; // savings in the bank can be spent too
-                var shop = PickSeller(shops.Where(seller => seller.Inventory["tools"] > 0 && seller.PriceMinor <= spendable).ToArray(),
+                var shop = PickOffer(shops.Where(offer => offer.Seller.Inventory["tools"] > 0 && offer.PriceMinor <= spendable).ToArray(),
                     world.Seed, $"{resident.Id}:{world.Tick}:tools:{round}");
                 var venue = PickSeller(venues.Where(seller => seats[seller.Id] > 0 && SocietyResources.CanPowerSession(world, seller) && seller.PriceMinor <= spendable).ToArray(),
                     world.Seed, $"{resident.Id}:{world.Tick}:entertainment:{round}");
@@ -381,9 +382,10 @@ public static class SocietyEconomy
                     break;
                 if (goodsGain >= serviceGain)
                 {
-                    SocietyBank.Draw(world, resident, shop!.PriceMinor);
-                    Sell(world, resident, shop, shop.PriceMinor, true, 1);
-                    shop.Inventory["tools"]--;
+                    using var auditGroup = RunAudit.Group(world, "tools", 1, shop!.PriceMinor);
+                    Sell(world, resident, shop.Seller, shop.PriceMinor, true, 1, shop.Liquidation ? "liquidation_sale" : "purchase");
+                    shop.Seller.Inventory["tools"]--;
+                    if (shop.Liquidation) SocietyEstates.Settle(world, shop.Seller);
                     society.ConsumedGoods["tools"]++;
                     goods++;
                 }
@@ -391,8 +393,7 @@ public static class SocietyEconomy
                 {
                     if (!SocietyResources.PowerSession(world, venue!))
                         break;
-                    SocietyBank.Draw(world, resident, venue!.PriceMinor);
-                    Sell(world, resident, venue, venue.PriceMinor, true, 1);
+                    Sell(world, resident, venue!, venue!.PriceMinor, true, 1);
                     seats[venue.Id]--;
                     services++;
                 }
@@ -423,10 +424,31 @@ public static class SocietyEconomy
         return sellers[^1];
     }
 
+    private static DomesticOffer? PickOffer(DomesticOffer[] offers, int seed, string key)
+    {
+        if (offers.Length <= 1)
+            return offers.FirstOrDefault();
+        var cheapest = offers.Min(offer => offer.PriceMinor);
+        var weights = offers.Select(offer => Math.Pow(cheapest / (double)offer.PriceMinor, 4)).ToArray();
+        var draw = SocietyFactory.Sample(seed, key, "seller") * weights.Sum();
+        for (var index = 0; index < offers.Length; index++)
+        {
+            draw -= weights[index];
+            if (draw <= 0) return offers[index];
+        }
+        return offers[^1];
+    }
+
     // Domestic sellers of a good, cheapest first.
     public static IEnumerable<Agent> Sellers(World world, Nation nation, string good) =>
         SocietyLabor.Firms(world, nation.Id, SocietyResources.SectorForGood(good).Id).Where(agent => agent.Inventory[good] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id);
+
+    public static IEnumerable<DomesticOffer> Offers(World world, Nation nation, string good) =>
+        Sellers(world, nation, good).Select(seller => new DomesticOffer(seller, seller.PriceMinor))
+            .Concat(SocietyEstates.Sellers(world, nation.Id, good)
+                .Select(seller => new DomesticOffer(seller, SocietyEstates.Price(good), true)))
+            .OrderBy(offer => offer.PriceMinor).ThenBy(offer => offer.Seller.Id, StringComparer.Ordinal);
 
     // Buys up to the wanted quantity from domestic sellers the buyer can afford. Firms buy inputs from the
     // cheapest seller; households start at a price-weighted pick and fall back to the cheapest. A food subsidy
@@ -437,17 +459,18 @@ public static class SocietyEconomy
             return 0; // households demand the finished goods, never raw industrial inputs
         var nation = world.Society!.Nations[buyer.CountryId];
         var bought = 0;
-        var sellers = Sellers(world, nation, good).Where(seller => seller != buyer).ToArray();
-        if (household && wanted > 0 && PickSeller(sellers, world.Seed, $"{buyer.Id}:{world.Tick}:{good}") is { } first)
-            sellers = [first, .. sellers.Where(seller => seller != first)];
+        var offers = Offers(world, nation, good).Where(offer => offer.Seller != buyer).ToArray();
+        if (household && wanted > 0 && PickOffer(offers, world.Seed, $"{buyer.Id}:{world.Tick}:{good}") is { } first)
+            offers = [first, .. offers.Where(offer => offer != first)];
         var subsidyPct = household && good == "food" ? nation.FoodSubsidyPct : 0;
         var government = world.Agents[nation.Id + "_government"];
-        foreach (var seller in sellers)
+        foreach (var offer in offers)
         {
+            var seller = offer.Seller;
             if (bought >= wanted)
                 break;
-            var share = (long)seller.PriceMinor * subsidyPct / 100;
-            var own = seller.PriceMinor - share;
+            var share = (long)offer.PriceMinor * subsidyPct / 100;
+            var own = offer.PriceMinor - share;
             var units = (int)Math.Min(Math.Min(wanted - bought, seller.Inventory[good]), SocietyBank.Liquid(world, buyer) / Math.Max(1, own));
             if (share > 0)
                 units = (int)Math.Min(units, SocietyBank.Liquid(world, government) / share);
@@ -461,7 +484,8 @@ public static class SocietyEconomy
                     world.Society.IncomeConstrainedThisWeek[seller.Id] = world.Society.IncomeConstrainedThisWeek.GetValueOrDefault(seller.Id) + 1;
                 continue;
             }
-            Sell(world, buyer, seller, units * own, household, units);
+            using var auditGroup = RunAudit.Group(world, good, units, offer.PriceMinor);
+            Sell(world, buyer, seller, units * own, household, units, offer.Liquidation ? "liquidation_sale" : "purchase");
             if (share > 0)
             {
                 Sell(world, government, seller, units * share, kind: "food_subsidy");
@@ -470,6 +494,8 @@ public static class SocietyEconomy
             seller.Inventory[good] -= units;
             buyer.Inventory[good] += units;
             bought += units;
+            if (offer.Liquidation)
+                SocietyEstates.Settle(world, seller);
         }
         return bought;
     }
@@ -480,7 +506,7 @@ public static class SocietyEconomy
         if (wanted <= 0)
             return;
         var bought = Acquire(world, buyer, good, wanted, false);
-        if (bought < wanted && !Sellers(world, world.Society!.Nations[buyer.CountryId], good).Any(seller => seller != buyer))
+        if (bought < wanted && !Offers(world, world.Society!.Nations[buyer.CountryId], good).Any(offer => offer.Seller != buyer))
             SocietyTrade.AutoImport(world, buyer, good, (wanted - bought) * 14);
     }
 
@@ -499,7 +525,8 @@ public static class SocietyEconomy
     public static void Sell(World world, Agent buyer, Agent seller, long amount, bool household = false, int units = 0,
         string kind = "purchase")
     {
-        using var auditGroup = RunAudit.Group(world, seller.Specialty, units > 0 ? units : null, seller.PriceMinor);
+        using var auditGroup = RunAudit.Group(world, world.CurrentAuditContext?.Good ?? seller.Specialty, units > 0 ? units : null,
+            world.CurrentAuditContext?.UnitPriceMinor ?? seller.PriceMinor);
         var society = world.Society!;
         var nation = society.Nations[seller.CountryId];
         var tax = household ? amount * nation.SalesTaxBasisPoints / 10000 : 0;

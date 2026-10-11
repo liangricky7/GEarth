@@ -45,8 +45,18 @@ public sealed class CoordinatorAuditTests
             Assert.Equal(interruptedTick, final.AuditDailyThroughTick);
             var persisted = (await backing.Load(runId, CancellationToken.None))!;
             Assert.Equal(final.AuditSequence, persisted.AuditSequence);
-            var records = await backing.ReadAudit(runId, 0, 10000, CancellationToken.None);
-            Assert.Equal(final.AuditSequence, records.Length);
+            // Pages are bounded by bytes as well as rows; richer agent facts can reach the byte cap.
+            var records = new List<AuditRecord>();
+            long after = 0;
+            while (after < final.AuditSequence)
+            {
+                var page = await backing.ReadAudit(runId, after, 10000, CancellationToken.None);
+                Assert.NotEmpty(page);
+                Assert.Equal(after + 1, page[0].Sequence);
+                records.AddRange(page);
+                after = page[^1].Sequence;
+            }
+            Assert.Equal(final.AuditSequence, records.Count);
             var daily = records.Where(row => row.Kind == "agent_day" && row.Payload["frame_kind"]!.GetValue<string>() == "day");
             var terminal = records.Where(row => row.Kind == "agent_day" && row.Payload["frame_kind"]!.GetValue<string>() == "end");
             Assert.Equal(final.Agents.Count * interruptedTick, daily.Count());

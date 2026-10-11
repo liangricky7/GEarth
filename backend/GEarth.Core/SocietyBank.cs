@@ -42,6 +42,19 @@ public static class SocietyBank
     public static long CashAvailable(World world, Agent resident) =>
         resident.CashMinor + Math.Min(resident.DepositMinor, BankOf(world, resident.CountryId).CashMinor);
 
+    // A cash-only operation may use existing reserves, but is not a request for insurance.
+    public static long WithdrawAvailable(World world, Agent depositor, long requested)
+    {
+        if (requested < 0)
+            throw new InvalidOperationException("Negative withdrawal");
+        var bank = BankOf(world, depositor.CountryId);
+        var paid = Math.Min(requested, Math.Min(depositor.DepositMinor, bank.CashMinor));
+        SocietyEconomy.Transfer(world, bank, depositor, paid, "withdrawal");
+        depositor.DepositMinor -= paid;
+        Ledger(world, bank, depositor, null, paid, "cash_withdrawal_claim_reduced");
+        return paid;
+    }
+
     public static long PaymentCapacity(World world, Agent payer, Agent recipient) => payer.CashMinor
         + (payer.CountryId == recipient.CountryId ? payer.DepositMinor
             : Math.Min(payer.DepositMinor, BankOf(world, payer.CountryId).CashMinor));
@@ -64,15 +77,23 @@ public static class SocietyBank
         Ledger(world, source, payer, recipient, amount, kind);
     }
 
-    private static void Ledger(World world, Agent bank, Agent? from, Agent? to, long amount, string kind)
+    private static void Ledger(World world, Agent bank, Agent? from, Agent? to, long amount, string kind, string? creditId = null)
     {
+        if (amount == 0)
+            return;
         var payload = new
         {
             bank_id = bank.Id, from = from?.Id, to = to?.Id, amount_minor = amount, kind,
+            credit_id = creditId,
             reserves_minor = bank.CashMinor, deposits_minor = Deposits(world, bank.CountryId),
             loans_minor = LoansOutstanding(world, bank), equity_minor = Equity(world, bank)
         };
-        RunAudit.Append(world, "bank_ledger", payload);
+        // Capture-only causal IDs must not change ordinary simulation events or saved state.
+        var auditPayload = Wire.Node(payload).AsObject();
+        auditPayload["event_id"] = world.CurrentAuditContext?.EventId;
+        auditPayload["transaction_group_id"] = world.CurrentAuditContext?.GroupId;
+        auditPayload["decision_id"] = world.CurrentAuditContext?.DecisionId;
+        RunAudit.Append(world, "bank_ledger", auditPayload);
         world.Emit("bank_ledger", "rule", new[] { bank.Id, from?.Id, to?.Id }.OfType<string>().Distinct().ToArray(), payload);
     }
 
@@ -81,7 +102,7 @@ public static class SocietyBank
         borrower.DepositMinor += amount;
         loan.DepositCreated = true;
         world.Society!.CreditCreatedMinor += amount;
-        Ledger(world, bank, null, borrower, amount, "loan_deposit_created");
+        Ledger(world, bank, null, borrower, amount, "loan_deposit_created", loan.Id);
     }
 
     public static long BroadMoney(World world) => world.Agents.Values.Where(agent => !IsBank(agent)).Sum(agent => agent.CashMinor)
@@ -124,6 +145,7 @@ public static class SocietyBank
             throw new InvalidOperationException("A cash deposit requires cash");
         SocietyEconomy.Transfer(world, depositor, BankOf(world, depositor.CountryId), amount, "deposit");
         depositor.DepositMinor += amount;
+        Ledger(world, BankOf(world, depositor.CountryId), null, depositor, amount, "cash_deposit_claim_created");
     }
 
     // Pays out from reserves. Whatever the reserves cannot pay is covered by deposit insurance up to the
@@ -135,6 +157,7 @@ public static class SocietyBank
         var paid = Math.Min(amount, bank.CashMinor);
         SocietyEconomy.Transfer(world, bank, depositor, paid, "withdrawal");
         depositor.DepositMinor -= paid;
+        Ledger(world, bank, depositor, null, paid, "cash_withdrawal_claim_reduced");
         var shortfall = amount - paid;
         if (shortfall == 0)
             return paid;
@@ -152,6 +175,7 @@ public static class SocietyBank
         depositor.InsuredMinor += covered;
         government.DepositMinor += covered;
         nation.DepositInsurancePaidMinor += covered;
+        Ledger(world, bank, depositor, government, covered, "insurance_claim_assigned");
         return paid + covered;
     }
 
@@ -159,7 +183,7 @@ public static class SocietyBank
     public static void Draw(World world, Agent resident, long amount)
     {
         if (resident.CashMinor < amount && resident.DepositMinor > 0)
-            Withdraw(world, resident, amount - resident.CashMinor);
+            WithdrawAvailable(world, resident, amount - resident.CashMinor);
     }
 
     // A resident who stops trusting the bank takes everything out; one who returns is swept in again weekly.
@@ -203,8 +227,10 @@ public static class SocietyBank
         var government = world.Agents[nation.Id + "_government"];
         foreach (var loan in society.Credit.Where(credit => credit.BankId == government.Id && credit.Status == "active").ToArray())
             Collect(world, nation, government, loan);
+        // State continuation preserves existing claims; exhausted capital cannot fund new interest.
+        bank.DepositInterestSuspended = Equity(world, bank) <= 0;
         // Interest is added to deposits: a cost to the bank that moves no cash.
-        foreach (var depositor in world.Agents.Values.Where(agent => agent.CountryId == nation.Id
+        foreach (var depositor in world.Agents.Values.Where(agent => !bank.DepositInterestSuspended && agent.CountryId == nation.Id
                      && agent.Role != "government" && agent.DepositMinor > 0))
         {
             var interest = (long)Math.Round(depositor.DepositMinor * bank.DepositRatePct / (100.0 * WeeksPerYear));
@@ -212,6 +238,7 @@ public static class SocietyBank
             if (SocietyLabor.IsResident(depositor))
                 depositor.WeekDisposableIncomeMinor += interest;
             society.PeriodCostMinor[bank.Id] = society.PeriodCostMinor.GetValueOrDefault(bank.Id) + interest;
+            Ledger(world, bank, null, depositor, interest, "deposit_interest");
         }
         var equity = Equity(world, bank);
         if (equity < 0 && bank.OwnerId is { } ownerId)
@@ -222,7 +249,7 @@ public static class SocietyBank
             world.Emit("bank_failed", "rule", [bank.Id, nation.Id], new
             {
                 owner = ownerId, equity_minor = equity, deposits_minor = Deposits(world, nation.Id),
-                outcome = "state takeover; the owner loses their stake and depositors keep their claims"
+                outcome = "state takeover with nominal domestic deposit continuation guarantee; no recapitalization or new reserves"
             });
         }
         var shortOfReserves = bank.UnmetWithdrawalsMinor > 0;
@@ -232,36 +259,54 @@ public static class SocietyBank
         {
             reserves_minor = bank.CashMinor, deposits_minor = Deposits(world, nation.Id), loans_minor = LoansOutstanding(world, bank),
             equity_minor = Equity(world, bank), unmet_withdrawals_minor = bank.UnmetWithdrawalsMinor,
+            reserve_shortfall_minor = Math.Max(0, RequiredReserves(world, bank) - bank.CashMinor),
+            capital_shortfall_minor = Math.Max(0, -Equity(world, bank)),
+            continuation_guarantee_exposure_minor = Math.Max(0, -Equity(world, bank)),
+            nominal_domestic_claims_guaranteed = bank.OwnerId is null,
+            deposit_interest_suspended = bank.DepositInterestSuspended,
             insurance_paid_minor = nation.DepositInsurancePaidMinor, bank.DepositRatePct, bank.LoanRatePct, bank.LendingStandard
         });
         bank.UnmetWithdrawalsMinor = 0;
     }
 
-    // After the week's spending: savings above the cash buffer go into the bank, residents short of it
-    // draw on deposits, and those who chose to keep savings out withdraw what the bank still owes them.
+    // After spending: deposit excess cash, then share spare reserves across automatic buffer requests.
+    // Those who explicitly chose to keep savings out request real withdrawals, with insurance if needed.
     // The government then recovers insurance claims from reserves above the requirement.
     public static void Sweep(World world, Nation nation, Agent[] residents)
     {
-        foreach (var resident in residents)
+        var buffers = new List<(Agent Account, long Buffer)>();
+        foreach (var resident in residents.OrderBy(resident => resident.Id, StringComparer.Ordinal))
         {
             var buffer = (long)(CashBufferWeeks * SocietyEconomy.WeeklyPay(resident));
             if (!resident.KeepsSavingsInBank)
                 Withdraw(world, resident, resident.DepositMinor);
-            else if (resident.CashMinor > buffer)
-                Deposit(world, resident, resident.CashMinor - buffer);
-            else if (resident.DepositMinor > 0)
-                Withdraw(world, resident, buffer - resident.CashMinor);
+            else
+                buffers.Add((resident, buffer));
         }
         // Private firms bank their cash above two weeks of payroll and draw on it when short.
         foreach (var firm in world.InCountry(nation.Id).Where(Banks).ToArray())
         {
             var buffer = FirmBuffer(world, firm);
-            if (firm.CashMinor > buffer)
-                Deposit(world, firm, firm.CashMinor - buffer);
-            else if (firm.DepositMinor > 0)
-                Withdraw(world, firm, buffer - firm.CashMinor);
+            buffers.Add((firm, buffer));
         }
+        foreach (var (account, buffer) in buffers)
+            if (account.CashMinor > buffer)
+                Deposit(world, account, account.CashMinor - buffer);
         var bank = BankOf(world, nation.Id);
+        var requests = buffers.Select(item => (item.Account,
+                Amount: Math.Min(item.Account.DepositMinor, Math.Max(0, item.Buffer - item.Account.CashMinor))))
+            .Where(item => item.Amount > 0).OrderBy(item => item.Account.Id, StringComparer.Ordinal).ToArray();
+        var total = requests.Sum(item => item.Amount);
+        var budget = Math.Min(total, Math.Max(0, bank.CashMinor - RequiredReserves(world, bank)));
+        // Cumulative rounding gives proportional allocation with an exact, deterministic total.
+        long cumulative = 0, allocated = 0;
+        foreach (var (account, amount) in requests)
+        {
+            cumulative += amount;
+            var through = (long)((decimal)budget * cumulative / total);
+            WithdrawAvailable(world, account, through - allocated);
+            allocated = through;
+        }
         var government = world.Agents[nation.Id + "_government"];
         var spare = bank.CashMinor - RequiredReserves(world, bank);
         if (government.DepositMinor > 0 && spare > 0)
@@ -302,7 +347,7 @@ public static class SocietyBank
         if (loan.DepositCreated && IsBank(bank))
         {
             society.CreditRetiredMinor += principal;
-            Ledger(world, bank, borrower, null, principal, "loan_principal_retired");
+            Ledger(world, bank, borrower, null, principal, "loan_principal_retired", loan.Id);
         }
         loan.MissedPayments = 0;
         society.PeriodRevenueMinor[bank.Id] = society.PeriodRevenueMinor.GetValueOrDefault(bank.Id) + loan.WeeklyInterestMinor;
@@ -331,6 +376,7 @@ public static class SocietyBank
                 {
                     var debt = Open(world, bank, owner, loan.PrincipalLeftMinor, "owner_debt", loan.RatePct);
                     debt.DepositCreated = loan.DepositCreated;
+                    firm.EstateCreditIds.Add(debt.Id);
                     world.Emit("owner_debt", "rule", [debt.Id, owner.Id, bank.Id], new
                     {
                         firm = firm.Id, amount_minor = debt.PrincipalMinor, weekly_payment_minor = debt.WeeklyPrincipalMinor + debt.WeeklyInterestMinor
@@ -341,10 +387,31 @@ public static class SocietyBank
             if (loan.DepositCreated && IsBank(bank) && paid > 0)
             {
                 world.Society.CreditRetiredMinor += paid;
-                Ledger(world, bank, firm, null, paid, "loan_principal_retired");
+                Ledger(world, bank, firm, null, paid, "loan_principal_retired", loan.Id);
             }
             Settle(world, nation, bank, loan, paid);
         }
+    }
+
+    // Estate proceeds pay the existing guaranteed principal, never another copy of the debt.
+    public static long RepayPrincipal(World world, Agent payer, Credit loan)
+    {
+        if (loan.Status != "active")
+            return 0;
+        var lender = world.Agents[loan.BankId];
+        var paid = Math.Min(PaymentCapacity(world, payer, lender), loan.PrincipalLeftMinor);
+        if (paid == 0)
+            return 0;
+        SocietyEconomy.Transfer(world, payer, lender, paid, "loan_recovery");
+        loan.PrincipalLeftMinor -= paid;
+        if (paid > 0 && loan.DepositCreated && IsBank(lender))
+        {
+            world.Society!.CreditRetiredMinor += paid;
+            Ledger(world, lender, payer, null, paid, "loan_principal_retired", loan.Id);
+        }
+        if (loan.PrincipalLeftMinor == 0)
+            Settle(world, world.Society!.Nations[payer.CountryId], lender, loan, paid);
+        return paid;
     }
 
     // An active loan with no request step: owner debt, a student loan or treasury borrowing.
@@ -396,7 +463,7 @@ public static class SocietyBank
         if (loan.DepositCreated)
         {
             world.Society!.CreditRetiredMinor += loan.PrincipalLeftMinor;
-            Ledger(world, bank, government, null, loan.PrincipalLeftMinor, "loan_principal_retired");
+            Ledger(world, bank, government, null, loan.PrincipalLeftMinor, "loan_principal_retired", loan.Id);
         }
         loan.MissedPayments = 0;
         world.Emit("loan_guaranteed", "rule", [loan.Id, loan.BorrowerId, government.Id], new { paid_minor = loan.PrincipalLeftMinor });
@@ -500,6 +567,11 @@ public static class SocietyBank
             bank.DepositRatePct, bank.LoanRatePct,
             reserves_pct_of_deposits = deposits == 0 ? (long?)null : bank.CashMinor * 100 / deposits,
             unmet_withdrawals_minor = bank.UnmetWithdrawalsMinor,
+            reserve_shortfall_minor = Math.Max(0, RequiredReserves(world, bank) - bank.CashMinor),
+            capital_shortfall_minor = Math.Max(0, -Equity(world, bank)),
+            nominal_domestic_claims_guaranteed = bank.OwnerId is null,
+            continuation_guarantee_exposure_minor = bank.OwnerId is null ? Math.Max(0, -Equity(world, bank)) : 0,
+            deposit_interest_suspended = bank.DepositInterestSuspended,
             deposits_insured_up_to = limit == Governments.FullDepositInsurance ? "all" : limit.ToString(),
             state_run = bank.OwnerId is null ? true : (bool?)null,
             reserves_minor = manager ? bank.CashMinor : (long?)null,

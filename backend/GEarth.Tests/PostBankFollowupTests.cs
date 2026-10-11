@@ -114,7 +114,7 @@ public sealed class PostBankFollowupTests
         var reference = firm.WageIndexReference;
         Assert.True(reference < SocietyLabor.LivingCost(world, world.Society!.Nations["aster"]));
         Assert.DoesNotContain(world.Events, item => item.EventType == "wage_indexed" && item.EntityIds.Contains(firm.Id));
-        world.Society.PeriodRevenueMinor[firm.Id] = 10_000_000;
+        SocietyEconomy.Sell(world, world.Agents["aster_government"], firm, 100_000, kind: "public_investment");
         world.Tick += SocietyLabor.IndexationDays;
         Week(world);
         var raised = Assert.Single(world.Events, item => item.EventType == "wage_indexed" && item.EntityIds.Contains(firm.Id));

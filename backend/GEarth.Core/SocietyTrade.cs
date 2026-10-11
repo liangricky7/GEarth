@@ -16,7 +16,8 @@ public static class SocietyTrade
             return false;
         var path = Path(world, seller.LocationId, buyer.LocationId, objective);
         var value = (long)quantity * seller.PriceMinor;
-        return path is not null && SocietyBank.CashAvailable(world, buyer) >= value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value)
+        return path is not null && SocietyBank.CashAvailable(world, buyer) >= value
+            && SocietyBank.Liquid(world, buyer) >= value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value)
             && world.Society!.Cargo.Count(cargo => cargo.BuyerId == buyer.Id && cargo.Good == good && cargo.Status == "in_transit") < 2;
     }
 
@@ -42,7 +43,7 @@ public static class SocietyTrade
     public static void ImportFood(World world, Nation nation, int residents)
     {
         var farms = SocietyLabor.Firms(world, nation.Id, "food").OrderBy(farm => farm.Id).ToArray();
-        if (farms.Length == 0 || farms.Sum(farm => farm.Inventory["food"]) >= residents * 3)
+        if (farms.Length == 0 || SocietyEconomy.Offers(world, nation, "food").Sum(offer => offer.Seller.Inventory["food"]) >= residents * 3)
             return;
         foreach (var farm in farms)
         {
@@ -96,7 +97,7 @@ public static class SocietyTrade
         using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor, cargoId);
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
-        SocietyBank.Draw(world, buyer, value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value));
+        SocietyBank.Draw(world, buyer, value);
         buyer.CashMinor -= value;
         // A domestic freight firm (dockworkers) carries the goods; without one the port authority collects the fee.
         var carrier = SocietyLabor.Firms(world, buyer.CountryId, "freight").OrderBy(agent => agent.Id).FirstOrDefault()
@@ -176,6 +177,9 @@ public static class SocietyTrade
                 cargo.EdgeIndex++;
             }
         }
+        // Reserves or asset-sale proceeds can become available after closure, including after resume.
+        foreach (var estate in world.Agents.Values.Where(agent => agent.Role == "defunct"))
+            SocietyEstates.Settle(world, estate);
     }
 
     private static void Deliver(World world, Cargo cargo)
@@ -206,6 +210,9 @@ public static class SocietyTrade
             cargo.Good, cargo.Quantity, travel_ticks = world.Tick - cargo.CreatedTick,
             settlement = "internal_escrow_released"
         }, Causes(cargo));
+        // Keep settlement under the shipment's cause/group, including creditor recoveries.
+        SocietyEstates.Settle(world, buyer);
+        SocietyEstates.Settle(world, seller);
     }
 
     private static void Fail(World world, Cargo cargo)
@@ -225,5 +232,7 @@ public static class SocietyTrade
             reason = "DELIVERY_DEADLINE", cargo.Good, cargo.Quantity,
             refund = "goods escrow refunded; transport fees sunk; abandoned cargo counted as lost"
         }, Causes(cargo));
+        SocietyEstates.Settle(world, world.Agents[cargo.BuyerId]);
+        SocietyEstates.Settle(world, world.Agents[cargo.SellerId]);
     }
 }

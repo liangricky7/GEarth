@@ -124,7 +124,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 bucket["count"] += 1
                 bucket["amount_minor"] += row["amount_minor"]
                 # Deposit payments are economic transfers, but must never enter cash reconciliation.
-                if transfer_kind not in ("loan_deposit_created", "loan_principal_retired"):
+                if transfer_kind not in ("loan_deposit_created", "loan_principal_retired",
+                                         "cash_deposit_claim_created", "cash_withdrawal_claim_reduced",
+                                         "insurance_claim_assigned"):
                     bucket = transfer_kinds.setdefault(transfer_kind, {"kind": transfer_kind, "count": 0, "amount_minor": 0, "evidence_refs": []})
                     bucket["count"] += 1
                     bucket["amount_minor"] += row["amount_minor"]

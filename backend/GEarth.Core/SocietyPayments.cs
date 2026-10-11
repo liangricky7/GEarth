@@ -20,11 +20,11 @@ public static class SocietyPayments
         if (!SocietyLabor.IsResident(agent))
             return;
         foreach (var good in new[] { "food", "energy" })
-            if (SocietyEconomy.Sellers(world, world.Society!.Nations[agent.CountryId], good).FirstOrDefault() is { } seller
-                && CanBuy(world, agent, seller.Id, good, BuyQuantity, seller.PriceMinor))
+            if (SocietyEconomy.Offers(world, world.Society!.Nations[agent.CountryId], good).FirstOrDefault() is { } offer
+                && CanBuy(world, agent, offer.Seller.Id, good, BuyQuantity, offer.PriceMinor))
                 options.Add(SocietyActions.Make("buy_goods", new
                 {
-                    seller_id = seller.Id, good, quantity = BuyQuantity, price_minor = seller.PriceMinor
+                    seller_id = offer.Seller.Id, good, quantity = BuyQuantity, price_minor = offer.PriceMinor
                 }));
     }
 
@@ -57,15 +57,17 @@ public static class SocietyPayments
         var seller = world.Agents[parameters["seller_id"]!.GetValue<string>()];
         var good = parameters["good"]!.GetValue<string>();
         var quantity = parameters["quantity"]!.GetValue<int>();
-        var total = (long)quantity * seller.PriceMinor;
-        using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor);
-        SocietyEconomy.Sell(world, buyer, seller, total, true);
+        var price = parameters["price_minor"]!.GetValue<int>();
+        var total = (long)quantity * price;
+        using var auditGroup = RunAudit.Group(world, good, quantity, price);
+        SocietyEconomy.Sell(world, buyer, seller, total, true, quantity, seller.Role == "defunct" ? "liquidation_sale" : "purchase");
         seller.Inventory[good] -= quantity;
         buyer.Inventory[good] += quantity;
         world.Emit("goods_purchased", "rule", [buyer.Id, seller.Id], new
         {
-            buyer = buyer.Id, seller = seller.Id, good, quantity, price_minor = seller.PriceMinor, total_minor = total
+            buyer = buyer.Id, seller = seller.Id, good, quantity, price_minor = price, total_minor = total
         }, cause);
+        if (seller.Role == "defunct") SocietyEstates.Settle(world, seller);
     }
 
     private static bool CanPay(World world, Agent payer, string recipientId, long amount) =>
@@ -75,9 +77,10 @@ public static class SocietyPayments
     // The quoted price is part of the choice: a repriced seller invalidates it rather than charging more.
     private static bool CanBuy(World world, Agent buyer, string sellerId, string good, int quantity, int price) =>
         SocietyLabor.IsResident(buyer) && world.Agents.TryGetValue(sellerId, out var seller)
-        && seller.Role == "business" && seller.Specialty == good && seller.CountryId == buyer.CountryId
-        && seller.PriceMinor == price && seller.Inventory[good] >= quantity
-        && SocietyBank.Liquid(world, buyer) >= (long)quantity * price;
+        && good is "food" or "energy" && quantity > 0
+        && SocietyEconomy.Offers(world, world.Society!.Nations[buyer.CountryId], good)
+            .Any(offer => offer.Seller == seller && offer.PriceMinor == price)
+        && seller.Inventory[good] >= quantity && SocietyBank.Liquid(world, buyer) >= (long)quantity * price;
 
     private static IEnumerable<Agent> Recipients(World world, Agent payer)
     {

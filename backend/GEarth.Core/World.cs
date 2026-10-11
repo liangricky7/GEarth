@@ -55,7 +55,14 @@ public sealed class Agent
     public int LastWeekUnitsSold { get; set; }
     public int LastWeekTurnedAway { get; set; }
     public int LastWeekIncomeConstrained { get; set; }
+    // Legacy checkpoint field name: operating cash surplus after tax, not accrual profit.
     public long LastWeekOperatingProfitMinor { get; set; }
+    // Completed operating cash-flow weeks (including deposit settlement), before tax/distributions.
+    public List<long> OperatingSurplusWeeksMinor { get; set; } = [];
+    // Defunct firms retain their original account, stock and shipment claims as liquidation estates.
+    public string? EstateBeneficiaryId { get; set; }
+    public List<string> EstateCreditIds { get; set; } = [];
+    public bool EstateFinalized { get; set; }
     public int OvertimeDays { get; set; }
     // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
     public int GoodsBoughtLastWeek { get; set; }
@@ -99,6 +106,7 @@ public sealed class Agent
     public int LoanRatePct { get; set; }
     public string? LendingStandard { get; set; }
     public long UnmetWithdrawalsMinor { get; set; }
+    public bool DepositInterestSuspended { get; set; }
     // Money in and out this week and last week, for budgets shown to decision makers.
     public long WeekInMinor { get; set; }
     public long WeekOutMinor { get; set; }

@@ -103,6 +103,8 @@ projections["run_metadata"][2].update(condition_signature=F.lit(conditions["sign
 projections["bank_ledger"] = ("bank_ledger", ["run_id", "sequence"], {
     "bank_id": p("bank_id"), "sender_account_id": p("from"), "recipient_account_id": p("to"),
     "transfer_kind": p("kind"), "amount_minor": p("amount_minor", "long"),
+    "credit_id": p("credit_id"), "event_id": p("event_id"), "transaction_group_id": p("transaction_group_id"),
+    "decision_id": p("decision_id"),
     "reserves_minor": p("reserves_minor", "long"), "deposits_minor": p("deposits_minor", "long"),
     "loans_minor": p("loans_minor", "long"), "equity_minor": p("equity_minor", "long")})
 projections["decision_request"][2]["menu_parameter_contract"] = p("menu_parameter_contract")

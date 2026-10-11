@@ -108,6 +108,25 @@ class PublicServicesReportTests(unittest.TestCase):
         self.assertEqual({item["kind"]: item["amount_minor"] for item in report["public_services"]["transfers_by_kind"]}["wage"], 100)
         self.assertEqual(next(row["status"] for row in report["checks"] if row["name"] == "cash_plus_escrow_conservation"), "pass")
 
+    def test_cash_claim_updates_are_not_counted_as_a_second_economic_payment(self):
+        claim_kinds = ("cash_deposit_claim_created", "cash_withdrawal_claim_reduced", "insurance_claim_assigned")
+        for movement in (*claim_kinds, "deposit_interest"):
+            self.records.append({"run_id": self.metadata["run_id"], "sequence": len(self.records) + 1,
+                "tick": 1, "revision": 2, "kind": "bank_ledger", "payload": {
+                    "bank_id": "bank", "from": "b", "to": "a", "kind": movement, "amount_minor": 7,
+                    "reserves_minor": 50, "deposits_minor": 1000, "loans_minor": 1000, "equity_minor": 50,
+                    "credit_id": "credit", "event_id": "shipment_cause", "transaction_group_id": "cargo"}})
+        self.metadata["through_sequence"] = len(self.records)
+        report = self.report()
+        kinds = {item["kind"]: item["amount_minor"] for item in report["public_services"]["transfers_by_kind"]}
+        self.assertEqual(report["summary"]["transfer_minor"], 25)
+        self.assertEqual(report["banking"]["ledger_record_count"], 4)
+        self.assertFalse(set(claim_kinds).intersection(kinds))
+        self.assertEqual(kinds["deposit_interest"], 7)
+        _, row = typed_record(self.records[-1])
+        self.assertEqual((row["credit_id"], row["event_id"], row["transaction_group_id"]),
+                         ("credit", "shipment_cause", "cargo"))
+
     def bounded_decision(self):
         request, result = self.records[4]["payload"], self.records[5]["payload"]
         request["menu_parameter_contract"] = "fixed_or_bounded_integer.v1"

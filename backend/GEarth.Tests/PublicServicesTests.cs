@@ -101,7 +101,8 @@ public sealed class PublicServicesTests
         var nation = world.Society!.Nations["aster"];
         foreach (var plant in SocietyLabor.Firms(world, "aster", "energy").ToArray())
             SocietyLabor.Close(world, nation, plant, "test");
-        foreach (var firm in world.InCountry("aster").Where(agent => agent.Role == "business"))
+        // Closed firms now offer residual inventory too: remove both active and estate supply.
+        foreach (var firm in world.InCountry("aster").Where(agent => agent.Role is "business" or "defunct"))
         {
             world.Society!.LostGoods["energy"] += firm.Inventory["energy"];
             firm.Inventory["energy"] = 0;

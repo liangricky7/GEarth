@@ -72,8 +72,8 @@ public static class SocietyResources
     // foreign supplier. A missing supplier uses the base quote; its absence still blocks actual production.
     public static double InputUnitCost(World world, Agent firm, string good, int quantity)
     {
-        var local = SocietyEconomy.Sellers(world, world.Society!.Nations[firm.CountryId], good)
-            .Where(seller => seller != firm).FirstOrDefault();
+        var local = SocietyEconomy.Offers(world, world.Society!.Nations[firm.CountryId], good)
+            .Where(offer => offer.Seller != firm).FirstOrDefault();
         if (local is not null)
             return local.PriceMinor;
         var quotes = world.Agents.Values.Where(seller => seller.Role == "business" && seller.CountryId != firm.CountryId
@@ -87,6 +87,32 @@ public static class SocietyResources
 
     public static double InputCostPerOutput(World world, Agent firm) => Inputs(firm.Specialty!).Sum(input =>
         InputUnitCost(world, firm, input.Good, Math.Max(1, firm.LastWeekUnitsSold / input.OutputsPerInput)) / input.OutputsPerInput);
+
+    // Operating funding must include physical inputs as well as wages. Forecast only what the current
+    // workers and quota could produce; this supplies money, never inputs or extra productive capacity.
+    public static long InputWorkingCapital(World world, Nation nation, Agent firm)
+    {
+        var spec = SocietyLabor.SectorOf(firm.Specialty!);
+        var quantity = spec.Good is { } good
+            ? (int)Math.Ceiling(SocietyLabor.Workers(world, firm).Sum(worker => SocietyEconomy.Capacity(worker)
+                * SocietyLabor.DayEffort(world, worker)) * spec.DailyOutput * SocietyLabor.DaysPerWeek
+                * SocietyEconomy.OutputMultiplier(world, nation, good))
+            : firm.Specialty == "school" ? SocietyLabor.Students(world, firm).Length * SocietyLabor.DaysPerWeek
+                : (int)Math.Ceiling(SocietyLabor.ServiceCapacity(world, firm));
+        quantity = SocietyPlanning.Cap(world, nation, firm, quantity, SocietyLabor.DaysPerWeek);
+        var cost = 0.0;
+        foreach (var input in Inputs(firm.Specialty!))
+        {
+            var needed = Math.Max(0, (quantity + input.OutputsPerInput - 1) / input.OutputsPerInput - firm.Inventory[input.Good]);
+            if (needed > 0) cost += needed * InputUnitCost(world, firm, input.Good, needed);
+        }
+        if (spec.Good is null && !Inputs(firm.Specialty!).Any(input => input.Good == "energy"))
+        {
+            var needed = Math.Max(0, (quantity + ServiceSessionsPerEnergy - 1) / ServiceSessionsPerEnergy - firm.Inventory["energy"]);
+            if (needed > 0) cost += needed * InputUnitCost(world, firm, "energy", needed);
+        }
+        return (long)Math.Ceiling(cost);
+    }
 
     public static int SupplyProduction(World world, Agent firm, int quantity)
     {

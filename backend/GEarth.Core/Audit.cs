@@ -122,6 +122,9 @@ public static class RunAudit
             wellbeing_basis = "engine_smoothed_score", adjustment_divisor = 4 },
         planning = new { SocietyPlanning.PlanningWeeks, SocietyPlanning.PlannedSectors },
         banking = new { SocietyBank.Paused, SocietyBank.ReserveRatioPct, SocietyBank.CapitalRatioPct, SocietyBank.AccountingVersion, SocietyBank.CashBufferWeeks,
+            automatic_topups = "best_effort_proportional_spare_reserves_no_insurance",
+            foreign_goods_settlement = "cash_escrow_domestic_fees_deposits",
+            state_continuation = "nominal_domestic_claims_no_recapitalization_interest_suspended_at_nonpositive_equity",
             SocietyBank.LoanWeeks, SocietyBank.LoansPerBanker, SocietyBank.MissedPaymentsToDefault,
             SocietyBank.WeeksPerYear, SocietyBank.DepositRates, SocietyBank.LoanRates,
             lending_standards = SocietyBank.Standards.ToDictionary(pair => pair.Key, pair => new
@@ -131,7 +134,11 @@ public static class RunAudit
             conserved_money = "base_cash_including_bank_reserves_plus_cargo_escrow",
             deposit_minor = "bank_liability_created_by_cash_deposits_and_credit; broad_money_is_not_conserved",
             in_kind_minor = "wage_deduction_owed_not_money_transfer",
-            bank_capture_scope = "cash_transactions_and_bank_ledger_claim_changes; daily_balance_sheets"
+            bank_capture_scope = "cash_transactions_and_bank_ledger_claim_changes; daily_balance_sheets",
+            operating_result = "operating_cash_surplus_input_purchases_expensed_when_paid",
+            wage_review = "up_to_four_completed_actual_payroll_weeks_effective_following_week",
+            closed_firms = "fixed_country_estates_existing_guaranteed_credit_ids",
+            state_working_capital = "payroll_plus_feasible_input_purchase_forecast"
         }
     };
 
@@ -167,6 +174,12 @@ public static class RunAudit
         agent.WageIndexReference, agent.LastWeekDisposableIncomeMinor, agent.LastWeekRealIncomeMinor,
         agent.LastWeekWorkDays, agent.LastWeekIncomeTick,
         agent.LastWeekIncomeConstrained, agent.LastWeekOperatingProfitMinor,
+        last_week_operating_cash_surplus_minor = agent.LastWeekOperatingProfitMinor,
+        operating_cash_surplus_average_minor = agent.OperatingSurplusWeeksMinor.Count == 0 ? (long?)null
+            : (long)agent.OperatingSurplusWeeksMinor.Average(),
+        operating_cash_surplus_observed_weeks = agent.OperatingSurplusWeeksMinor.Count,
+        agent.OperatingSurplusWeeksMinor, agent.EstateBeneficiaryId, agent.EstateCreditIds, agent.EstateFinalized,
+        agent.DepositInterestSuspended,
         net_wealth_minor = SocietyLabor.IsResident(agent) ? (long?)SocietyMetrics.NetWealth(world, agent) : null
     };
 

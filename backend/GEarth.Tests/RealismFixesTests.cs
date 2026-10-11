@@ -20,7 +20,7 @@ public sealed class RealismFixesTests
         foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
             farm.PriceMinor = 80; // food at twice its base price
         var workshop = world.Agents["aster_tools"];
-        world.Society!.PeriodRevenueMinor[workshop.Id] = 10_000_000; // a profitable week
+        SocietyEconomy.Sell(world, world.Agents["aster_government"], workshop, 100_000, kind: "public_investment"); // funded receipts
         var pay = SocietyLabor.Staff(world, workshop).ToDictionary(worker => worker.Id, worker => worker.SalaryMinor);
         var power = world.Agents["aster_energy"]; // sold nothing this week
         var powerOffer = power.WageOfferMinor;
@@ -256,7 +256,7 @@ public sealed class RealismFixesTests
             farm.PriceMinor = 80;
         var workshop = world.Agents["aster_tools"];
         workshop.WageOfferMinor = 5000;
-        world.Society!.PeriodRevenueMinor[workshop.Id] = 10_000_000;
+        SocietyEconomy.Sell(world, world.Agents["aster_government"], workshop, 100_000, kind: "public_investment");
         world.Tick = SocietyLabor.IndexationDays;
 
         Week(world, "aster");

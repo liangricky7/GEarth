@@ -24,6 +24,11 @@ public static class SocietyMetrics
     public static long NetWealth(World world, Agent person)
     {
         var financial = SocietyBank.Savings(person) + person.ArrearsMinor - SocietyBank.Debt(world, person);
+        // Guaranteed owner debt is already subtracted above; do not subtract it again from estate assets.
+        financial += world.Agents.Values.Where(estate => estate.Role == "defunct" && estate.EstateBeneficiaryId == person.Id)
+            .Sum(estate => SocietyBank.Savings(estate)
+                + estate.Inventory.Sum(item => (long)item.Value * SocietyEstates.Price(item.Key))
+                - SocietyBank.Debt(world, estate));
         if (person.OwnedBusinessId is not { } id || !world.Agents.TryGetValue(id, out var firm) || firm.Role != "business")
             return financial;
         var equity = SocietyBank.IsBank(firm) ? SocietyBank.Equity(world, firm)
@@ -56,7 +61,7 @@ public static class SocietyMetrics
         unemployment_rate = nation.LaborForce == 0 ? (double?)null : nation.Unemployed / (double)nation.LaborForce,
         unemployment_definition = "available citizen participating in automatic job matching; excludes students and work refusals",
         liquid_assets_gini = nation.GiniCash, nation.GiniDisposableIncome, nation.GiniNetWealth,
-        wealth_definition = "cash + deposits + wage arrears receivable - personal debt + nonnegative owned business equity, inventories at local quotes; land and fixed capital unvalued",
+        wealth_definition = "cash + deposits + wage arrears receivable - personal debt + nonnegative owned business equity, inventories at local quotes + unresolved estate assets at liquidation quotes; land and fixed capital unvalued",
         nation.EssentialsBasketMinor, nation.MedianRealDisposableIncomeMinor,
         real_income_definition = "weekly disposable income at base food-and-energy purchasing power; fixed 7+7 basket, including sales tax, before food subsidy"
     };

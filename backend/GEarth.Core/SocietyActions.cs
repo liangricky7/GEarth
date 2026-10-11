@@ -55,7 +55,7 @@ public static class SocietyActions
                 }
                 if (SocietyBank.Liquid(world, agent) >= 100)
                     foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.Id != agent.CountryId)
-                        .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
+                        .Where(nation => SocietyEngine.CanMigrate(world, agent, nation.Id))
                         .OrderByDescending(nation => nation.Approval).Take(2))
                         options.Add(Make("migrate", new { country_id = nation.Id, cost_minor = 100 }));
                 break;
@@ -226,7 +226,7 @@ public static class SocietyActions
         options.Add(new("set_welfare", new JsonObject { ["amount_minor"] = Range(0, 200, nation.WelfareMinor) }));
         options.Add(new("set_sales_tax", new JsonObject { ["sales_tax_basis_points"] = Range(0, 1000, nation.SalesTaxBasisPoints) }));
         options.Add(new("fund_services", new JsonObject { ["amount_minor"] = Range(0, 150, nation.ServiceBudgetPerResidentMinor) }));
-        if (SocietyBank.Liquid(world, agent) >= 1500 && nation.Productivity < 2)
+        if (SocietyBank.Liquid(world, agent) >= 1500 && nation.Productivity < 2 && SocietyLabor.Firms(world, nation.Id, "tools").Any())
             options.Add(Make("invest", new { amount_minor = 1500 }));
         // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
         // a food subsidy when residents went hungry with food on the shelves, and schooling when people are

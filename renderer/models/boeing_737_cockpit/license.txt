@@ -1,0 +1,11 @@
+Model Information:
+* title:	Boeing 737-800 Cockpit
+* source:	https://sketchfab.com/3d-models/boeing-737-800-cockpit-d463256f98654b36af019d2d88bd5bbe
+* author:	hakai315 (https://sketchfab.com/hakai315)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Boeing 737-800 Cockpit" (https://sketchfab.com/3d-models/boeing-737-800-cockpit-d463256f98654b36af019d2d88bd5bbe) by hakai315 (https://sketchfab.com/hakai315) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

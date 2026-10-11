@@ -1,0 +1,3 @@
+Modified for the Faultline renderer (CC-BY-4.0 permits adaptation with attribution):
+- Detached the mesh from node(s): background_fl_0 (display floor / stray parts outside the model).
+- No other geometry, materials or textures changed. Original: see license.txt.

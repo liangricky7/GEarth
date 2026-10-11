@@ -1,0 +1,3 @@
+Modified for the Faultline renderer (CC-BY-4.0 permits adaptation with attribution):
+- Detached the mesh from node(s): Cube.133__0, Cube.134__0, Cube.210_Material.095_0 (display floor / stray parts outside the model).
+- No other geometry, materials or textures changed. Original: see license.txt.

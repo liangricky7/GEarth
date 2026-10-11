@@ -68,7 +68,7 @@ public static class SocietyBank
 
     public static void Deposit(World world, Agent depositor, long amount)
     {
-        SocietyEconomy.Transfer(depositor, BankOf(world, depositor.CountryId), amount);
+        SocietyEconomy.Transfer(world, depositor, BankOf(world, depositor.CountryId), amount, "deposit");
         depositor.DepositMinor += amount;
     }
 
@@ -79,7 +79,7 @@ public static class SocietyBank
         var bank = BankOf(world, depositor.CountryId);
         amount = Math.Min(amount, depositor.DepositMinor);
         var paid = Math.Min(amount, bank.CashMinor);
-        SocietyEconomy.Transfer(bank, depositor, paid);
+        SocietyEconomy.Transfer(world, bank, depositor, paid, "withdrawal");
         depositor.DepositMinor -= paid;
         var shortfall = amount - paid;
         if (shortfall == 0)
@@ -91,7 +91,7 @@ public static class SocietyBank
         var nation = world.Society!.Nations[depositor.CountryId];
         // ponytail: the limit applies to each withdrawal, not to a depositor's total; track insured totals if banks fail repeatedly
         var covered = Math.Min(Math.Min(shortfall, InsuranceLimit(nation)), government.CashMinor);
-        SocietyEconomy.Transfer(government, depositor, covered);
+        SocietyEconomy.Transfer(world, government, depositor, covered, "deposit_insurance");
         depositor.DepositMinor -= covered;
         government.DepositMinor += covered;
         nation.DepositInsurancePaidMinor += covered;
@@ -208,7 +208,7 @@ public static class SocietyBank
                 SocietyLabor.Close(world, nation, borrower, $"missed {MissedPaymentsToDefault} loan payments");
             return;
         }
-        SocietyEconomy.Transfer(borrower, bank, due);
+        SocietyEconomy.Transfer(world, borrower, bank, due, "loan_repayment");
         loan.PrincipalLeftMinor -= principal;
         loan.MissedPayments = 0;
         society.PeriodRevenueMinor[bank.Id] = society.PeriodRevenueMinor.GetValueOrDefault(bank.Id) + loan.WeeklyInterestMinor;
@@ -224,7 +224,7 @@ public static class SocietyBank
         {
             var bank = world.Agents[loan.BankId];
             var paid = Math.Min(firm.CashMinor, loan.PrincipalLeftMinor);
-            SocietyEconomy.Transfer(firm, bank, paid);
+            SocietyEconomy.Transfer(world, firm, bank, paid, "loan_recovery");
             loan.PrincipalLeftMinor -= paid;
             Settle(world, nation, bank, loan, paid);
         }
@@ -273,7 +273,7 @@ public static class SocietyBank
         (request.WeeklyPrincipalMinor, request.WeeklyInterestMinor) = (principal, interest);
         request.PrincipalLeftMinor = request.PrincipalMinor;
         request.Status = "active";
-        SocietyEconomy.Transfer(bank, borrower, request.PrincipalMinor);
+        SocietyEconomy.Transfer(world, bank, borrower, request.PrincipalMinor, "loan");
         if (request.Sector is { } opening) // the new firm, not the founder, owes the loan (limited liability)
             request.BorrowerId = SocietyLabor.Start(world, borrower, opening, request.LaunchPriceMinor, request.RequestEventId).Id;
         world.Emit("loan_funded", "rule", [request.Id, bank.Id, request.BorrowerId], new

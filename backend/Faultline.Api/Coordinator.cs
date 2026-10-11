@@ -122,59 +122,114 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
 
     private async Task RunSociety(bool live, CancellationToken cancellationToken)
     {
-        using var requests = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var tickLimit = ReadNumber("FAULTLINE_TICKS", 360, 1, 10000);
         var interval = ReadNumber("FAULTLINE_INTERVAL_MS", 2000, 0, 30000);
-        var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 128);
-        var population = ReadNumber("FAULTLINE_POPULATION", 1100, 100, 100000);
+        var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 384);
+        var population = ReadNumber("FAULTLINE_POPULATION", 1100, 160, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
-        var id = $"world_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}";
-        var world = SocietyFactory.Create(id, live, population,
-            ReadNumber("FAULTLINE_SEED", 20261010, 1, int.MaxValue),
-            ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
+        var resumeId = Environment.GetEnvironmentVariable("FAULTLINE_RESUME_RUN_ID");
+        World world;
+        if (string.IsNullOrEmpty(resumeId))
+        {
+            var id = $"world_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}";
+            world = SocietyFactory.Create(id, live, population,
+                ReadNumber("FAULTLINE_SEED", 20261010, 1, int.MaxValue),
+                ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
+        }
+        else
+        {
+            // A forked timeline: continue a saved run (on its own Neon branch) from a week-boundary checkpoint.
+            world = await store.Load(resumeId, cancellationToken) ?? throw new InvalidOperationException("Resume run missing");
+            if (world.Society is null || world.Status != "running"
+                || (world.Tick != 0 && (world.Tick + 1) % SocietyLabor.DaysPerWeek != 0))
+                throw new InvalidOperationException("Resume needs a running week-boundary checkpoint");
+            world.Mode = live ? "LIVE" : "RULE";
+            var change = Environment.GetEnvironmentVariable("FAULTLINE_FORK_GOVERNMENT")?.Split('=');
+            world.Emit("timeline_forked", "rule", [world.Id], new
+            {
+                from_tick = world.Tick,
+                timeline = Environment.GetEnvironmentVariable("FAULTLINE_TIMELINE"),
+                change = change is [var country, var government] ? new { country, government } : null
+            });
+            if (change is [var countryId, var profileId])
+                SocietyFactory.ChangeGovernment(world, countryId, profileId);
+        }
         world.Society!.WorkerCapacity = capacity;
         world.Society.TickIntervalMilliseconds = interval;
-        var pending = new Dictionary<string, (DecisionJob Job, Task<DecisionResult> Task)>();
-        var queue = new Queue<string>(); // this week's decision makers still waiting for a worker slot
-        long revision = 0;
+        var providerConfig = Environment.GetEnvironmentVariable("FAULTLINE_COMPUTE_PROVIDERS");
+        if (!string.IsNullOrEmpty(providerConfig))
+            world.Society.ComputeProviders = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider[]>(providerConfig, Wire.Json) ?? [];
+        if (live && world.Society.ComputeProviders.Length > 0)
+            foreach (var group in new[] { "institution", "citizen" })
+                if (!world.Society.ComputeProviders.Any(provider => provider.Capacity > 0 && (provider.DecisionGroup == group || provider.DecisionGroup == "all")))
+                    throw new InvalidOperationException($"No model provider serves {group} decisions");
+        await using var pending = new DecisionQueue(capacity, cancellationToken);
+        var queue = new Queue<string>();
+        long revision = world.Revision;
+        // Verbose runs also write the day-by-day history file the renderer replays (a fork's file is named after its timeline).
+        using var history = Environment.GetEnvironmentVariable("FAULTLINE_VERBOSE") == "true"
+            ? new HistoryWriter(HistoryWriter.PathFor(Environment.GetEnvironmentVariable("FAULTLINE_TIMELINE") is { Length: > 0 } timeline
+                ? timeline : world.Id), world) : null;
+        history?.Day(world);
 
         async Task Commit(CancellationToken? token = null)
         {
             world.UpdatedAt = DateTimeOffset.UtcNow;
-            SocietyScheduler.UpdateMetrics(world, pending.Keys.ToHashSet(), queue, world.UpdatedAt);
+            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, world.UpdatedAt);
             world.Revision = revision + 1;
-            await store.Save(world, revision, token ?? cancellationToken);
+            // One serialization feeds both the store and the API's read-only copy.
+            var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
+            await store.Save(world, revision, token ?? cancellationToken, serialized);
             revision = world.Revision;
+            history?.Flush();
             world.Events = world.Events.TakeLast(512).ToList();
-            current = Wire.Copy(world);
+            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+            copy.Events = copy.Events.TakeLast(512).ToList();
+            current = copy;
             logger.LogInformation("World tick {Tick}: {Coverage}/{Population} model coverage, {Pending} pending",
                 world.Tick, world.Agents.Values.Count(agent => agent.ModelDecisions > 0), world.Agents.Count, pending.Count);
         }
 
         void ApplyCompleted()
         {
-            foreach (var agentId in pending.Where(item => item.Value.Task.IsCompleted).Select(item => item.Key).ToArray())
+            foreach (var request in pending.TakeCompleted())
             {
-                var request = pending[agentId];
                 SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), DateTimeOffset.UtcNow);
-                pending.Remove(agentId);
             }
         }
 
-        // Fill free worker slots from the week's queue; each job observes the world as it is now.
         void Dispatch()
         {
-            while (pending.Count < capacity && queue.TryDequeue(out var agentId))
+            var pendingIds = pending.AgentIds;
+            queue = new Queue<string>(queue.Where(id => world.Agents.TryGetValue(id, out var agent)
+                && SocietyLabor.DecidesForItself(agent) && !pendingIds.Contains(id)));
+            var started = new HashSet<string>();
+            foreach (var agent in SocietyScheduler.SelectQueued(world, queue, pending.AgentIds, pending.FreeSlots))
             {
-                var agent = world.Agents[agentId];
-                if (pending.ContainsKey(agentId) || !SocietyLabor.DecidesForItself(agent))
-                    continue;
                 var now = DateTimeOffset.UtcNow;
-                agent.LastAttemptAt = now;
-                agent.LastAttemptTick = world.Tick;
                 var job = SocietyEngine.Observe(world, agent.Id, now);
-                pending.Add(agent.Id, (job, Decide(job, live, requests.Token)));
+                if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
+                {
+                    agent.LastAttemptAt = now;
+                    agent.LastAttemptTick = world.Tick;
+                    started.Add(agent.Id);
+                }
+            }
+            queue = new Queue<string>(queue.Where(id => !started.Contains(id)));
+            SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, DateTimeOffset.UtcNow);
+        }
+
+        async Task DrainWeek()
+        {
+            while (queue.Count > 0 || pending.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ApplyCompleted();
+                Dispatch();
+                if (pending.Count > 0)
+                    await pending.WaitForCompletion(cancellationToken);
+                ApplyCompleted();
             }
         }
 
@@ -182,37 +237,53 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         {
             await Commit();
             await notes.Record(current!);
-            for (var tick = 1; tick <= tickLimit; tick++)
+            var firstTick = world.Tick + 1;
+            for (var tick = firstTick; tick <= tickLimit; tick++)
             {
                 var started = DateTimeOffset.UtcNow;
                 ApplyCompleted();
-                // Weekly barrier: the week's decisions land before payroll and the weekly reviews run.
                 if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)
-                    while (queue.Count > 0 || pending.Count > 0)
-                    {
-                        Dispatch();
-                        if (pending.Count > 0)
-                            await Task.WhenAny(pending.Values.Select(item => item.Task));
-                        ApplyCompleted();
-                    }
+                {
+                    await DrainWeek();
+                    // Week-boundary checkpoint: nothing in flight or queued, so a fork resumes from it exactly.
+                    if (tick > firstTick)
+                        await Commit();
+                }
                 SocietyEngine.Advance(world);
-                if (world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0)
+                if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)
                     foreach (var agent in SocietyScheduler.WeeklyCohort(world))
                         queue.Enqueue(agent.Id);
                 if (tick < tickLimit)
                     Dispatch();
                 ApplyCompleted();
-                if (tick % 5 == 0)
-                    await Commit();
-                var delay = interval - (DateTimeOffset.UtcNow - started).TotalMilliseconds;
-                if (delay > 0)
-                    await Task.Delay(TimeSpan.FromMilliseconds(delay), cancellationToken);
+                history?.Day(world);
+                var nextTick = started.AddMilliseconds(interval);
+                while (DateTimeOffset.UtcNow < nextTick)
+                {
+                    var delay = nextTick - DateTimeOffset.UtcNow;
+                    if (delay <= TimeSpan.Zero)
+                        break;
+                    if (!live || tick == tickLimit || pending.Count == 0)
+                    {
+                        await Task.Delay(delay, cancellationToken);
+                        break;
+                    }
+                    using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    wait.CancelAfter(delay);
+                    try
+                    {
+                        await pending.WaitForCompletion(wait.Token);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ApplyCompleted();
+                    Dispatch();
+                }
             }
-            while (pending.Count > 0)
-            {
-                await Task.WhenAny(pending.Values.Select(item => item.Task));
-                ApplyCompleted();
-            }
+            await DrainWeek();
             world.Status = "completed";
             world.Emit("run_completed", "rule", [world.Id], new
             {
@@ -225,24 +296,22 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            requests.Cancel();
-            await Task.WhenAll(pending.Values.Select(item => item.Task));
-            var abandoned = pending.Count;
-            pending.Clear();
+            var abandoned = await pending.CancelAndDrain();
+            var queued = queue.Count;
+            queue.Clear();
             world.Status = "stopped";
             world.Emit("run_stopped", "rule", [world.Id], new
             {
                 reason = "host_shutdown",
                 canceled_pending_requests = abandoned,
+                canceled_queued_requests = queued,
                 canceled_requests_applied = false
             });
             await Commit(CancellationToken.None);
         }
         finally
         {
-            requests.Cancel();
-            try { await Task.WhenAll(pending.Values.Select(item => item.Task)); }
-            catch (OperationCanceledException) { }
+            history?.End(world);
         }
     }
 

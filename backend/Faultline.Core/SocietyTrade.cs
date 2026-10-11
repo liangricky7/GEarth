@@ -28,23 +28,23 @@ public static class SocietyTrade
         var value = (long)quantity * seller.PriceMinor;
         buyer.CashMinor -= value;
         // A domestic freight firm (dockworkers) carries the goods; without one the port authority collects the fee.
-        var carrier = world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == buyer.CountryId
-            && agent.Specialty == "freight").OrderBy(agent => agent.Id).FirstOrDefault()
+        var carrier = SocietyLabor.Firms(world, buyer.CountryId, "freight").OrderBy(agent => agent.Id).FirstOrDefault()
             ?? world.Agents[buyer.CountryId + "_government"];
-        SocietyEconomy.Sell(world, buyer, carrier, path.CostMinor, false, 1);
+        SocietyEconomy.Sell(world, buyer, carrier, path.CostMinor, false, 1, "shipping");
         var tariff = Tariff(world, buyer, seller, value);
-        SocietyEconomy.Transfer(buyer, world.Agents[buyer.CountryId + "_government"], tariff);
+        SocietyEconomy.Transfer(world, buyer, world.Agents[buyer.CountryId + "_government"], tariff, "tariff");
         var costs = world.Society!.PeriodCostMinor;
         costs[buyer.Id] = costs.GetValueOrDefault(buyer.Id) + value + tariff;
         seller.Inventory[good] -= quantity;
         var cargo = new Cargo
         {
-            Id = $"cargo_{world.Seq}", BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
+            Id = $"cargo_{world.NextEntityNumber()}", BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
             Quantity = quantity, EscrowMinor = value, LocationId = seller.LocationId,
             DestinationId = buyer.LocationId, Plan = path, CreatedTick = world.Tick,
             DeadlineTick = world.Tick + 60, CauseId = cause
         };
         world.Society!.Cargo.Add(cargo);
+        SocietyEconomy.RecordFlow(world, buyer.Id, cargo.Id, value, "import_escrow");
         world.Emit("shipment_dispatched", "rule", [cargo.Id, buyer.Id, seller.Id], new
         {
             good, quantity, escrow_minor = value, shipping_minor = path.CostMinor,
@@ -109,6 +109,7 @@ public static class SocietyTrade
         var seller = world.Agents[cargo.SellerId];
         buyer.Inventory[cargo.Good] += cargo.Quantity;
         seller.CashMinor += cargo.EscrowMinor;
+        SocietyEconomy.RecordFlow(world, cargo.Id, seller.Id, cargo.EscrowMinor, "import");
         var revenue = world.Society!.PeriodRevenueMinor;
         revenue[seller.Id] = revenue.GetValueOrDefault(seller.Id) + cargo.EscrowMinor;
         var sold = world.Society.PeriodUnitsSold;
@@ -132,6 +133,7 @@ public static class SocietyTrade
     private static void Fail(World world, Cargo cargo)
     {
         world.Agents[cargo.BuyerId].CashMinor += cargo.EscrowMinor;
+        SocietyEconomy.RecordFlow(world, cargo.Id, cargo.BuyerId, cargo.EscrowMinor, "import_refund");
         var costs = world.Society!.PeriodCostMinor;
         costs[cargo.BuyerId] = costs.GetValueOrDefault(cargo.BuyerId) - cargo.EscrowMinor;
         cargo.EscrowMinor = 0;

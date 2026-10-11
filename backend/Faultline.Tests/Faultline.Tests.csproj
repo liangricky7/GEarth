@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Faultline.Core\Faultline.Core.csproj" />
+    <ProjectReference Include="..\Faultline.Api\Faultline.Api.csproj" />
   </ItemGroup>
 
 </Project>

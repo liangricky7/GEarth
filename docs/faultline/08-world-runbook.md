@@ -1,6 +1,6 @@
 # Faultline world runbook
 
-Run the world application on Jayden's laptop. The Spark supplies inference through an SSH tunnel; the application, worker, observer and persistence client run locally. Netplan is outside this workflow.
+Run the world application on Jayden's laptop. Spark and AMD supply configured inference services; the application, worker, observer and persistence client run locally. Netplan is outside this workflow.
 
 ## Start without Spark access
 
@@ -17,12 +17,12 @@ This is a fast rule-mode smoke test. It uses deterministic choices and does not 
 Connect to Tailscale and verify noninteractive SSH access to `hackathon@100.70.23.23`. Save the Neon connection string in the ignored `.env.local`; keep credentials out of chat, source and exported evidence.
 
 ```bash
-.venv/bin/python ops/run_stage1.py --world --live --storage neon --population 1100 --capacity 64 --ticks 420
+.venv/bin/python ops/run_stage1.py --world --live --compute hybrid --storage neon --population 1100 --ticks 365
 ```
 
 Use `--storage local` to avoid Neon. The launcher reads the existing model API key over SSH when it is absent from local configuration. It does not restart or reconfigure the model service. Only launcher-owned local child processes are stopped on exit.
 
-Defaults are two-second ticks (one simulated day each), a weekly economy (payroll, hiring, price reviews and discretionary spending every seven ticks) and one pending request per agent. Each country has one bank, a firm run by its owner (by the state in planned economies): residents' savings above two weeks of pay are swept into deposits weekly and earn interest, the bank lends them to businesses and founders over 26 weekly installments under the owner's rates and lending standard, and government deposit insurance (by government type) covers withdrawals the reserves cannot pay. Decisions follow the weekly rhythm: every government, entrepreneur, newsroom and state firm (including a state bank) gets one turn a week, and citizens rotate so each decides once every eight weeks (about 12% a week). Before each weekly review the run waits until that week's requests have returned, so a slow model stretches wall time instead of acting on stale views; any proposal made on a view more than seven days old is rejected as expired. Model calls time out at 60 seconds and proposals expire at 65 seconds. At most 64 requests are in flight with this configuration. The macOS launcher holds a `caffeinate -i` assertion while the API runs; keep the lid open because lid-closed sleep is not prevented. The observer publishes committed state every five ticks and at completion.
+Defaults are two-second ticks (one simulated day each), a weekly economy (payroll, hiring, price reviews and discretionary spending every seven ticks) and one pending request per agent. Each country has one bank, a firm run by its owner (by the state in planned economies): residents' savings above two weeks of pay are swept into deposits weekly and earn interest, the bank lends them to businesses and founders over 26 weekly installments under the owner's rates and lending standard, and government deposit insurance (by government type) covers withdrawals the reserves cannot pay. Decisions follow the weekly rhythm: every government, entrepreneur, newsroom and state firm (including a state bank) gets one turn a week, and citizens rotate so each decides once every eight weeks (about 12% a week). Before each weekly review the run waits until that week's requests have returned, so a slow model stretches wall time instead of acting on stale views; any proposal made on a view more than seven days old is rejected as expired. Model calls time out at 60 seconds and proposals expire at 65 seconds. Admission derives from enabled model capacities. Jayden's current private configuration totals 13 slots (4 institutions, 8 citizens, 1 shared AMD); these are concurrency settings, not throughput guarantees. The macOS launcher holds a `caffeinate -i` assertion while the API runs; keep the lid open because lid-closed sleep is not prevented. The observer publishes committed state every five ticks and at completion.
 
 A spawned agent is an individual identity with state and observations. All identities share the model weights. Routine purchases, wages, production and consumption follow engine rules between model turns.
 
@@ -65,10 +65,12 @@ Notes summarize role-specific choices, work effort, trade, policy changes, crise
 
 The model worker remains on loopback port 8100 and requires an ephemeral bearer token. Browser clients never receive that token or the Spark model key. The observer is read-only.
 
+Agent pages and details include committed revision, event sequence and update time. Model decision ages and role metrics are documented with sample responses in [the design](../../faultline-design.md#82-read-api-all-read-only). Run `ops/check_stage2_api.py` against a completed or stopped world to check these API contracts without new inference.
+
 ## Sharing and failure handling
 
-The existing temporary public tunnel forwards the read-only observer through the laptop. Free tunnel URLs can expire or change. The laptop must remain awake and online. Groupmates can inspect that observer; they can run rule mode locally without Spark access. They do not need direct model access to view Jayden's integrated runs.
+Use [the permanent Faultline address](https://diarockets-faultline.finebear64.chatgpt.site). Its temporary upstream tunnel reconnects automatically while the public address stays the same. The laptop must remain awake and online. Groupmates can inspect that observer; they can run rule mode locally without Spark access. They do not need direct model access to view Jayden's integrated runs. See [sharing operations](09-sharing.md).
 
 If health reports `paused`, the last committed state remains inspectable. Check `.logs/api.log`, `.logs/worker.log` and `.logs/tunnel.log` locally. Inference failures become explicit fallback holds; fallbacks do not count toward accepted model coverage. A storage failure pauses the run after bounded retries. Restarting normally creates a new run; inspect the old checkpoint with `--run-id`.
 
-Cash and goods are simulated. Cargo escrow and credit use internal accounting. Solana, Databricks and AMD remain future integrations. The population is a measured operating target, not an absolute hardware maximum.
+Cash and goods are simulated. Cargo escrow and credit use internal accounting. AMD inference is implemented and verified; Solana and Databricks remain future integrations. The population is a test target, not a measured maximum. The known full-year calibration failure and old hybrid HTTP-error fallbacks remain recorded in the [design](../../faultline-design.md#14-known-problems-and-open-questions).

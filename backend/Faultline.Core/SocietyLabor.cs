@@ -65,10 +65,11 @@ public static class SocietyLabor
         agent.Role != "defunct" && !(agent.Role == "business" && agent.OwnerId is not null);
 
     public static IEnumerable<Agent> Firms(World world, string country, string sector) =>
-        world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == country && agent.Specialty == sector);
+        world.InCountry(country).Where(agent => agent.Role == "business" && agent.Specialty == sector);
 
+    // Staff live in the firm's country: migrating clears a resident's employer.
     public static Agent[] Staff(World world, Agent firm) =>
-        world.Agents.Values.Where(agent => agent.EmployerId == firm.Id && IsResident(agent)).ToArray();
+        world.InCountry(firm.CountryId).Where(agent => agent.EmployerId == firm.Id && IsResident(agent)).ToArray();
 
     // Everyone who works at a firm: its staff plus a working owner.
     public static Agent[] Workers(World world, Agent firm) => Staff(world, firm)
@@ -141,7 +142,7 @@ public static class SocietyLabor
         var cost = StartupCost(founder, sector);
         var firm = new Agent
         {
-            Id = $"{founder.CountryId}_{sector}_firm{world.Seq}", Role = "business", CountryId = founder.CountryId,
+            Id = $"{founder.CountryId}_{sector}_firm{world.NextEntityNumber()}", Role = "business", CountryId = founder.CountryId,
             LocationId = founder.LocationId, Occupation = sector, Specialty = sector, PriceMinor = launchPrice,
             Traits = founder.Traits, WageOfferMinor = TableWage[spec.Occupation], TargetHeadcount = 1,
             OwnerId = founder.Id, InvestedMinor = cost, FoundedTick = world.Tick,
@@ -150,7 +151,7 @@ public static class SocietyLabor
         };
         world.Agents.Add(firm.Id, firm);
         SocietyBank.Draw(world, founder, cost);
-        SocietyEconomy.Transfer(founder, firm, cost);
+        SocietyEconomy.Transfer(world, founder, firm, cost, "business_founding");
         Quit(founder);
         founder.FormerOccupation = founder.Occupation;
         founder.Occupation = "entrepreneur";
@@ -174,7 +175,7 @@ public static class SocietyLabor
     {
         var society = world.Society!;
         var planned = IsPlanned(nation);
-        var firms = world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id).ToArray();
+        var firms = world.InCountry(nation.Id).Where(agent => agent.Role == "business").ToArray();
         int hires = 0, layoffs = 0, quits = 0, payCuts = 0;
         var dividends = 0L;
         foreach (var firm in firms.Where(_ => !planned))
@@ -205,7 +206,7 @@ public static class SocietyLabor
             hires, layoffs, job_switches = quits, pay_cuts = payCuts, unemployed = nation.Unemployed,
             dividends_minor = dividends,
             overtime_offers = firms.Count(firm => firm.Role == "business" && firm.OvertimeOffered),
-            active_businesses = world.Agents.Values.Count(agent => agent.Role == "business" && agent.CountryId == nation.Id),
+            active_businesses = world.InCountry(nation.Id).Count(agent => agent.Role == "business"),
             wage_offers = firms.Where(firm => firm.Role == "business").GroupBy(firm => SectorOf(firm.Specialty!).Occupation)
                 .ToDictionary(group => group.Key, group => group.Max(firm => firm.WageOfferMinor))
         });
@@ -363,11 +364,11 @@ public static class SocietyLabor
             var overtime = worker.SalaryMinor * worker.OvertimeDays * OvertimePayEighths / (8 * DaysPerWeek);
             worker.OvertimeDays = 0;
             if (worker.WorkEffort > 0) // strikers forfeit the week's pay
-                paid += SocietyEconomy.PayWage(nation, government, firm, worker, Math.Min(worker.SalaryMinor + overtime, firm.CashMinor));
+                paid += SocietyEconomy.PayWage(world, nation, government, firm, worker, Math.Min(worker.SalaryMinor + overtime, firm.CashMinor));
         }
         var profit = revenue - society.PeriodCostMinor.GetValueOrDefault(firm.Id) - paid;
         var profitTax = Math.Min(firm.CashMinor, Math.Max(0, profit) * nation.ProfitTaxBasisPoints / 10000);
-        SocietyEconomy.Transfer(firm, government, profitTax);
+        SocietyEconomy.Transfer(world, firm, government, profitTax, "profit_tax");
         nation.ProfitTaxCollectedMinor += profitTax;
         nation.TaxesCollectedMinor += profitTax;
         var dividend = 0L;
@@ -381,12 +382,12 @@ public static class SocietyLabor
                 var afterTax = profit - profitTax;
                 var wage = TableWage.GetValueOrDefault(owner.FormerOccupation ?? "", 0);
                 var draw = Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000;
-                SocietyEconomy.Transfer(firm, owner, Math.Min(firm.CashMinor, draw));
+                SocietyEconomy.Transfer(world, firm, owner, Math.Min(firm.CashMinor, draw), "owner_draw");
             }
             // Dividends: cash beyond a buffer of several weeks' payroll goes to the owner instead of idling.
             var buffer = Math.Max(10000, DividendBufferWeeks * Staff(world, firm).Sum(worker => worker.SalaryMinor));
             dividend = SocietyBank.IsBank(firm) ? SocietyBank.Dividend(world, firm) : Math.Max(0, firm.CashMinor - buffer);
-            SocietyEconomy.Transfer(firm, owner, dividend);
+            SocietyEconomy.Transfer(world, firm, owner, dividend, "dividend");
             nation.DividendsPaidMinor += dividend;
         }
         society.PeriodRevenueMinor[firm.Id] = 0;
@@ -450,14 +451,13 @@ public static class SocietyLabor
             var units = firm.Inventory[good];
             if (units == 0)
                 continue;
-            var buyer = world.Agents.Values.Where(agent => agent.Role == "business" && agent != firm
-                    && agent.CountryId == firm.CountryId && agent.Specialty == firm.Specialty)
+            var buyer = Firms(world, firm.CountryId, firm.Specialty!).Where(agent => agent != firm)
                 .OrderByDescending(agent => agent.CashMinor).FirstOrDefault();
             var price = Math.Max(1, SocietyFactory.BasePrice(good) / 2);
             var sold = buyer is null ? 0 : (int)Math.Min(units, buyer.CashMinor / price);
             if (sold > 0)
             {
-                SocietyEconomy.Transfer(buyer!, firm, (long)sold * price);
+                SocietyEconomy.Transfer(world, buyer!, firm, (long)sold * price, "liquidation_sale");
                 buyer!.Inventory[good] += sold;
             }
             if (owner is not null)
@@ -472,11 +472,11 @@ public static class SocietyLabor
         if (owner is not null)
         {
             recovered = firm.CashMinor;
-            SocietyEconomy.Transfer(firm, owner, firm.CashMinor);
+            SocietyEconomy.Transfer(world, firm, owner, firm.CashMinor, "closure_payout");
             ReleaseOwner(world, owner);
         }
         else
-            SocietyEconomy.Transfer(firm, world.Agents[nation.Id + "_government"], firm.CashMinor);
+            SocietyEconomy.Transfer(world, firm, world.Agents[nation.Id + "_government"], firm.CashMinor, "closure_payout");
         firm.Role = "defunct";
         firm.TargetHeadcount = 0;
         nation.Population--;

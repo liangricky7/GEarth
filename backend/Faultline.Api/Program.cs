@@ -3,7 +3,9 @@ using Faultline.Api;
 using Faultline.Core;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls("http://127.0.0.1:5080");
+var port = int.TryParse(Environment.GetEnvironmentVariable("FAULTLINE_PORT"), out var configuredPort)
+    && configuredPort is >= 1024 and <= 65535 ? configuredPort : 5080;
+builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 
@@ -53,7 +55,7 @@ app.MapGet("/api/runs/{id}/snapshot", async (string id, Coordinator coordinator,
     return world is null ? Results.NotFound() : Results.Ok(world.Snapshot());
 });
 
-app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, int? limit,
+app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, long? through_seq, int? limit,
     Coordinator coordinator, CancellationToken cancellationToken) =>
 {
     var world = await ReadWorld(id, coordinator, cancellationToken);
@@ -61,12 +63,13 @@ app.MapGet("/api/runs/{id}/events", async (string id, long? after_seq, int? limi
         return Results.NotFound();
 
     var after = Math.Max(0, after_seq ?? 0);
+    var through = Math.Clamp(through_seq ?? world.Seq, 0, world.Seq);
     var count = Math.Clamp(limit ?? 100, 1, 500);
     var events = world.Events.Count > 0 && after >= world.Events[0].Seq - 1
         ? world.Events.Where(item => item.Seq > after).Take(count).ToArray()
         : await store.ReadEvents(id, after, count, cancellationToken);
 
-    return Results.Ok(events);
+    return Results.Ok(events.Where(item => item.Seq <= through));
 });
 
 app.MapGet("/api/runs/{id}/agents", async (string id, string? country, string? role, string? q, int? offset, int? limit,
@@ -86,9 +89,10 @@ app.MapGet("/api/runs/{id}/agents", async (string id, string? country, string? r
         total = matches.Length,
         offset = start,
         limit = count,
-        agents = matches.Skip(start).Take(count).Select(agent => new
-        { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions, agent.LastAttemptAt, agent.LastModelDecisionAt,
-          decision_maker = SocietyLabor.DecidesForItself(agent) })
+        world.Revision,
+        world.Seq,
+        world.UpdatedAt,
+        agents = matches.Skip(start).Take(count).Select(agent => SocietyProjection.AgentSummary(world, agent))
     });
 });
 
@@ -102,6 +106,10 @@ app.MapGet("/api/runs/{id}/agents/{agentId}", async (string id, string agentId,
     return Results.Ok(new
     {
         agent,
+        world.Revision,
+        world.Seq,
+        world.UpdatedAt,
+        model_decision_age_seconds = SocietyProjection.ModelDecisionAgeSeconds(world, agent),
         last_decision = agent.LastDecision,
         decisions = world.Decisions.Values.Where(item => item.Job.AgentId == agentId).TakeLast(20),
         observer_only = true
@@ -123,6 +131,19 @@ app.MapGet("/api/runs/{id}/notes.md", async (string id, Coordinator coordinator,
         return Results.NotFound();
     var report = await notes.Record(world, coordinator.Current?.Id == id && coordinator.Error is not null ? "paused" : null, cancellationToken);
     return Results.File(System.Text.Encoding.UTF8.GetBytes(report.Markdown), "text/markdown; charset=utf-8", id + "-observations.md");
+});
+
+// Verbose runs only: the gzipped day-by-day history (header, one line per day, end line). Complete once the run ends.
+app.MapGet("/api/runs/{id}/history", (string id, HttpContext context) =>
+{
+    string path;
+    try { path = HistoryWriter.PathFor(id); }
+    catch (ArgumentException) { return Results.BadRequest(); }
+    if (!File.Exists(path))
+        return Results.NotFound();
+    context.Response.Headers.ContentEncoding = "gzip";
+    return Results.Stream(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite),
+        "application/x-ndjson", id + "-history.ndjson");
 });
 
 app.Run();

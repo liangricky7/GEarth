@@ -205,7 +205,7 @@ def check_run(base_url, require_model=False, require_full_coverage=False):
         ],
         "visual_inspection": "unverified: browser permission denied",
         "limitations": [
-            "one Spark",
+            "configured shared model services; backend/model assignment may affect outcomes",
             "sparse model turns between rule-driven life cycles",
             "synthetic institutional assumptions",
             "internal currency and escrow",

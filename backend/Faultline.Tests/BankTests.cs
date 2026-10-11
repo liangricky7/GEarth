@@ -12,7 +12,7 @@ public sealed class BankTests
         world.Agents.Values.Where(agent => agent.CountryId == country && agent.Role == "citizen").OrderBy(agent => agent.Id).First();
 
     private static void Give(World world, Agent agent, long amount) =>
-        SocietyEconomy.Transfer(world.Agents[agent.CountryId + "_government"], agent, amount);
+        SocietyEconomy.Transfer(world, world.Agents[agent.CountryId + "_government"], agent, amount);
 
     private static long Deposit(World world, Agent resident, long cash)
     {
@@ -87,7 +87,7 @@ public sealed class BankTests
         var (firm, _, loan) = FundLoan(world);
         var government = world.Agents["aster_government"];
         var owner = world.Agents[firm.OwnerId!];
-        SocietyEconomy.Transfer(firm, government, firm.CashMinor);
+        SocietyEconomy.Transfer(world, firm, government, firm.CashMinor);
         foreach (var good in SocietyFactory.Goods) // nothing left to sell on closure
         {
             government.Inventory[good] += firm.Inventory[good];
@@ -113,7 +113,7 @@ public sealed class BankTests
         foreach (var venue in SocietyLabor.Firms(world, "aster", "entertainment"))
             venue.PriceMinor = 2 * SocietyLabor.SectorOf("entertainment").BasePrice; // an opening for a cheaper venue
         var cost = SocietyLabor.StartupCost(founder, "entertainment");
-        SocietyEconomy.Transfer(founder, world.Agents["aster_government"], founder.CashMinor);
+        SocietyEconomy.Transfer(world, founder, world.Agents["aster_government"], founder.CashMinor);
         Give(world, founder, cost / 2); // half the cost: more than the 25% down payment, less than the whole
 
         Decide(world, founder.Id, "start_business", candidate => candidate.Params["sector"]!.GetValue<string>() == "entertainment"
@@ -139,7 +139,7 @@ public sealed class BankTests
         var bank = world.Agents[country + "_bank"];
         var government = world.Agents[country + "_government"];
         var deposit = Deposit(world, resident, 20000);
-        SocietyEconomy.Transfer(bank, government, bank.CashMinor - 1000); // the rest is lent out
+        SocietyEconomy.Transfer(world, bank, government, bank.CashMinor - 1000); // the rest is lent out
         var cash = resident.CashMinor;
 
         Decide(world, resident.Id, "bank_savings", candidate => !candidate.Params["keep_in_bank"]!.GetValue<bool>());
@@ -160,7 +160,7 @@ public sealed class BankTests
         var bank = world.Agents["aster_bank"];
         var owner = world.Agents[bank.OwnerId!];
         Deposit(world, Resident(world, "aster"), 20000);
-        SocietyEconomy.Transfer(bank, world.Agents["aster_government"], bank.CashMinor - 100); // losses wiped out the capital
+        SocietyEconomy.Transfer(world, bank, world.Agents["aster_government"], bank.CashMinor - 100); // losses wiped out the capital
 
         SocietyBank.Week(world, world.Society!.Nations["aster"]);
 

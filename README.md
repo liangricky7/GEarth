@@ -1,18 +1,20 @@
 # Faultline
 
-An observable AI society built for KnightHacks 2026. Individual agents govern, work, trade, communicate, and respond to crises. Best AI is the primary target.
+An observable AI society for KnightHacks 2026: ten fictional countries, five institutional profiles and 1,100 individual agents by default. Residents work, shop and own competing firms; governments, banks and newsrooms make bounded decisions. The C# engine owns accounting and simulated time, and shared model services provide individual strategic turns.
 
-## Current status
+## Current state
 
-The expanded world is implemented: ten fictional countries, five government profiles, 1,100 individual agents, occupations, wages, production, taxes, welfare, internal escrow, moving shipments, credit and diplomacy. The observer includes country outcomes, shipment and loan ledgers, searchable agents, and their observations and decisions.
+Main combines the daily labor-market economy, entrepreneurs, quality of life, clinics, public services, trade and diplomacy with shared Spark/AMD routing, seeded endowments, bounded scheduling, observer consistency and automatic run reports. One tick is one day; payroll runs every seven ticks. Institutions and entrepreneurs decide weekly, and citizens rotate over eight weeks. Weekly decisions finish before payroll.
 
-A 1,100-agent rule-mode smoke test completed 120 ticks, delivered 11 shipments and verified cash, goods, ordered events, persistence and pagination. The first live run reached 977/1,100 model coverage and 82 delivered shipments, but a laptop sleep interrupted inference and invalidated its sustained-capacity measurement. The launcher now prevents idle sleep on macOS, the scheduler retries failed turns sooner. The repeat coverage test was stopped at the user’s request; it is not required for the next implementation stage. This population is a test target, not an absolute hardware maximum.
+Spark A's Qwen3-8B and Qwen3-4B services were verified; AMD's Qwen3-4B endpoint also completed decisions. Jayden's private configuration enables 4 institution slots, 8 citizen slots and 1 shared AMD slot. Spark B and AMD's second model are prepared but unverified. These are inference services; the laptop runs one world. The previous simulation is stopped and is not restarted by this merge.
 
-The implementation passes 30 C# tests and 14 Python tests. Browser layout inspection remains unverified.
+See the [design](faultline-design.md) for the full specification, current limitations, decisions and their reasons.
 
-## Start locally
+The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Databricks and Solana settlement remain unimplemented.
 
-Requirements: .NET 10 SDK compatible with `global.json`, Python 3.12+, and Git. Spark access is only needed for live model decisions.
+## Run locally
+
+Requirements: .NET 10 matching `global.json`, Python 3.12+, and Git. Node is used for observer tests.
 
 ```bash
 python3.12 -m venv .venv
@@ -21,71 +23,60 @@ cp .env.example .env.local
 .venv/bin/python ops/run_stage1.py --world --storage local
 ```
 
-Open [localhost:5080](http://127.0.0.1:5080/). This runs the expanded world with deterministic rule choices, without Spark or Neon credentials. The observer remains available after the run completes; Ctrl+C stops the launcher and its child services.
+Open [localhost:5080](http://127.0.0.1:5080/). This uses deterministic rule choices and requires neither model credentials nor Neon. For an existing installation, preserve its private `.env.local` rather than copying over it.
 
-For live inference, connect to the team's Tailscale network and ensure SSH access to the configured Spark target in `ops/run_stage1.py`:
-
-```bash
-.venv/bin/python ops/run_stage1.py --world --live --storage local
-```
-
-For Neon, put your connection string in the ignored `.env.local` file and use `--storage neon`:
+For live inference, configure authenticated endpoints and Spark SSH access, then run:
 
 ```bash
-.venv/bin/python ops/run_stage1.py --world --live --storage neon --ticks 420
+.venv/bin/python ops/run_stage1.py --world --live --compute hybrid --storage neon
 ```
 
-The launcher connects to the existing model service. It does not modify Spark networking or Netplan. Real credentials, virtual environments, runtime state, downloaded tools, and logs are excluded from Git.
+Use `--compute spark` or `--compute amd` for a single source, and `--storage local` to omit Neon. See [Qwen setup](docs/faultline/18-all-node-qwen-setup.md), [AMD setup](docs/faultline/12-amd-compute.md) and [the world runbook](docs/faultline/08-world-runbook.md). Real credentials, logs, environments and runtime state are ignored by Git.
 
-## Verify
+World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--seed`, `--government-rotation` and `--verbose` (writes the day-by-day history file for the renderer, served at `/api/runs/{id}/history`). Defaults: 1,100 agents, 360 daily ticks and two-second intervals. Live admission derives from enabled provider capacities; an explicit `--capacity` lowers the total cap. Use `--ticks 365` for a simulated year. The software population range is 160–100,000 and is not a validated capacity range. Wall-clock institution/resident cadence flags were removed.
 
-```bash
-dotnet test Faultline.sln
-.venv/bin/python -m pytest agents/test_worker.py -q
-.venv/bin/python docs/faultline/validate_design.py
-```
-
-After a completed live world run is being served:
-
-```bash
-.venv/bin/python ops/check_world.py --require-model --require-full-coverage
-```
-
-The reference-document validator checks the historical version 1 scenario and fixtures. It does not validate the expanded society or prove sponsor integrations.
-
-Keep Stage 1 available by omitting `--world`. To inspect a saved checkpoint without new inference:
+Ctrl+C or SIGTERM stops the launcher and its child services. The observer stays available after completion unless `--exit-on-complete` is supplied. To inspect a saved checkpoint without inference:
 
 ```bash
 .venv/bin/python ops/run_stage1.py --storage neon --run-id YOUR_RUN_ID
 ```
 
-World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--institution-seconds`, `--resident-seconds`, `--seed`, and `--government-rotation`. Defaults are 1,100 agents, 64 concurrent requests, two-second ticks, institution attempts every 120 seconds, and resident attempts every 600 seconds. Eligibility is a target cadence; measured queue wait and coverage determine achieved cadence. The default world run lasts 360 ticks; use 420 for the longer qualification. Routine economic activity runs every five ticks. Full events are durable; the checkpoint retains recent events, decisions and each agent's last observation.
+Saved-run inspection does not resume execution. Stage 1 remains available by omitting `--world`.
 
-## Automatic run observations
+To fork a Neon world run into a what-if timeline on its own Neon branch (needs `NEON_API_KEY` and `NEON_PROJECT_ID`; see [design 12.3](faultline-design.md#123-neon-branching-timelines)):
 
-Every new run saves observations at completion, graceful stop or pause. Reports describe accepted choices by role/source, work effort, trade and reroutes, policy changes, crises, migration, diplomacy, credit outcomes, country metrics, example model explanations, and inference failures. Findings reference recorded event IDs and separate descriptive behavior from political or causal claims. Paused runs use the available checkpoint and label incomplete history.
+```bash
+.venv/bin/python ops/fork_run.py YOUR_RUN_ID --day 14 --country aster --government dictatorship
+```
 
-The observer shows run notes and a Markdown download. `GET /api/runs/{id}/notes` returns structured notes; `GET /api/runs/{id}/notes.md` downloads the report. Markdown and JSON copies are written under `.data/run-notes/`, with complete reports also saved in Neon or local storage. Older runs are analyzed when inspected. Saved-run inspection uses no model inference.
+## Verify
 
-## Design and implementation
+```bash
+dotnet test Faultline.sln
+.venv/bin/python -m pytest agents ops/test_amd_model_server.py ops/test_compute_config.py ops/test_spark_qwen.py -q
+npm ci
+npm run test:observer
+.venv/bin/python docs/faultline/validate_design.py
+.venv/bin/python ops/check_scheduler_integration.py
+```
 
-- [Current plan and design](faultline-current-plan-and-design.md): the current one-Spark architecture, world design, benchmark results, and implementation plan.
-- [World runbook](docs/faultline/08-world-runbook.md): launch, inspect and verify the expanded world.
-- [Stage 1 runbook](docs/faultline/07-stage1-runbook.md): operation and verification of the working demo.
-- [Earlier full design](faultline-full-design.md): detailed historical contracts, scenarios, and prior targets; the current plan takes precedence.
-- [Recorded evidence](docs/faultline/evidence): Stage 1, expanded world results and one-Spark load sweeps.
+Exact consolidation results and the known calibration failure are recorded in [integration evidence](docs/faultline/evidence/main-integration.json). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures. Browser visual layout remains unverified.
 
-| Directory                 | Contents                                                        |
-| ------------------------- | --------------------------------------------------------------- |
-| `backend/Faultline.Core`  | Authoritative engine, accounting, routing, and expanded society |
-| `backend/Faultline.Api`   | Bounded coordinator, read API, and observer assets              |
-| `backend/Faultline.Tests` | Engine and persistence tests                                    |
-| `agents`                  | Python model worker and tests                                   |
-| `ops`                     | Local launcher, verification, and Spark benchmark               |
-| `docs/faultline`          | Design documents, schemas, fixtures, and evidence               |
+For a completed world being served, `ops/check_world.py` checks conservation, durable ordered events, checkpoint readback, pagination, request bounds and read-only assets. Add `--require-model` for real model turns and `--require-full-coverage` only when explicitly qualifying coverage; coverage uses actual decision makers rather than owner-controlled firms. `ops/check_stage2_api.py` checks the committed API without new inference.
 
-## Scope and team
+## Observer and reports
 
-The current one-Spark test target is 1,100 agents, subject to sustained integrated coverage and cadence measurements. Solana, Databricks, and AMD integrations remain planned or conditional. Currency and expanded escrow are currently simulated internally.
+[The permanent observer](https://diarockets-faultline.finebear64.chatgpt.site/) keeps its address across restarts. The existing share supervisor reconnects when the laptop app is running; the laptop must remain online and awake. See [sharing operations](docs/faultline/09-sharing.md).
 
-Jayden Hong: engine and integration. Kennedy Nguyen: visualization and Spark operations. Ahmad Hijazi: inference and evaluation. Ricky Liang: persistence and finance. Jayden and Kennedy have Spark SSH access.
+Completed, gracefully stopped and paused runs produce behavior observations, country outcomes, model/backend counts, inequalities, examples of attributed reasoning and inference errors. Reports distinguish accepted model actions, engine rules and fallbacks, with event references and limits on interpretation. Markdown/JSON reports live under ignored `.data/run-notes/` and in configured storage. The observer exposes structured notes and a Markdown download.
+
+| Directory | Responsibility |
+| --- | --- |
+| `backend/Faultline.Core` | Economy, labor, accounting, world state, weekly cohorts, observations |
+| `backend/Faultline.Api` | Bounded coordination, persistence, read API, observer and run notes |
+| `backend/Faultline.Tests` | Engine, queue, accounting, profiles, scheduling and persistence tests |
+| `agents` | Authenticated worker, model pool, compact prompts and validation |
+| `ops` | Launcher, synthetic checks, Spark installer, AMD setup and private relays |
+| `docs/faultline` | Operational guides, contracts, fixtures and historical/integration evidence |
+
+Ricky implemented the labor economy and persistence refactors; Jayden integrated compute, endowments and observer/scheduler work; Kennedy operates visualization and live runs; Ahmad works on inference and evaluation. Outcomes describe a configured fictional society, not causal conclusions about real governments.

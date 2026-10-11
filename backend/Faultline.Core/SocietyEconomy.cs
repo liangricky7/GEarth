@@ -48,11 +48,9 @@ public static class SocietyEconomy
     {
         var society = world.Society!;
         society.VisitsServedToday.Clear();
-        var byCountry = world.Agents.Values.Where(agent => agent.Role != "defunct").GroupBy(agent => agent.CountryId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
         foreach (var nation in society.Nations.Values)
         {
-            var agents = byCountry[nation.Id];
+            var agents = world.InCountry(nation.Id).Where(agent => agent.Role != "defunct").ToArray();
             var residents = agents.Where(SocietyLabor.IsResident).ToArray();
             var firms = agents.Where(agent => agent.Role == "business").ToArray();
             foreach (var firm in firms.OrderBy(firm => firm.Specialty == "energy" ? 0 : 1).ThenBy(firm => firm.Id))
@@ -108,8 +106,9 @@ public static class SocietyEconomy
     public static void Week(World world)
     {
         var society = world.Society!;
-        var byCountry = world.Agents.Values.Where(agent => agent.Role != "defunct").GroupBy(agent => agent.CountryId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
+        // Each country's agents are listed before any country's weekly changes, as one snapshot.
+        var byCountry = society.Nations.Keys.ToDictionary(id => id,
+            id => world.InCountry(id).Where(agent => agent.Role != "defunct").ToArray());
         foreach (var nation in society.Nations.Values)
         {
             var agents = byCountry[nation.Id];
@@ -125,14 +124,14 @@ public static class SocietyEconomy
                 {
                     var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
                     if (firm.CashMinor > payroll * 4)
-                        Transfer(firm, government, firm.CashMinor - payroll * 4);
+                        Transfer(world, firm, government, firm.CashMinor - payroll * 4, "state_surplus");
                     else if (firm.CashMinor < payroll)
-                        Transfer(government, firm, Math.Min(government.CashMinor, payroll - firm.CashMinor));
+                        Transfer(world, government, firm, Math.Min(government.CashMinor, payroll - firm.CashMinor), "state_subsidy");
                 }
 
             SocietyBank.Week(world, nation);
             SocietyLabor.Week(world, nation, government, residents);
-            var teachers = PublicPayroll(nation, government,
+            var teachers = PublicPayroll(world, nation, government,
                 residents.Where(resident => resident.EmployerId == government.Id).ToArray());
             // Schools run at full strength only when teachers are paid and healthy enough to work.
             nation.EducationFactor = teachers.Length == 0 ? 1
@@ -142,13 +141,13 @@ public static class SocietyEconomy
             var welfare = citizens.Length == 0 ? 0 : Math.Min(government.CashMinor, (long)nation.WelfareMinor * citizens.Length) / citizens.Length;
             foreach (var citizen in citizens)
             {
-                Transfer(government, citizen, welfare);
+                Transfer(world, government, citizen, welfare, "welfare");
                 nation.WelfarePaidMinor += welfare;
             }
             foreach (var jobless in citizens.Where(citizen => citizen.EmployerId is null))
             {
                 var benefit = Math.Min(government.CashMinor, nation.UnemploymentBenefitMinor);
-                Transfer(government, jobless, benefit);
+                Transfer(world, government, jobless, benefit, "unemployment_benefit");
                 nation.UnemploymentPaidMinor += benefit;
             }
 
@@ -300,8 +299,7 @@ public static class SocietyEconomy
 
     // Domestic sellers of a good, cheapest first.
     public static IEnumerable<Agent> Sellers(World world, Nation nation, string good) =>
-        world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id
-                && agent.Specialty == good && agent.Inventory[good] > 0)
+        SocietyLabor.Firms(world, nation.Id, good).Where(agent => agent.Inventory[good] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id);
 
     // Buys up to the wanted quantity from domestic sellers the buyer can afford. Firms buy inputs from the
@@ -330,13 +328,14 @@ public static class SocietyEconomy
 
     // A sale between agents. Household purchases carry sales tax inside the price; business
     // revenue, costs and units sold accumulate for the weekly payroll, profit tax and price review.
-    public static void Sell(World world, Agent buyer, Agent seller, long amount, bool household = false, int units = 0)
+    public static void Sell(World world, Agent buyer, Agent seller, long amount, bool household = false, int units = 0,
+        string kind = "purchase")
     {
         var society = world.Society!;
         var nation = society.Nations[seller.CountryId];
         var tax = household ? amount * nation.SalesTaxBasisPoints / 10000 : 0;
-        Transfer(buyer, seller, amount - tax);
-        Transfer(buyer, world.Agents[seller.CountryId + "_government"], tax);
+        Transfer(world, buyer, seller, amount - tax, kind);
+        Transfer(world, buyer, world.Agents[seller.CountryId + "_government"], tax, "sales_tax");
         nation.SalesTaxCollectedMinor += tax;
         nation.TaxesCollectedMinor += tax;
         if (seller.Role == "business")
@@ -350,8 +349,8 @@ public static class SocietyEconomy
 
     // The cheapest clinic with a doctor free today and medicine supplies on hand.
     public static Agent? OpenClinic(World world, Nation nation) =>
-        world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id && agent.Specialty == "clinic"
-                && world.Society!.VisitsServedToday.GetValueOrDefault(agent.Id) < 0 && agent.Inventory["medicine"] > 0)
+        SocietyLabor.Firms(world, nation.Id, "clinic")
+            .Where(agent => world.Society!.VisitsServedToday.GetValueOrDefault(agent.Id) < 0 && agent.Inventory["medicine"] > 0)
             .OrderBy(agent => agent.PriceMinor).ThenBy(agent => agent.Id).FirstOrDefault();
 
     // A doctor visit: a clinic's doctor sees the patient and uses one unit of medicine as supplies.
@@ -361,8 +360,7 @@ public static class SocietyEconomy
         var clinic = OpenClinic(world, nation);
         if (clinic is null)
         {
-            foreach (var busy in world.Agents.Values.Where(agent => agent.Role == "business" && agent.CountryId == nation.Id
-                         && agent.Specialty == "clinic"))
+            foreach (var busy in SocietyLabor.Firms(world, nation.Id, "clinic"))
                 society.TurnedAwayThisWeek[busy.Id] = society.TurnedAwayThisWeek.GetValueOrDefault(busy.Id) + 1;
             return false;
         }
@@ -379,21 +377,21 @@ public static class SocietyEconomy
 
     // Public salaries come from the government's pay scale, not effort; when the treasury falls
     // short, everyone is paid the same fraction.
-    private static (Agent Teacher, double PaidShare)[] PublicPayroll(Nation nation, Agent government, Agent[] staff)
+    private static (Agent Teacher, double PaidShare)[] PublicPayroll(World world, Nation nation, Agent government, Agent[] staff)
     {
         var working = staff.Where(worker => worker.WorkEffort > 0).ToArray(); // strikers forfeit the week's pay
         var bill = working.Sum(worker => worker.SalaryMinor);
         var share = bill == 0 ? 1 : Math.Min(1, government.CashMinor / (double)bill);
         foreach (var worker in working)
-            PayWage(nation, government, government, worker, (long)(worker.SalaryMinor * share));
+            PayWage(world, nation, government, government, worker, (long)(worker.SalaryMinor * share));
         return staff.Where(worker => worker.Occupation == "teacher").Select(worker => (worker, share)).ToArray();
     }
 
-    public static long PayWage(Nation nation, Agent government, Agent employer, Agent worker, long wage)
+    public static long PayWage(World world, Nation nation, Agent government, Agent employer, Agent worker, long wage)
     {
-        Transfer(employer, worker, wage);
+        Transfer(world, employer, worker, wage, "wage");
         var tax = wage * nation.TaxBasisPoints / 10000;
-        Transfer(worker, government, tax);
+        Transfer(world, worker, government, tax, "income_tax");
         nation.TaxesCollectedMinor += tax;
         nation.WagesPaidMinor += wage;
         return wage;
@@ -419,7 +417,7 @@ public static class SocietyEconomy
         if (sector.Good is not { } good)
             return;
         // Health drives output; wellbeing (morale) has a milder effect.
-        var potential = (int)(workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker))
+        var potential = (int)(workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker) * worker.Weights.Productivity)
             * sector.DailyOutput * OutputMultiplier(world, nation, good));
         // Firms plan output toward two weeks of their own recent sales, below the three-week glut line.
         var stockLimit = Math.Max(residents / 4, 2 * producer.LastWeekUnitsSold);
@@ -447,7 +445,7 @@ public static class SocietyEconomy
     private static void ConflictCosts(World world, Nation nation, Agent government, Agent[] businesses, int conflicts)
     {
         var bank = world.Agents[nation.Id + "_bank"];
-        Transfer(government, bank, Math.Min(government.CashMinor, 1000L * conflicts));
+        Transfer(world, government, bank, Math.Min(government.CashMinor, 1000L * conflicts), "war_upkeep");
         foreach (var business in businesses.Where(business => SocietyLabor.SectorOf(business.Specialty!).Good is not null))
         {
             var good = business.Specialty!;
@@ -461,11 +459,9 @@ public static class SocietyEconomy
 
     public static void UpdateMetrics(World world)
     {
-        var groups = world.Agents.Values.GroupBy(agent => agent.CountryId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
         foreach (var nation in world.Society!.Nations.Values)
         {
-            var agents = groups[nation.Id];
+            var agents = world.InCountry(nation.Id);
             var citizens = agents.Where(SocietyLabor.IsResident).ToArray();
             var support = citizens.Length == 0 ? 0 : citizens.Count(citizen => citizen.SupportsLeadership) / (double)citizens.Length;
             var wellbeing = citizens.Length == 0 ? 0 : citizens.Average(citizen => citizen.Wellbeing) / 100;
@@ -492,7 +488,7 @@ public static class SocietyEconomy
         return weighted / (ordered.Length * (double)ordered.Sum());
     }
 
-    public static void Transfer(Agent from, Agent to, long amount)
+    public static void Transfer(World world, Agent from, Agent to, long amount, string kind = "transfer")
     {
         if (amount < 0 || amount > from.CashMinor)
             throw new InvalidOperationException("Unfunded transfer");
@@ -500,6 +496,17 @@ public static class SocietyEconomy
         to.CashMinor += amount;
         from.WeekOutMinor += amount;
         to.WeekInMinor += amount;
+        RecordFlow(world, from.Id, to.Id, amount, kind);
+    }
+
+    // Verbose runs sum every money movement per giver, recipient and kind for the history file.
+    // Shipment escrow uses the cargo ID as the giver or recipient.
+    public static void RecordFlow(World world, string from, string to, long amount, string kind)
+    {
+        if (world.Flows is not { } flows || amount == 0)
+            return;
+        var (total, count) = flows.GetValueOrDefault((from, to, kind));
+        flows[(from, to, kind)] = (total + amount, count + 1);
     }
 
     public static void AssertConservation(World world)

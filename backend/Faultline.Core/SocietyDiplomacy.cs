@@ -26,8 +26,7 @@ public static class SocietyDiplomacy
         if (profile.Id == "dictatorship")
             return world.Agents[nation.Id + "_bank"].CashMinor >= nation.Population * 100;
         if (profile.Id == "monarchy")
-            return world.Agents.Values.Count(agent => agent.CountryId == nation.Id
-                && agent.Role == "business" && agent.CashMinor > 1000) >= 2;
+            return world.InCountry(nation.Id).Count(agent => agent.Role == "business" && agent.CashMinor > 1000) >= 2;
         return true;
     }
 
@@ -37,7 +36,7 @@ public static class SocietyDiplomacy
         var profile = Governments.Get(nation.GovernmentId);
         var policy = new PolicyProposal
         {
-            Id = $"policy_{world.Seq}", CountryId = nation.Id, ActionType = action.ActionType,
+            Id = $"policy_{world.NextEntityNumber()}", CountryId = nation.Id, ActionType = action.ActionType,
             Params = (JsonObject)action.Params.DeepClone(), ProposedTick = world.Tick,
             EffectiveTick = world.Tick + profile.PolicyDelay, CauseId = cause
         };
@@ -97,7 +96,7 @@ public static class SocietyDiplomacy
                 var workshop = SocietyLabor.Firms(world, nation.Id, "tools").OrderBy(firm => firm.Id).FirstOrDefault();
                 if (workshop is null)
                     return false;
-                SocietyEconomy.Sell(world, government, workshop, amount);
+                SocietyEconomy.Sell(world, government, workshop, amount, kind: "public_investment");
                 nation.Productivity = Math.Min(2, nation.Productivity + 0.05);
                 return true;
             case "set_border":
@@ -152,7 +151,7 @@ public static class SocietyDiplomacy
                 var opponent = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
                 if (government.CashMinor < 5000 || opponent.Tension < 60 || opponent.AtWar)
                     return false;
-                SocietyEconomy.Transfer(government, world.Agents[nation.Id + "_bank"], 5000);
+                SocietyEconomy.Transfer(world, government, world.Agents[nation.Id + "_bank"], 5000, "war_declaration");
                 opponent.AtWar = true;
                 opponent.TradeAgreement = false;
                 opponent.Tension = 100;

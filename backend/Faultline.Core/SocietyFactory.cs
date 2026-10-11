@@ -28,6 +28,23 @@ public static class SocietyFactory
         ("dockworker", 2), ("teacher", 9), ("soldier", 6), ("unemployed", 9)
     ];
 
+    // A forked timeline's one change: the country switches regime overnight and starts from the new profile's default policies.
+    public static void ChangeGovernment(World world, string countryId, string profileId)
+    {
+        if (world.Society?.Nations.GetValueOrDefault(countryId) is not { } nation)
+            throw new ArgumentException($"Unknown country {countryId}");
+        var profile = Governments.Profiles.FirstOrDefault(item => item.Id == profileId)
+            ?? throw new ArgumentException($"Unknown government {profileId}");
+        var previous = nation.GovernmentId;
+        nation.GovernmentId = profile.Id;
+        nation.TaxBasisPoints = profile.DefaultTaxBasisPoints;
+        nation.WelfareMinor = profile.DefaultWelfareMinor;
+        nation.UnemploymentBenefitMinor = profile.Id switch { "market_democracy" => 300, "social_democracy" => 400, _ => 0 };
+        foreach (var country in world.Countries.OfType<System.Text.Json.Nodes.JsonObject>().Where(item => (string?)item["id"] == countryId))
+            country["government_id"] = profile.Id;
+        world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason = "timeline_fork" });
+    }
+
     public static World Create(string id, bool live, int population, int seed = 20261010, int rotation = 0)
     {
         if (population < Geography.Length * (InstitutionsPerCountry + 1) || population > 100000)
@@ -81,6 +98,7 @@ public static class SocietyFactory
             Agent NewResident(string occupation, long cash)
             {
                 var resident = CreateAgent(world, $"{countryId}_citizen_{++number:00000}", countryId, "citizen", occupation, cash);
+                resident.Weights = AgentEndowments.Create(seed, $"citizen_{number:00000}");
                 resident.Inventory["food"] = 4;
                 resident.Inventory["energy"] = 4;
                 resident.Health = 70 + (int)(Sample(seed, resident.Id, "initial_health") * 30);
@@ -114,6 +132,7 @@ public static class SocietyFactory
                 citizen.SalaryMinor = wage;
             }
             var residentsHere = world.Agents.Values.Where(agent => agent.CountryId == countryId && SocietyLabor.IsResident(agent)).ToArray();
+            AgentEndowments.AllocateCash(residentsHere, budgetMinor: residentsHere.Sum(resident => resident.CashMinor));
             foreach (var resident in residentsHere)
                 resident.Wellbeing = resident.LastWeekWellbeing = SocietyEconomy.QualityOfLife(resident, 2, false);
             foreach (var (sectorId, group) in firms)
@@ -165,12 +184,13 @@ public static class SocietyFactory
         }
         world.InitialCashMinor = world.Agents.Values.Sum(agent => agent.CashMinor);
         world.ScenarioHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms12:bank:election100:crisis40"))).ToLowerInvariant();
+            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms12:bank:election100:crisis40:{AgentEndowments.Version}"))).ToLowerInvariant();
         SocietyEconomy.UpdateMetrics(world);
         world.Emit("world_initialized", "scenario", [world.Id], new
         {
             stage = 2, population = world.Agents.Count, countries = Geography.Length,
             currency = "simulated WLD", settlement = "internal_escrow", individual_minds = true,
+            agent_weights = AgentEndowments.Version,
             routine_life = "rule-driven between individual model turns"
         });
         return world;

@@ -38,6 +38,47 @@ public sealed class RunNotesTests
     }
 
     [Fact]
+    public void NotesAttributeAcceptedModelChoicesToTheirBackend()
+    {
+        var world = Create();
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (agent, backend, model) in new[] {
+            ("aster_citizen_00001", "spark_a", "openai/gpt-oss-120b"),
+            ("beryl_citizen_00001", "amd", "Qwen/Qwen3-4B") })
+        {
+            var job = SocietyEngine.Observe(world, agent, now);
+            SocietyEngine.Apply(world, job, new(job.RequestId,
+                new("hold", new JsonObject(), "Wait.", []), "model", model, 1, Backend: backend), now);
+        }
+        var notes = RunAnalysis.Create(world, world.Events);
+        Assert.Contains(notes.Observations, item => item.Category == "compute"
+            && item.Text.Contains("amd running Qwen/Qwen3-4B supplied 1 accepted"));
+        Assert.Contains(notes.Observations, item => item.Category == "compute"
+            && item.Text.Contains("spark_a running openai/gpt-oss-120b supplied 1 accepted"));
+        Assert.Contains(notes.Limits, item => item.Contains("model assignment"));
+    }
+
+    [Fact]
+    public void SavedProviderMetadataPreservesRoleAssignmentAndReadsLegacyRecords()
+    {
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider>(
+            "{\"name\":\"spark_a\",\"model\":\"old\",\"capacity\":4}", Wire.Json)!;
+        Assert.Equal("all", legacy.DecisionGroup);
+        var world = Create();
+        world.Society!.ComputeProviders = [
+            new("spark_a", "Qwen/Qwen3-8B", 4, "institution"),
+            new("spark_a_citizen", "Qwen/Qwen3-4B", 8, "citizen")];
+        var restored = System.Text.Json.JsonSerializer.Deserialize<World>(
+            System.Text.Json.JsonSerializer.Serialize(world, Wire.Json), Wire.Json)!;
+        Assert.Equal("citizen", restored.Society!.ComputeProviders[1].DecisionGroup);
+        var notes = RunAnalysis.Create(restored, restored.Events);
+        Assert.Contains(notes.Observations, item => item.Category == "configuration"
+            && item.Text.Contains("citizen decisions with Qwen/Qwen3-4B"));
+        Assert.Contains(notes.Observations, item => item.Category == "configuration"
+            && item.Text.Contains("institution decisions with Qwen/Qwen3-8B"));
+    }
+
+    [Fact]
     public void NotesDescribePhysicalConsequencesAndDoNotClaimGovernmentCausality()
     {
         var world = Create();

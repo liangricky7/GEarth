@@ -64,7 +64,6 @@ public sealed class Nation
     public int Unemployed { get; set; }
     public int BusinessesStarted { get; set; }
     public int BusinessesClosed { get; set; }
-    public int TurnedAwayPatients { get; set; }
     public Dictionary<string, long> WeekStartTotals { get; set; } = new();
     public int CrisisUntilTick { get; set; }
     public string? CrisisGood { get; set; }
@@ -140,6 +139,8 @@ public sealed class Credit
     public string Status { get; set; } = "requested";
 }
 
+public sealed record ComputeProvider(string Name, string Model, int Capacity, string DecisionGroup = "all");
+
 public sealed class SocietyState
 {
     public Dictionary<string, Nation> Nations { get; set; } = new();
@@ -157,14 +158,14 @@ public sealed class SocietyState
     public long RuleDecisionCount { get; set; }
     public long DeliveredShipments { get; set; }
     public long FailedShipments { get; set; }
+    public ComputeProvider[] ComputeProviders { get; set; } = [];
     public int WorkerCapacity { get; set; }
     public int PendingDecisions { get; set; }
     public int DueAgents { get; set; }
     public int OldestWaitTicks { get; set; }
-    public int InstitutionCadenceTicks { get; set; } = 30;
-    public int CitizenCadenceTicks { get; set; } = 300;
+    public Dictionary<string, int> PendingByRole { get; set; } = new();
+    public string[] QueuedAgentIds { get; set; } = [];
     public int TickIntervalMilliseconds { get; set; } = 2000;
-    public double MeasuredDecisionsPerSecond { get; set; }
     public double RecentModelDecisionsPerSecond { get; set; }
     public List<double> LatenciesMs { get; set; } = [];
     public DateTimeOffset StartedAt { get; set; }

@@ -21,6 +21,7 @@ public sealed class Agent
     public string CountryId { get; set; } = "";
     public string LocationId { get; set; } = "";
     public string Goal { get; set; } = "";
+    public AgentWeights Weights { get; set; } = new();
     public Dictionary<string, double> Traits { get; set; } = new();
     public long CashMinor { get; set; }
     public int Version { get; set; }
@@ -78,6 +79,14 @@ public sealed class Agent
     public DateTimeOffset? LastAttemptAt { get; set; }
     public DateTimeOffset? LastModelDecisionAt { get; set; }
     public DecisionRecord? LastDecision { get; set; }
+
+    // Agents keep their five most recent memories.
+    public void Remember(string memory)
+    {
+        Memories.Add(memory);
+        if (Memories.Count > 5)
+            Memories.RemoveAt(0);
+    }
 }
 
 public sealed class Route
@@ -101,7 +110,7 @@ public record DecisionJob(string RequestId, string RunId, string AgentId, int Ob
     DateTimeOffset Deadline, Dictionary<string, int> Dependencies, string[] EvidenceIds,
     JsonNode Observation, Candidate[] Candidates);
 public record DecisionResult(string RequestId, ActionProposal Action, string Source, string Model,
-    double LatencyMs, string? Error = null);
+    double LatencyMs, string? Error = null, string? Backend = null);
 public record DecisionRecord(DecisionJob Job, DecisionResult Result, bool Accepted, string Code);
 public record WorldEvent(int SchemaVersion, string EventId, string RunId, int Tick, long Seq,
     string EventType, string Source, string[] EntityIds, string[] CauseIds, JsonNode Payload);
@@ -117,6 +126,9 @@ public sealed class World
     public int Tick { get; set; }
     public long Revision { get; set; }
     public long Seq { get; set; }
+    // Numbers new firms, cargo, loans and policies. Separate from Seq so an extra event (a fork's own) doesn't rename later entities.
+    public long LastEntityNumber { get; set; }
+    public long NextEntityNumber() => ++LastEntityNumber;
     public int SchedulerCursor { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public long InitialCashMinor { get; set; }
@@ -130,6 +142,27 @@ public sealed class World
     public PathPlan? MedicineRoutePlan { get; set; }
     public string ScenarioHash { get; set; } = "";
     public SocietyState? Society { get; set; }
+
+    // Verbose runs only (null otherwise): money moved since the last history frame, per giver, recipient and kind.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Dictionary<(string From, string To, string Kind), (long Amount, int Count)>? Flows { get; set; }
+
+    // Agents grouped by country in insertion order, so per-country scans skip the rest of the world.
+    // Not saved; rebuilt when an agent is added (agents are never removed) or after Reindex (migration).
+    private Dictionary<string, Agent[]>? byCountry;
+    private int indexedAgents;
+
+    public Agent[] InCountry(string country)
+    {
+        if (byCountry is null || indexedAgents != Agents.Count)
+        {
+            byCountry = Agents.Values.GroupBy(agent => agent.CountryId).ToDictionary(group => group.Key, group => group.ToArray());
+            indexedAgents = Agents.Count;
+        }
+        return byCountry.GetValueOrDefault(country, []);
+    }
+
+    public void Reindex() => byCountry = null;
 
     public WorldEvent Emit(string type, string source, string[] entities, object payload, params string[] causes)
     {

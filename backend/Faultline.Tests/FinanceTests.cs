@@ -97,7 +97,7 @@ public sealed class FinanceTests
         Assert.True(SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow).Accepted);
 
         var (second, secondResult) = Propose(world, payer.Id, "pay", ToResident(world));
-        SocietyEconomy.Transfer(payer, world.Agents["aster_government"], payer.CashMinor - 50);
+        SocietyEconomy.Transfer(world, payer, world.Agents["aster_government"], payer.CashMinor - 50);
         var rejected = SocietyEngine.Apply(world, second, secondResult, DateTimeOffset.UtcNow);
 
         Assert.Equal("CURRENT_PRECONDITION_FAILED", rejected.Code);

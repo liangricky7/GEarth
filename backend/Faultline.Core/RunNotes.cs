@@ -37,6 +37,14 @@ public static class RunAnalysis
         var modelCount = world.Society?.ModelDecisionCount ?? model.Length;
         observations.Add(new("coverage", $"{coverage}/{world.Agents.Count} agents had accepted model turns; {modelCount} model decisions were accepted. Routine economic activity followed engine rules between turns.", Evidence(model)));
 
+        foreach (var backend in model.GroupBy(item => (
+            Name: item.Payload["backend"]?.GetValue<string>() ?? "unrecorded",
+            Model: item.Payload["model"]?.GetValue<string>() ?? "unknown")))
+            observations.Add(new("compute", $"{backend.Key.Name} running {backend.Key.Model} supplied {backend.Count()} accepted model decisions in the retrieved history.", Evidence(backend)));
+
+        foreach (var provider in world.Society?.ComputeProviders ?? [])
+            observations.Add(new("configuration", $"{provider.Name} was configured to serve {provider.DecisionGroup} decisions with {provider.Model} and {provider.Capacity} request slots. Configured slots are not a measured throughput result.", []));
+
         foreach (var role in behaviors.Select(item => item.Role).Distinct())
         {
             var leader = behaviors.First(item => item.Role == role);
@@ -128,6 +136,15 @@ public static class RunAnalysis
             observations.Add(new("outcome", $"{country.Id} ({country.Government}) met {country.NeedsMet:P0} of needs in its latest economic cycle; cumulative unmet needs were {country.UnmetNeeds}, support {country.Approval:P0}, and cash Gini {country.GiniCash:F3}.", Evidence(events.Where(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(country.Id)).TakeLast(1))));
         var cash = world.Agents.Values.Sum(agent => agent.CashMinor) + (world.Society?.Cargo.Sum(cargo => cargo.EscrowMinor) ?? 0);
         observations.Add(new("accounting", $"Cash plus goods escrow at this checkpoint was {Money(cash)} WLD against {Money(world.InitialCashMinor)} WLD initially; {(cash == world.InitialCashMinor ? "the totals reconcile" : "the totals do not reconcile")}. This is a checkpoint comparison, not a causal economic conclusion.", []));
+        var initialized = events.FirstOrDefault(item => item.EventType == "world_initialized");
+        if (initialized?.Payload["agent_weights"]?.GetValue<string>() == AgentEndowments.Version)
+        {
+            var residents = world.Agents.Values.Where(SocietyLabor.IsResident).ToArray();
+            observations.Add(new("inequality", $"Seeded {AgentEndowments.Version} profiles varied starting wealth, productivity, bargaining power and personal priorities. Current resident cash ranged from {Money(residents.Min(agent => agent.CashMinor))} to {Money(residents.Max(agent => agent.CashMinor))} WLD. Starting cash was redistributed within a fixed country budget; productivity weights scaled goods output, and salary agreements remained fixed. Bargaining weights were retained as profile metadata. Equal voting and scheduler access were preserved.", [initialized.EventId]));
+            foreach (var group in residents.GroupBy(agent => agent.Weights.Wealth < 0.75 ? "lower initial wealth"
+                : agent.Weights.Wealth > 1.5 ? "higher initial wealth" : "middle initial wealth"))
+                observations.Add(new("inequality", $"The {group.Key} cohort contained {group.Count()} residents: current mean cash {Money((long)group.Average(agent => agent.CashMinor))} WLD, wellbeing {group.Average(agent => agent.Wellbeing):F1}/100, health {group.Average(agent => agent.Health):F1}/100. These descriptive cohorts retain initial profiles after migration and do not establish causal effects.", [initialized.EventId]));
+        }
         var examples = model.Where(item => Action(item) != "hold").GroupBy(item => Role(world, item)).Take(5)
             .Select(group => group.First()).Select(item => new DecisionExample(item.EntityIds[0], Action(item),
                 item.Payload["action"]!["reason"]!.GetValue<string>(), item.EventId, item.Tick)).ToArray();
@@ -136,6 +153,7 @@ public static class RunAnalysis
             "Government profiles share an economic engine; geography, resources, personality, timing and migration also affect outcomes.",
             "Model explanations are attributed statements, not proof of private motives or factual accuracy.",
             "Fallbacks and rule choices are separated from accepted model behavior. Wall duration may include host or network interruptions.",
+            "When multiple models supply decisions, model assignment can affect behavior and is an additional comparison confound.",
             complete ? "Complete ordered event history was used through the stated sequence." : "Event history is incomplete; behavior counts describe only the retrieved events."
         ];
         var notes = new RunNotes(world.Id, status ?? world.Status, world.Mode, world.Seed, world.Tick, world.Seq,

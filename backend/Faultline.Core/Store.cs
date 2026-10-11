@@ -11,7 +11,8 @@ public interface IWorldStore
     Task Initialize(CancellationToken cancellationToken);
     Task SaveNotes(RunNotes notes, CancellationToken cancellationToken);
     Task<RunNotes?> LoadNotes(string id, CancellationToken cancellationToken);
-    Task Save(World world, long expectedRevision, CancellationToken cancellationToken);
+    // serialized: the world's JSON when the caller already has it, so a checkpoint is serialized once.
+    Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null);
     Task<World?> Load(string id, CancellationToken cancellationToken);
     Task<string[]> List(CancellationToken cancellationToken);
     Task<WorldEvent[]> ReadEvents(string id, long afterSequence, int limit, CancellationToken cancellationToken);
@@ -27,14 +28,19 @@ public sealed class LocalStore(string directory) : IWorldStore
         return Task.CompletedTask;
     }
 
-    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken)
+    private sealed record CheckpointHead(long Revision, long Seq);
+
+    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null)
     {
         var path = PathFor(world.Id);
         using var writeLock = new FileStream(path + ".lock", FileMode.OpenOrCreate,
             FileAccess.ReadWrite, FileShare.None);
 
-        var existing = await Load(world.Id, cancellationToken);
-        if (SameCheckpoint(existing, world))
+        // Only the saved revision and sequence are needed; the full checkpoint is read only for a same-revision retry.
+        var existing = File.Exists(path)
+            ? JsonSerializer.Deserialize<CheckpointHead>(await File.ReadAllTextAsync(path, cancellationToken), Wire.Json)
+            : null;
+        if (existing?.Revision == world.Revision && SameCheckpoint(await Load(world.Id, cancellationToken), world))
             return;
         if ((existing?.Revision ?? 0) != expectedRevision)
             throw new InvalidOperationException("Revision conflict");
@@ -50,7 +56,7 @@ public sealed class LocalStore(string directory) : IWorldStore
         }
 
         var temporaryPath = path + ".tmp";
-        await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(world, Wire.Json), cancellationToken);
+        await File.WriteAllTextAsync(temporaryPath, serialized ?? JsonSerializer.Serialize(world, Wire.Json), cancellationToken);
         File.Move(temporaryPath, path, true);
     }
 
@@ -134,7 +140,7 @@ public sealed class NeonStore : IWorldStore, IDisposable
     private const string SaveQuery = """
         WITH saved AS (
           INSERT INTO faultline.stage1_runs(run_id,revision,state)
-          SELECT $1,$2::bigint,$3::jsonb WHERE $4::bigint = 0
+          SELECT $1,$2::bigint,$3::json WHERE $4::bigint = 0
             OR EXISTS (SELECT 1 FROM faultline.stage1_runs WHERE run_id=$1)
           ON CONFLICT (run_id) DO UPDATE SET revision=EXCLUDED.revision,state=EXCLUDED.state,updated_at=now()
             WHERE stage1_runs.revision=$4::bigint
@@ -173,9 +179,19 @@ public sealed class NeonStore : IWorldStore, IDisposable
             CREATE TABLE IF NOT EXISTS faultline.stage1_runs (
                 run_id text PRIMARY KEY,
                 revision bigint NOT NULL,
-                state jsonb NOT NULL,
+                state json NOT NULL,
                 updated_at timestamptz NOT NULL DEFAULT now()
             )
+            """, [], cancellationToken);
+        // json, not jsonb: jsonb reorders object keys, and a forked timeline must reload agents and countries
+        // in the order the engine iterates them, or it drifts from its parent. Converts older tables once.
+        await Query("""
+            DO $$ BEGIN
+              IF (SELECT data_type FROM information_schema.columns WHERE table_schema='faultline'
+                  AND table_name='stage1_runs' AND column_name='state') = 'jsonb' THEN
+                ALTER TABLE faultline.stage1_runs ALTER COLUMN state TYPE json;
+              END IF;
+            END $$
             """, [], cancellationToken);
         await Query("""
             CREATE TABLE IF NOT EXISTS faultline.stage1_events (
@@ -190,6 +206,17 @@ public sealed class NeonStore : IWorldStore, IDisposable
                 run_id text PRIMARY KEY REFERENCES faultline.stage1_runs(run_id),
                 through_seq bigint NOT NULL,
                 notes jsonb NOT NULL
+            )
+            """, [], cancellationToken);
+        // Where each saved checkpoint lands in Neon's history; ops/fork_run.py branches at these LSNs.
+        await Query("""
+            CREATE TABLE IF NOT EXISTS faultline.checkpoints (
+                run_id text NOT NULL REFERENCES faultline.stage1_runs(run_id),
+                tick bigint NOT NULL,
+                revision bigint NOT NULL,
+                lsn pg_lsn NOT NULL,
+                saved_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY(run_id, revision)
             )
             """, [], cancellationToken);
     }
@@ -210,19 +237,24 @@ public sealed class NeonStore : IWorldStore, IDisposable
         return rows.Count == 0 ? null : JsonSerializer.Deserialize<RunNotes>(rows[0]![0]!.GetValue<string>(), Wire.Json);
     }
 
-    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken)
+    public async Task Save(World world, long expectedRevision, CancellationToken cancellationToken, string? serialized = null)
     {
         string?[] parameters =
         [
             world.Id,
             world.Revision.ToString(),
-            JsonSerializer.Serialize(world, Wire.Json),
+            serialized ?? JsonSerializer.Serialize(world, Wire.Json),
             expectedRevision.ToString()
         ];
 
         var rows = await Query(SaveQuery, parameters, cancellationToken);
         if (rows.Count == 1)
+        {
+            // Read after the save committed, so a branch at this LSN includes the checkpoint and nothing later from this run.
+            await Query("INSERT INTO faultline.checkpoints(run_id,tick,revision,lsn) VALUES($1,$2::bigint,$3::bigint,pg_current_wal_lsn()) ON CONFLICT DO NOTHING",
+                [world.Id, world.Tick.ToString(), world.Revision.ToString()], cancellationToken);
             return;
+        }
 
         var existing = await Load(world.Id, cancellationToken);
         if (!LocalStore.SameCheckpoint(existing, world))

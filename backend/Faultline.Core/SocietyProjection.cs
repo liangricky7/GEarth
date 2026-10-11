@@ -2,6 +2,48 @@ namespace Faultline.Core;
 
 public static class SocietyProjection
 {
+    public static double? ModelDecisionAgeSeconds(World world, Agent agent) => agent.LastModelDecisionAt is { } at
+        ? Math.Max(0, (world.UpdatedAt - at).TotalSeconds) : null;
+
+    public static object AgentSummary(World world, Agent agent) => new
+    {
+        agent.Id,
+        agent.Role,
+        agent.CountryId,
+        agent.Occupation,
+        agent.CashMinor,
+        agent.Weights,
+        agent.ModelDecisions,
+        agent.LastAttemptAt,
+        agent.LastModelDecisionAt,
+        model_decision_age_seconds = ModelDecisionAgeSeconds(world, agent),
+        decision_maker = SocietyLabor.DecidesForItself(agent),
+        next_attempt_due_tick = world.Society is null || world.ScenarioId != "earthlike_society_v3_daily"
+            ? (int?)null : SocietyScheduler.NextTurnTick(world, agent)
+    };
+
+    private static object[] RoleMetrics(World world) => world.Agents.Values.GroupBy(agent => agent.Role)
+        .OrderBy(group => group.Key).Select(group =>
+        {
+            var ages = group.Select(agent => ModelDecisionAgeSeconds(world, agent))
+                .Where(age => age.HasValue).Select(age => age!.Value).Order().ToArray();
+            var society = world.Society!;
+            return (object)new
+            {
+                role = group.Key,
+                population = group.Count(),
+                unique_model_deciding = group.Count(agent => agent.ModelDecisions > 0),
+                model_decision_count = group.Sum(agent => agent.ModelDecisions),
+                never_attempted = group.Count(agent => agent.LastAttemptAt is null),
+                eligible_agents = group.Count(agent => society.QueuedAgentIds.Contains(agent.Id)),
+                pending_decisions = society.PendingByRole.Values.Sum() == society.PendingDecisions
+                    ? (int?)society.PendingByRole.GetValueOrDefault(group.Key) : null,
+                model_decision_age_p95_seconds = ages.Length == 0 ? (double?)null
+                    : ages[Math.Min(ages.Length - 1, (int)(ages.Length * 0.95))],
+                model_decision_age_max_seconds = ages.Length == 0 ? (double?)null : ages[^1]
+            };
+        }).ToArray();
+
     public static object Snapshot(World world)
     {
         var society = world.Society ?? throw new InvalidOperationException("Society state missing");
@@ -40,8 +82,8 @@ public static class SocietyProjection
                 unique_model_deciding = world.Agents.Values.Count(agent => agent.ModelDecisions > 0),
                 decision_makers = world.Agents.Values.Count(SocietyLabor.DecidesForItself)
             },
-            agents = world.Agents.Values.Where(agent => agent.Role != "citizen").Select(agent => new
-            { agent.Id, agent.Role, agent.CountryId, agent.Occupation, agent.CashMinor, agent.ModelDecisions }),
+            agents = world.Agents.Values.Where(agent => agent.Role != "citizen")
+                .Select(agent => AgentSummary(world, agent)),
             metrics = new
             {
                 society.ModelDecisionCount,
@@ -70,15 +112,19 @@ public static class SocietyProjection
             {
                 new
                 {
-                    id = "spark_a",
+                    id = "decision_pool",
+                    providers = society.ComputeProviders,
                     status = world.Mode == "LIVE" ? "configured" : "disabled",
                     society.WorkerCapacity,
                     society.PendingDecisions,
                     society.DueAgents,
                     society.OldestWaitTicks,
+                    society.PendingByRole,
+                    by_role = RoleMetrics(world),
                     average_model_decisions_per_second = society.RecentModelDecisionsPerSecond,
                     society.MaxPendingObserved,
-                    citizen_rotation_weeks = SocietyScheduler.CitizenRotationWeeks,
+                    scheduling_mode = world.ScenarioId == "earthlike_society_v3_daily" ? "weekly" : "legacy_wall_clock",
+                    citizen_rotation_weeks = world.ScenarioId == "earthlike_society_v3_daily" ? (int?)SocietyScheduler.CitizenRotationWeeks : null,
                     society.TickIntervalMilliseconds
                 }
             }

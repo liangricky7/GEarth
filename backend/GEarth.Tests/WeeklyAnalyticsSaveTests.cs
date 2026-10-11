@@ -128,7 +128,7 @@ public sealed class WeeklyAnalyticsSaveTests
             var settings = new Dictionary<string, string?>
             {
                 ["GEARTH_ANALYTICS"] = "true", ["GEARTH_WORLD"] = "true", ["GEARTH_LIVE"] = "false",
-                ["GEARTH_TICKS"] = ticks.ToString(), ["GEARTH_POPULATION"] = "200", ["GEARTH_INTERVAL_MS"] = interval.ToString(),
+                ["GEARTH_TICKS"] = ticks.ToString(), ["GEARTH_POPULATION"] = "170", ["GEARTH_INTERVAL_MS"] = interval.ToString(),
                 ["GEARTH_VERBOSE"] = "false", ["GEARTH_SAVED_RUN_ID"] = null,
                 ["GEARTH_COMPUTE_PROVIDERS"] = null, ["GEARTH_RESUME_RUN_ID"] = null
             };

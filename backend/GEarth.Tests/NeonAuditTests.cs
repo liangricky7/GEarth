@@ -13,7 +13,7 @@ public sealed class NeonAuditTests
     {
         var handler = new AuditHandler { FailCommit = true };
         using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
-        var world = SocietyFactory.Create("neon_audit", false, 200);
+        var world = SocietyFactory.Create("neon_audit", false, 170);
         RunAudit.Enable(world);
         for (var index = 0; index < 2500; index++)
             RunAudit.Append(world, "decision_request", new { context = new string('c', 1800), index });
@@ -50,7 +50,7 @@ public sealed class NeonAuditTests
     {
         var handler = new AuditHandler();
         using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
-        var world = SocietyFactory.Create("neon_large", false, 200);
+        var world = SocietyFactory.Create("neon_large", false, 170);
         RunAudit.Enable(world);
         world.Agents.Values.First().Goal = new string('x', 17 * 1024 * 1024) + "世界🌎";
         world.Revision = 1;
@@ -69,7 +69,7 @@ public sealed class NeonAuditTests
     {
         var handler = new AuditHandler();
         using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
-        var parent = SocietyFactory.Create("neon_fork", false, 200);
+        var parent = SocietyFactory.Create("neon_fork", false, 170);
         RunAudit.Enable(parent);
         SocietyEngine.Advance(parent);
         RunAudit.Day(parent);
@@ -112,7 +112,7 @@ public sealed class NeonAuditTests
     {
         var handler = new AuditHandler { FailCheckpointRegistrationOnce = true };
         using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
-        var world = SocietyFactory.Create("neon_lsn", false, 200);
+        var world = SocietyFactory.Create("neon_lsn", false, 170);
         RunAudit.Enable(world);
         world.Revision = 1;
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.Save(world, 0, CancellationToken.None));
@@ -128,7 +128,7 @@ public sealed class NeonAuditTests
     {
         var handler = new AuditHandler();
         using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
-        var world = SocietyFactory.Create("neon_conflict", false, 200);
+        var world = SocietyFactory.Create("neon_conflict", false, 170);
         RunAudit.Enable(world);
         world.Revision = 1;
         var pending = world.PendingAudit.ToArray();

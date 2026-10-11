@@ -15,7 +15,7 @@ from test_pipeline import fixture, fake_fetch
 
 
 def feature_metadata():
-    return {"seed": 7, "mode": "RULE", "tick_limit": 35, "initial_population": 200,
+    return {"seed": 7, "mode": "RULE", "tick_limit": 35, "initial_population": 170,
             "engine_commit": "a" * 40, "worker_capacity": 8, "tick_interval_ms": 100,
             "compute_providers": [], "government_rotation": 0,
             "capture_contract_version": "gearth.public_services.v1",

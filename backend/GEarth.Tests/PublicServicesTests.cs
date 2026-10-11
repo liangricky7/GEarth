@@ -311,10 +311,17 @@ public sealed class PublicServicesTests
         foreach (var farm in farms)
             farm.PriceMinor = 60; // well above what a unit costs to make
         Assert.False(Offered()); // a fat margin alone is no gap: nobody goes without
-        nation.PricedOutLastWeek = 3;
+        var tenth = (world.InCountry("aster").Count(SocietyLabor.IsResident) + 9) / 10;
+        nation.PricedOutLastWeek = tenth;
         Assert.False(Offered()); // residents go hungry, but nobody out of work could farm yet
         world.Tick = SocietyLabor.RelatedJobAfterDays;
         Assert.True(Offered()); // now the unemployed can take farm work
+        nation.PricedOutLastWeek = 1;
+        Assert.False(Offered()); // one priced-out shopper is not a market gap
+        nation.PricedOutLastWeek = tenth;
+        farms[0].FoundedTick = world.Tick - 1;
+        Assert.False(Offered()); // a newcomer opened this week: wait and see
+        farms[0].FoundedTick = 0;
         foreach (var farm in farms)
             farm.PriceMinor = (int)SocietyLabor.UnitCost(world, nation, farm) + 1;
         Assert.False(Offered()); // priced near cost: no margin for a newcomer
@@ -329,9 +336,9 @@ public sealed class PublicServicesTests
         var world = NewWorld();
         var government = world.Agents["aster_government"];
         var nation = world.Society!.Nations["aster"];
-        var tax = Assert.Single(SocietyActions.Available(world, government), candidate => candidate.ActionType == "adjust_tax");
-        var range = tax.Params["income_tax_percent"]!;
-        Assert.Equal([10, 20, 15], new[] { range["min"]!.GetValue<int>(), range["max"]!.GetValue<int>(), range["default"]!.GetValue<int>() });
+        var rates = SocietyActions.Available(world, government).Where(candidate => candidate.ActionType == "adjust_tax")
+            .Select(candidate => candidate.Params["income_tax_percent"]!.GetValue<int>()).Order().ToArray();
+        Assert.Equal([13, 17], rates); // two points either way from 15%
 
         var action = new ActionProposal("adjust_tax", new JsonObject { ["income_tax_percent"] = 13 }, "Test policy.", []);
         SocietyDiplomacy.Propose(world, government, action, "cause");

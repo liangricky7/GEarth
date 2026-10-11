@@ -124,29 +124,93 @@ public sealed class PostResourcePatchTests
         // A week of food and energy went from 7 x (40 + 25) to 7 x (80 + 25): benefits rise the full 61.5%.
         Assert.Equal((300 * 735 + 227) / 455, aster.UnemploymentBenefitMinor);
         Assert.Equal((100 * 735 + 227) / 455, aster.WelfareMinor);
-        var benefit = SocietyActions.Available(world, world.Agents["aster_government"])
-            .Single(candidate => candidate.ActionType == "set_unemployment_benefit").Params["amount_minor"]!;
-        Assert.True(benefit["max"]!.GetValue<int>() >= aster.UnemploymentBenefitMinor);
+        var benefits = SocietyActions.Available(world, world.Agents["aster_government"])
+            .Where(candidate => candidate.ActionType == "set_unemployment_benefit")
+            .Select(candidate => candidate.Params["amount_minor"]!.GetValue<int>()).Order().ToArray();
+        Assert.Equal([aster.UnemploymentBenefitMinor - 300, aster.UnemploymentBenefitMinor + 300], benefits); // around the indexed level
     }
 
     [Fact]
-    public void ALeverLeftAtItsCurrentLevelIsAHoldNotAPolicy()
+    public void LeversOfferACutAndARaiseWithTheirWeeklyEffectNotTheCurrentLevel()
     {
         var world = NewWorld();
         var government = world.Agents["aster_government"];
-        DecisionRecord Choose(int amount)
-        {
-            var job = SocietyEngine.Observe(world, government.Id, DateTimeOffset.UtcNow);
-            var action = new ActionProposal("fund_services", new System.Text.Json.Nodes.JsonObject { ["amount_minor"] = amount }, "test", []);
-            return SocietyEngine.Apply(world, job, new DecisionResult(job.RequestId, action, "rule", "test", 0), DateTimeOffset.UtcNow);
-        }
+        var nation = world.Society!.Nations["aster"];
+        var job = SocietyEngine.Observe(world, government.Id, DateTimeOffset.UtcNow);
+        var services = job.Candidates.Where(candidate => candidate.ActionType == "fund_services").ToArray();
+        Assert.Equal([nation.ServiceBudgetPerResidentMinor - 50, nation.ServiceBudgetPerResidentMinor + 50],
+            services.Select(candidate => candidate.Params["amount_minor"]!.GetValue<int>()).Order());
+        Assert.All(services, candidate => Assert.Contains("a week", candidate.Params["effect"]!.GetValue<string>()));
+        var current = new System.Text.Json.Nodes.JsonObject { ["amount_minor"] = nation.ServiceBudgetPerResidentMinor };
+        Assert.DoesNotContain(job.Candidates, candidate => SocietyActions.Matches(candidate, "fund_services", current));
 
-        var current = world.Society!.Nations["aster"].ServiceBudgetPerResidentMinor;
-        Assert.True(Choose(current).Accepted);
-        Assert.Empty(world.Society.Policies);
-        Assert.True(world.Events.Last(item => item.EventType == "action_accepted").Payload["unchanged_lever"]!.GetValue<bool>());
-
-        Assert.True(Choose(current == 150 ? 100 : current + 10).Accepted);
+        var raise = services.Single(candidate => candidate.Params["amount_minor"]!.GetValue<int>() > nation.ServiceBudgetPerResidentMinor);
+        var action = new ActionProposal("fund_services", raise.Params, "test", []);
+        Assert.True(SocietyEngine.Apply(world, job, new DecisionResult(job.RequestId, action, "rule", "test", 0), DateTimeOffset.UtcNow).Accepted);
         Assert.Single(world.Society.Policies);
+    }
+
+    [Fact]
+    public void GovernmentsSeeWhatIsGoingWrongInPlainWords()
+    {
+        var world = NewWorld();
+        var government = world.Agents["aster_government"];
+        var nation = world.Society!.Nations["aster"];
+        (nation.LaborForce, nation.Unemployed, nation.UnemploymentBenefitMinor, nation.HungryResidentsLastWeek) = (90, 25, 0, 4);
+        (government.LastWeekInMinor, government.LastWeekOutMinor) = (2000, 1000);
+        var problems = SocietyEngine.Observe(world, government.Id, DateTimeOffset.UtcNow).Observation["country"]!["problems"]!
+            .AsArray().Select(item => item!.GetValue<string>()).ToArray();
+        Assert.Contains("27% of the labor force is out of work with no unemployment benefit", problems);
+        Assert.Contains("4 residents went hungry last week", problems);
+        Assert.Contains(problems, problem => problem.StartsWith("the treasury grew by 1000 last week"));
+    }
+
+    // At twice the base price shoppers lean hard away from the dearer seller, so a 10% raise loses more custom
+    // than it gains in margin: that move is not offered, while the cut says how much more it should earn.
+    [Fact]
+    public void OwnersAreNotOfferedAPriceMoveThatSellsNoMoreAndEarnsLess()
+    {
+        var world = NewWorld();
+        var firms = SocietyLabor.Firms(world, "aster", "food").ToArray();
+        var firm = firms.First(farm => farm.OwnerId is { } owner && world.Agents[owner].Role == "entrepreneur");
+        foreach (var farm in firms)
+            (farm.PriceMinor, farm.LastWeekUnitsSold) = (80, 100);
+        var prices = SocietyActions.Available(world, world.Agents[firm.OwnerId!]).Where(candidate => candidate.ActionType == "set_price").ToArray();
+        var cut = Assert.Single(prices);
+        Assert.Equal(-10, cut.Params["change_pct"]!.GetValue<int>());
+        Assert.Contains("more than now", cut.Params["effect"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void AClosedFirmsLateReceiptsAreReportedOnceAWeek()
+    {
+        var world = NewWorld();
+        var firm = world.Agents["aster_tools"];
+        SocietyLabor.Close(world, world.Society!.Nations["aster"], firm, "test");
+        int Reports() => world.Events.Count(item => item.EventType == "estate_settled");
+        firm.Inventory["tools"] = Math.Max(1, firm.Inventory["tools"]); // stock left to sell keeps the estate open
+        world.Tick = 8;
+        foreach (var amount in new[] { 100, 200 })
+        {
+            SocietyEconomy.Transfer(world, world.Agents["aster_government"], firm, amount);
+            SocietyEstates.Settle(world, firm);
+            SocietyEstates.Report(world, firm);
+        }
+        Assert.Equal(0, Reports());
+        world.Tick = 14;
+        SocietyEstates.Report(world, firm);
+        Assert.Equal(1, Reports());
+        Assert.Equal(300, world.Events.Last(item => item.EventType == "estate_settled").Payload["payout_minor"]!.GetValue<long>());
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void StateFirmsAreNotOfferedPayments()
+    {
+        var world = NewWorld();
+        var stateFirm = world.Agents["cinder_food"];
+        Assert.True(SocietyLabor.DecidesForItself(stateFirm));
+        Assert.DoesNotContain(SocietyActions.Available(world, stateFirm), candidate => candidate.ActionType == "pay");
+        Assert.Contains(SocietyActions.Available(world, world.Agents["aster_citizen_00001"]), candidate => candidate.ActionType == "pay");
     }
 }

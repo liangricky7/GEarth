@@ -289,7 +289,10 @@ public static class SocietyTrade
         }
         // Reserves or asset-sale proceeds can become available after closure, including after resume.
         foreach (var estate in world.Agents.Values.Where(agent => agent.Role == "defunct"))
+        {
             SocietyEstates.Settle(world, estate);
+            SocietyEstates.Report(world, estate);
+        }
     }
 
     private static void Deliver(World world, Cargo cargo)

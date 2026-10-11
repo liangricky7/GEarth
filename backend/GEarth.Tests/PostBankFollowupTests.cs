@@ -128,10 +128,20 @@ public sealed class PostBankFollowupTests
     {
         var world = Create();
         var firm = world.Agents["aster_tools"];
-        var before = SocietyLabor.UnitCost(world, world.Society!.Nations["aster"], firm);
+        var aster = world.Society!.Nations["aster"];
+        // With no tools abroad to import, the cost follows the ore price; once tools can be imported, the
+        // landed price caps it, since a trader could stock them instead.
+        var foreign = world.Agents.Values.Where(agent => agent.Role == "business" && agent.Specialty == "tools" && agent.CountryId != "aster").ToArray();
+        var stock = foreign.Select(rival => rival.Inventory["tools"]).ToArray();
+        foreach (var rival in foreign) rival.Inventory["tools"] = 0;
+        var before = SocietyLabor.UnitCost(world, aster, firm);
         foreach (var mine in SocietyLabor.Firms(world, "aster", "mine")) mine.PriceMinor += 100;
-        var after = SocietyLabor.UnitCost(world, world.Society.Nations["aster"], firm);
+        var after = SocietyLabor.UnitCost(world, aster, firm);
         Assert.Equal(100, after - before, 6);
+        for (var index = 0; index < foreign.Length; index++) foreign[index].Inventory["tools"] = stock[index];
+        var landed = SocietyResources.ImportQuote(world, firm, "tools", Math.Max(10, firm.LastWeekUnitsSold))!.Value;
+        Assert.Equal(Math.Min(after, landed), SocietyLabor.UnitCost(world, aster, firm), 6);
+        Assert.True(landed < after);
     }
 
     [Fact]

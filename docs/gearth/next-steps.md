@@ -133,7 +133,7 @@ and failed; imports are 40% of entrepreneur choices and 576 of 621 rejections.
 | # | Decision | Status |
 |---|---|---|
 | P1 | Shoppers lean hard away from prices above 1.3x base (extra 8th power of reference/price; 1.3 and 8 arbitrary, tune after runs); each `set_price` option shows expected weekly sales and margin if competitors hold | built |
-| P2 | Government hoarding: (a) welfare and unemployment benefit indexed to the full cost-of-living rise every 28 days (never cut; levers' ranges stretch to include the indexed level); (b) a lever set to its current level is a hold (no policy; `unchanged_lever` on the accepted event). (c) lever effect text and (d) surplus rule wait for the phase 2 infrastructure run | a, b built; c, d deferred |
+| P2 | Government hoarding: (a) welfare and unemployment benefit indexed to the full cost-of-living rise every 28 days (never cut; levers' ranges stretch to include the indexed level); (b) a lever set to its current level is a hold (no policy; `unchanged_lever` on the accepted event). (c) lever effect text and (d) surplus rule wait for the phase 2 infrastructure run | a, b built; c built as D1 (ranges replaced by moves); d deferred |
 | P4 | An empty mine, well or pharma is a gap (and gets an essential grant) only if imports do not land below 1.5x a local firm's unit cost; food, energy and tools always keep a local seller (households only buy at home) | built |
 | P5 | Gap demand is market-wide: buyers turned away at least a tenth of sales (not any one seller turning someone away) | built |
 | P6 | Bank: another banker only when loans fill 80% of banker capacity; deposit-rate options capped at loan rate x loans / deposits | built |
@@ -189,6 +189,30 @@ twentieth a week later.
 
 Watch in the next run: whether governments order projects, weeks a project waits for builders, which sectors lose
 workers to the contractor, and contractor top-ups against treasury cash.
+
+### Post-resource run fixes (run `102658_3098da` on main `3726bd0`, day 118; signed off Oct 11, built on `gearth/phase-2-infrastructure`)
+
+Findings: price ratchet fixed (793 cuts against 576 raises) and treasuries down to 12–30% of national cash, but:
+governments froze (156 of 165 `fund_services` picks re-chose the level in force; taxes, welfare and benefits never moved
+while ember sat at 25–28% unemployment with no benefit and market treasuries grew every week); food-poor ionia and dune
+sold food at 4–5x the price imports landed for; 732 of 1,369 owner price moves chose a worse forecast margin than
+holding (197 sold less *and* earned less); founders entered in herds (4 food firms in aster in one day, 4 unstaffed
+mines in grove), and market unemployment rose from about 1 to 20–28 per country.
+
+| # | Fix | Status |
+|---|---|---|
+| D1 | Government levers (tax ±2 points, unemployment benefit ±300, welfare ±50, sales tax ±2 points, services ±50) are a cut and a raise from the level in force, each with its weekly cost or revenue; holding is the hold option. `country.problems` names joblessness ≥10% (and a missing benefit), hungry residents, and a treasury idling over 8 weeks of spending or running out within 12 | built |
+| D2 | A unit's cost is the cheaper of making it here or importing a week's sales of it, in the entry test, the cost push, price forecasts and the owner's view | built |
+| D3 | No price option forecast to sell no more and earn less than holding; each option states its margin against now. A firm's first week has no empty-shelf price rise | built |
+| D4 | A market that took a newcomer in the past week stays closed to founders; food's priced-out signal needs a tenth of residents (as for the food subsidy), not one shopper | built (trial) |
+| D5 | Remove `pay` from planned state firms' menus (147 gifts of 10 WLD to random residents and their own government) | built |
+| D6 | A closed firm's late receipts are still paid out as they arrive, but `estate_settled` is emitted once a week per estate (and when wound up), not per sale (was 1,149 events) | built |
+
+Watch: planned treasuries fall about 185 WLD a week (cinder 5,399 to 3,732 since day 42), pointing at arrears around
+day 250; planned economies still lead on needs met, comfort and approval, so P8's productivity knob waits for that.
+D2 cost: the entry test checks demand and an idle worker before the margin, and prices imports once per market, so
+a citizen menu got slightly faster (1.4 to 1.2 ms) and a day costs about 2 ms more (15.9 to 18.0 ms, best of 4), from
+each goods firm's weekly price review pricing one import.
 
 ## Phase 3: War, unrest, relations (in discussion; stretch goal)
 

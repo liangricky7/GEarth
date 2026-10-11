@@ -147,13 +147,22 @@ public static class SocietyLabor
         "school" => "security", "mine" or "well" => "industrial_inputs", _ => "comfort"
     };
 
-    // Current replacement cost per output, including reachable inputs and shipping.
-    public static double UnitCost(World world, Nation nation, Agent firm)
+    // Current replacement cost per output, including reachable inputs and shipping: the cheaper of making a
+    // unit here or importing a week's sales of it, since a trader can stock imports as well as a farm can grow.
+    public static double UnitCost(World world, Nation nation, Agent firm) =>
+        UnitCost(world, nation, firm, Landed(world, firm, firm.LastWeekUnitsSold));
+
+    // With the landed cost already priced, as for a whole market at once (a quote searches routes and sellers).
+    private static double UnitCost(World world, Nation nation, Agent firm, double? landed)
     {
         var spec = SectorOf(firm.Specialty!);
-        return firm.WageOfferMinor / (spec.DailyOutput * DaysPerWeek * (spec.Good is { } made ? SocietyEconomy.OutputMultiplier(world, nation, made) : 1))
+        var made = firm.WageOfferMinor / (spec.DailyOutput * DaysPerWeek * (spec.Good is { } good ? SocietyEconomy.OutputMultiplier(world, nation, good) : 1))
             + SocietyResources.InputCostPerOutput(world, firm);
+        return landed is { } imported ? Math.Min(made, imported) : made;
     }
+
+    private static double? Landed(World world, Agent firm, int weeklySales) => SectorOf(firm.Specialty!).Good is { } good
+        ? SocietyResources.ImportQuote(world, firm, good, Math.Max(10, weeklySales)) : null;
 
     // A gap worth a founder's money, as in a real market: incumbents charge well above what a unit costs to
     // make, buyers go without at today's prices (priced out or turned away, shelves under a week of sales, a
@@ -165,23 +174,31 @@ public static class SocietyLabor
         var incumbents = Firms(world, nation.Id, sector).ToArray();
         if (incumbents.Length == 0)
             return !ImportsCheaper(world, nation, sector);
+        // Founders see each other: a market that took a newcomer this week waits to see what it does to prices.
+        if (incumbents.Any(firm => firm.FoundedTick > 0 && world.Tick - firm.FoundedTick < DaysPerWeek))
+            return false;
         var spec = SectorOf(sector);
         var sold = incumbents.Sum(firm => firm.LastWeekUnitsSold);
         var turnedAway = incumbents.Sum(firm => firm.LastWeekTurnedAway) * 10 >= Math.Max(1, sold);
         var capacity = spec.Good is not null ? 0 : spec.Id == "school" ? incumbents.Sum(firm => Seats(world, firm))
             : incumbents.Sum(firm => ServiceCapacity(world, firm));
         var utilization = spec.Id == "school" ? incumbents.Sum(firm => Students(world, firm).Length) : sold;
+        // A tenth of residents priced out of food (as for a food subsidy) is a gap; one poor shopper is not.
         var demand = spec.Good is { } good
-            ? turnedAway || good == "food" && nation.PricedOutLastWeek > 0
+            ? turnedAway || good == "food" && nation.PricedOutLastWeek * 10 >= world.InCountry(nation.Id).Count(IsResident)
                 || incumbents.Sum(firm => firm.Inventory[good]) == 0 || incumbents.Sum(firm => firm.Inventory[good]) < sold
             : turnedAway || capacity > 0 && utilization >= 0.8 * capacity;
-        // School tuition is a fixed fee, so only demand counts there.
-        var margin = spec.Id == "school"
-            || AveragePrice(incumbents) >= EntryMarkup * incumbents.Average(firm => UnitCost(world, nation, firm));
         var idle = world.InCountry(nation.Id).Any(person => person.Role == "citizen" && person.EmployerId is null && !IsStudent(person)
             && (person.Occupation == spec.Occupation || CanSwitch(person.Occupation, spec.Occupation)
                 && world.Tick - person.UnemployedSinceTick >= RelatedJobAfterDays));
-        return margin && demand && idle;
+        if (!demand || !idle)
+            return false;
+        // School tuition is a fixed fee, so only demand counts there. The margin needs import quotes, so it is
+        // checked last and priced once for the market, at an incumbent's average week of sales.
+        if (spec.Id == "school")
+            return true;
+        var landed = Landed(world, incumbents[0], sold / incumbents.Length);
+        return AveragePrice(incumbents) >= EntryMarkup * incumbents.Average(firm => UnitCost(world, nation, firm, landed));
     }
 
     // Households buy food, energy and household goods only from local sellers, so those sectors always keep
@@ -755,8 +772,10 @@ public static class SocietyLabor
             var stockDays = StockDays(world, firm, good);
             var lost = society.TurnedAwayThisWeek.GetValueOrDefault(firm.Id);
             var lostShare = lost / (double)Math.Max(1, sold + lost);
+            // A firm in its first week has empty shelves because it has not made anything yet, not from a shortage.
+            var opening = world.Tick - firm.FoundedTick < DaysPerWeek;
             step = lostShare > 0.1 && firm.PriceMinor > marginalCost ? -Math.Min(MaxPriceStepPct, 50 * lostShare)
-                : stockDays < 7 ? MaxPriceStepPct * (7 - stockDays) / 7
+                : stockDays < 7 ? (opening ? 0 : MaxPriceStepPct * (7 - stockDays) / 7)
                 : stockDays > 21 ? -Math.Min(MaxPriceStepPct, MaxPriceStepPct * (stockDays - 21) / 42)
                 : losing ? 5 : 0;
         }
@@ -796,6 +815,7 @@ public static class SocietyLabor
         if (Essential.Contains(firm.Specialty!) && !Firms(world, nation.Id, firm.Specialty!).Any())
             nation.NeededSince.TryAdd(firm.Specialty!, world.Tick);
         var recovered = SocietyEstates.Settle(world, firm);
+        firm.EstateUnreportedPayoutMinor = 0; // reported with the closure below
         if (owner is not null)
             ReleaseOwner(world, owner);
         nation.Population--;

@@ -21,7 +21,7 @@ public interface IWorldStore
     Task<WorldEvent[]> ReadEvents(string id, long afterSequence, int limit, CancellationToken cancellationToken);
 }
 
-public sealed class LocalStore(string directory) : IWorldStore, IRunAuditStore, IAnalyticsReportStore
+public sealed partial class LocalStore(string directory) : IWorldStore, IRunAuditStore, IAnalyticsReportStore, IRendererStore
 {
     public string Kind => "local";
     public bool SupportsAudit => true;
@@ -96,7 +96,9 @@ public sealed class LocalStore(string directory) : IWorldStore, IRunAuditStore, 
         }
 
         var temporaryPath = path + ".tmp";
-        await File.WriteAllTextAsync(temporaryPath, serialized ?? JsonSerializer.Serialize(world, Wire.Json), cancellationToken);
+        serialized ??= JsonSerializer.Serialize(world, Wire.Json);
+        await StageRendererFrame(world, serialized, cancellationToken);
+        await File.WriteAllTextAsync(temporaryPath, serialized, cancellationToken);
         File.Move(temporaryPath, path, true);
         world.PendingAudit.Clear();
     }
@@ -249,7 +251,7 @@ public sealed class LocalStore(string directory) : IWorldStore, IRunAuditStore, 
     }
 }
 
-public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportStore, IDisposable
+public sealed partial class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportStore, IRendererStore, IDisposable
 {
     private const string SaveQuery = """
         WITH input AS (
@@ -279,6 +281,11 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
         ), audit_committed AS (
           INSERT INTO gearth.run_audit_commits(run_id,revision,batch_id,through_sequence)
           SELECT run_id,$2::bigint,$5,(state->>'audit_sequence')::bigint FROM saved WHERE $5::text IS NOT NULL
+          ON CONFLICT (run_id,revision) DO NOTHING RETURNING revision
+        ), renderer_saved AS (
+          INSERT INTO gearth.renderer_frames(run_id,revision,tick,week,frame_kind,through_event_sequence,checkpoint_digest,part_count)
+          SELECT run_id,$2::bigint,(state->>'tick')::int,((state->>'tick')::int+6)/7,$9,
+            (state->>'seq')::bigint,$7,$8::int FROM saved WHERE $9::text IS NOT NULL
           ON CONFLICT (run_id,revision) DO NOTHING RETURNING revision
         ) SELECT run_id FROM saved
         """;
@@ -344,6 +351,14 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
             CREATE TABLE IF NOT EXISTS gearth.checkpoint_parts (
               run_id text NOT NULL, digest text NOT NULL, part integer NOT NULL, content text NOT NULL,
               PRIMARY KEY(run_id,digest,part)
+            )
+            """, [], cancellationToken);
+        await Query("""
+            CREATE TABLE IF NOT EXISTS gearth.renderer_frames (
+              run_id text NOT NULL REFERENCES gearth.stage1_runs(run_id), revision bigint NOT NULL,
+              tick integer NOT NULL, week integer NOT NULL, frame_kind text NOT NULL,
+              through_event_sequence bigint NOT NULL, checkpoint_digest text NOT NULL, part_count integer NOT NULL,
+              PRIMARY KEY(run_id,revision)
             )
             """, [], cancellationToken);
         await Query("""
@@ -425,7 +440,8 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
         // Ordinary forks retain their inherited audit prefix after capture is disabled.
         // They still need cursor validation and bounded transport for a potentially large parent checkpoint.
         var hasAuditState = world.AnalyticsEnabled || world.AuditSequence > 0;
-        if (!hasAuditState && Encoding.UTF8.GetByteCount(state) > 16 * 1024 * 1024)
+        var boundedCheckpoint = hasAuditState || world.RendererCaptureEnabled;
+        if (!boundedCheckpoint && Encoding.UTF8.GetByteCount(state) > 16 * 1024 * 1024)
             throw new InvalidOperationException("Legacy Neon checkpoint exceeds the application's 16 MiB request safety limit; enable analytics for bounded checkpoint transport");
         var heads = hasAuditState
             ? await Query("SELECT revision,COALESCE(audit_sequence,(state->>'audit_sequence')::bigint) FROM gearth.stage1_runs WHERE run_id=$1", [world.Id], cancellationToken)
@@ -462,7 +478,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
                 """, [world.Id, world.Revision.ToString(), digest, JsonSerializer.Serialize(batch, Wire.Json)], cancellationToken);
         string? checkpointDigest = null;
         var partCount = 0;
-        if (hasAuditState)
+        if (boundedCheckpoint)
         {
             checkpointDigest = AuditPersistence.CheckpointDigest(state);
             foreach (var part in AuditPersistence.CheckpointParts(state))
@@ -476,7 +492,8 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
         }
         string?[] parameters =
         [world.Id, world.Revision.ToString(), checkpointDigest is null ? state : null,
-            expectedRevision.ToString(), digest, world.PendingAudit.Count.ToString(), checkpointDigest, partCount.ToString()];
+            expectedRevision.ToString(), digest, world.PendingAudit.Count.ToString(), checkpointDigest, partCount.ToString(),
+            RendererReplay.FrameKind(world)];
 
         var rows = await Query(SaveQuery, parameters, cancellationToken);
         if (rows.Count == 1)
@@ -522,6 +539,11 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
         }
         var digest = header[0]![0]!.GetValue<string>();
         var count = int.Parse(header[0]![1]!.GetValue<string>());
+        return await LoadCheckpoint(id, digest, count, cancellationToken);
+    }
+
+    private async Task<World?> LoadCheckpoint(string id, string digest, int count, CancellationToken cancellationToken)
+    {
         var serialized = new StringBuilder();
         for (var next = 0; next < count;)
         {

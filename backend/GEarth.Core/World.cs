@@ -180,6 +180,7 @@ public sealed class World
     public long Revision { get; set; }
     public long Seq { get; set; }
     public bool AnalyticsEnabled { get; set; }
+    public bool RendererCaptureEnabled { get; set; }
     public long AuditSequence { get; set; }
     public int AuditSchemaVersion { get; set; }
     public int? AuditStartTick { get; set; }

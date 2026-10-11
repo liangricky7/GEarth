@@ -4,6 +4,8 @@ The CPU VM runs the .NET world engine, Python decision worker, and observer. Bot
 
 AMD can supplement both Sparks in the same collector through its existing authenticated HTTPS endpoint. The service uses `--compute auto`: enabled AMD configuration selects hybrid mode, which keeps all four Spark providers active and adds AMD to their shared provider pool. Disabled AMD keeps Spark-only mode. All enabled model catalogs are checked before startup; AMD must also reject unauthenticated catalog requests. The existing AMD Qwen3-4B server is configured for resident decisions at capacity one. Keep the AMD instance and its tunnel online.
 
+The worker balances each decision group by active requests divided by configured capacity, rotating ties independently for citizens and institutions. Independent rotations prevent alternating roles from repeatedly choosing Spark A while skipping Spark B and AMD. Each Spark currently has 16 institutional and 32 citizen slots; AMD supplements the citizen pool with one slot. A full eligible backlog can use all 97 slots, distributed as 48 on Spark A, 48 on Spark B, and one on AMD. This balances available capacity; completed request counts and GPU utilization can differ with model latency, prompt size, and eligible roles.
+
 ## Current deployment
 
 - Project: `project-73e10704-566a-4d04-886` (My First Project).
@@ -17,6 +19,8 @@ The cloud service disables inference HTTP keepalive across SSH relays. A remote 
 Spark B currently depends on Ken's existing PC relay. Keeping that PC relay and both Sparks available remains necessary. The VM must not use Spark A's loopback 18002/18004 reverse tunnel, which currently passes through Jayden's laptop. Moving the coordinator to the VM removes Jayden's laptop from the collection path; it does not make the physical inference machines or Ken's relay available when powered off. Netplan is untouched on all machines.
 
 ## Repeated experiments
+
+The deployed VM is currently in manual mode. `/etc/systemd/system/faultline.service.d/10-manual-runs.conf` overrides the collector with `--max-runs 1`, `Restart=no`, and an empty `WantedBy`. Boot startup, crash restarts, and repeat worlds are disabled. Website Start explicitly launches one experiment; Stop pauses its current world, and Reset starts a fresh one. Deployments must preserve this override and leave the collector stopped unless the user explicitly requests starting it. Nginx and the team control service remain available while simulations are stopped.
 
 `ops/run_collection.py` builds once and repeatedly launches finite worlds with `--exit-on-complete`. The service defaults to 1,100 agents, 365 daily ticks, two-second minimum tick intervals, live Spark decisions, and Neon persistence. Real run duration also depends on inference and storage.
 

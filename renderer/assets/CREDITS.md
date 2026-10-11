@@ -16,3 +16,13 @@ All are CC-BY-4.0 and must be credited wherever the renderer or its footage is s
 - This work is based on "Boeing 737-800 Cockpit" (https://sketchfab.com/3d-models/boeing-737-800-cockpit-d463256f98654b36af019d2d88bd5bbe) by hakai315 (https://sketchfab.com/hakai315) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 
 Changes: a display floor (ship) and three stray parts (cockpit) were detached; see each folder's MODIFICATIONS.txt. The ship is drawn at 5x scale.
+
+# Optional Bistro environment (downloaded separately)
+
+Amazon Lumberyard Bistro, NVIDIA RTXDI Assets, edited by Arseny Kapoulkine (zeux):
+https://github.com/zeux/niagara_bistro/tree/2bdb6a410f8ebd475d3737e7c8e038ed2b00b02e
+
+The pinned repository supplies an MIT license, Copyright (c) 2023 NVIDIA GameWorks.
+The fetch script retains its complete LICENSE and README beside the downloaded
+assets. The original Bistro scene is attributed to Amazon Lumberyard / ORCA.
+No scene binaries or textures are copied into this repository.

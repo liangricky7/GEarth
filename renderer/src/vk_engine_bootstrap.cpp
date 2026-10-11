@@ -48,6 +48,8 @@ void VulkanEngine::init_vulkan()
     VkPhysicalDeviceFeatures optional{};
     optional.samplerAnisotropy = VK_TRUE;
     _samplerAnisotropySupported = physicalDevice.enable_features_if_present(optional);
+    optional = {}; optional.textureCompressionBC = VK_TRUE;
+    _textureCompressionBC = physicalDevice.enable_features_if_present(optional);
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(physicalDevice.physical_device, &properties);
     _maxSamplerAnisotropy = _samplerAnisotropySupported ? properties.limits.maxSamplerAnisotropy : 1;

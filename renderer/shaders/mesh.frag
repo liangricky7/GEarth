@@ -119,6 +119,9 @@ void main() {
     vec2 mr = texture(metalRoughTex, uv).bg * material.metal_rough_factors.xy;
     float metallic = clamp(mr.x, 0, 1);
     float roughness = clamp(mr.y, .05, 1);
+    bool specGloss = material.extra[1].y > .5;
+    vec4 sg = texture(metalRoughTex,uv) * material.extra[0];
+    if (specGloss) { metallic=0; roughness=clamp(1-sg.a,.05,1); }
     float ocean = 0, daylight = 1, cityLights = 0;
     if (material.materialFlags.w>.5) {
         // Globe only: normal-map alpha is ocean coverage; water is a broad-glint dielectric.
@@ -132,6 +135,7 @@ void main() {
     vec3 h = normalize(v + l);
     float nl = max(dot(n,l), 0), nv = max(dot(n,v), .001), nh = max(dot(n,h), 0);
     vec3 f0 = mix(vec3(mix(.04, .02, ocean)), base.rgb, metallic);
+    if (specGloss) f0 = clamp(sg.rgb,vec3(0),vec3(1));
     vec3 fresnel = f0 + (1 - f0) * pow(1 - max(dot(v,h), 0), 5);
     float a2 = pow(roughness, 4);
     float denom = nh * nh * (a2 - 1) + 1;
@@ -151,11 +155,38 @@ void main() {
         vec3 moonSpecular = a2 / max(PI * dm * dm, .000001) * gm * fm / max(4 * nv * nlm, .0001);
         direct += ((1 - fm) * (1 - metallic) * base.rgb / PI + moonSpecular) * nlm * vec3(.6, .7, 1) * scene.moonLight.w;
     }
+    for (int i=0;i<int(scene.lightInfo.x);++i) {
+        SceneLight lamp=scene.lights[i];
+        vec3 delta=lamp.positionRange.xyz-worldPosition;
+        float distance2=dot(delta,delta), range=lamp.positionRange.w;
+        if (range>0 && distance2>=range*range) continue;
+        vec3 direction=delta*inversesqrt(max(distance2,.0001));
+        float attenuation=1/max(distance2,.04);
+        if (range>0) attenuation*=pow(clamp(1-pow(sqrt(distance2)/range,4),0,1),2);
+        if (lamp.innerType.y>.5) {
+            float cone=dot(-direction,lamp.directionOuter.xyz);
+            attenuation*=pow(clamp((cone-lamp.directionOuter.w)/max(lamp.innerType.x-lamp.directionOuter.w,.0001),0,1),2);
+        }
+        float ndl=max(dot(n,direction),0);
+        if (ndl<=0 || attenuation<.000001) continue;
+        vec3 halfVector=normalize(v+direction);
+        float ndh=max(dot(n,halfVector),0), denominator=ndh*ndh*(a2-1)+1;
+        vec3 f=f0+(1-f0)*pow(1-max(dot(v,halfVector),0),5);
+        float g=(nv/(nv*(1-k)+k))*(ndl/max(ndl*(1-k)+k,.0001));
+        vec3 brdf=(1-f)*(1-metallic)*base.rgb/PI+a2/max(PI*denominator*denominator,.000001)*g*f/max(4*nv*ndl,.0001);
+        direct+=brdf*ndl*lamp.colorIntensity.rgb*lamp.colorIntensity.w*attenuation*scene.lightInfo.y;
+    }
     // Ambient fill is an explicit approximation; replace with IBL when environment assets are available.
     // Lightweight GI: sky visibility scales the ambient, over a 30% floor standing in for light that enters through
     // the windows and bounces around the interior (unbaked meshes have occlusion 1 and are unchanged).
     vec3 ambient = (base.rgb * (1 - metallic) + f0 * .25) * scene.ambientColor.rgb * (.55 + .45 * max(n.y, 0)) * mix(.3, 1., occlusion);
+    if (scene.lightInfo.z>.5) {
+        vec3 reflected=reflect(-v,n);
+        vec3 environment=mix(vec3(.18,.14,.1),vec3(.4,.6,.95),smoothstep(-.2,.5,reflected.y));
+        ambient+=environment*f0*scene.ambientColor.rgb*(1-.6*roughness);
+    }
     vec3 emission = material.emission.rgb;
+    if (material.extra[1].x > .5) emission *= texture(emissiveTex,uv).rgb;
     if (cityLights > 0) {
         // Globe at the origin: the nearest capital owns this pixel, matching world_country().
         vec3 radial = normalize(worldPosition);
@@ -168,5 +199,7 @@ void main() {
         if (night > .001)
             emission += city_lights(radial, cityLights, pixel) * (1 - ocean) * scene.cityLights[owner].w * scene.nightSettings.x * night;
     }
+    float transmission = material.extra[1].z;
+    if (transmission > 0) base.a *= mix(1.,.12,transmission);
     outColor = vec4(direct + ambient + emission, base.a);
 }

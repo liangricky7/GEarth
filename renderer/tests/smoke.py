@@ -141,6 +141,46 @@ def main():
     changed = difference(flat, derived)
     assert changed > .2, 'Normal maps without authored tangents must change the shaded scene'
     assert difference(derived, authored) < changed, 'Derivative normals must agree with the authored frame better than a flat normal'
+    # A BC7 mode-6 block with equal red endpoints: exercise DDS selection over a missing PNG fallback.
+    bits, at = 64, 7
+    for value in (127,127,0,0,0,0,127,127):
+        bits |= value << at
+        at += 7
+    bits |= 1 << at | 1 << (at+1)
+    dds = bytearray(148)
+    for offset, value in {0:0x20534444,4:124,12:4,16:4,28:1,76:32,80:4,84:0x30315844,128:98,132:3,140:1}.items():
+        struct.pack_into('<I',dds,offset,value)
+    dds.extend(bits.to_bytes(16,'little'))
+    (args.output/'red.dds').write_bytes(dds)
+    raw = good.read_bytes()
+    json_size = struct.unpack_from('<I',raw,12)[0]
+    asset = json.loads(raw[20:20+json_size])
+    (args.output/'environment.bin').write_bytes(raw[28+json_size:])
+    asset['buffers'][0]['uri'] = 'environment.bin'
+    image_index = len(asset['images'])
+    asset['images'] += [{'uri':'missing-fallback.png'},{'uri':'red.dds'}]
+    asset['textures'].append({'source':image_index,'extensions':{'MSFT_texture_dds':{'source':image_index+1}}})
+    asset['materials'][0]['extensions'] = {'KHR_materials_pbrSpecularGlossiness':{
+        'diffuseFactor':[1,1,1,1], 'diffuseTexture':{'index':len(asset['textures'])-1},
+        'specularFactor':[.04,.04,.04], 'glossinessFactor':.3}}
+    asset['extensionsUsed'] = ['MSFT_texture_dds','KHR_materials_pbrSpecularGlossiness','KHR_lights_punctual']
+    environment_file = args.output/'environment.gltf'
+    environment_file.write_text(json.dumps(asset))
+    log = run('environment-dds',['--smoke','--frames','12','--environment',environment_file,'--capture',args.output/'environment-dds.ppm'])
+    assert 'Failed to load GLTF image' not in log and 'Environment at original scale' in log
+    pixels = (args.output/'environment-dds.ppm').read_bytes().split(b'\n255\n',1)[1]
+    assert sum(r > g*1.4 and r > b*1.4 and r > 60 for r,g,b in zip(pixels[::3],pixels[1::3],pixels[2::3])) > 200, 'DDS diffuse texture must produce a red surface'
+    asset['extensions'] = {'KHR_lights_punctual':{'lights':[{'type':'point','color':[0,0,1],'intensity':50000,'range':50}]}}
+    asset['nodes'].append({'translation':[0,0,3],'extensions':{'KHR_lights_punctual':{'light':0}}})
+    asset['scenes'][0]['nodes'].append(len(asset['nodes'])-1)
+    environment_file.write_text(json.dumps(asset))
+    log = run('environment-light',['--smoke','--frames','12','--environment',environment_file,'--capture',args.output/'environment-light.ppm'])
+    assert 'Scene: 1 local lights' in log
+    assert difference(scene_pixels('environment-dds'),scene_pixels('environment-light')) > 1, 'Imported lights must change the shaded geometry'
+    (args.output/'red.dds').write_bytes(dds[:-1])
+    log = run('environment-bad-dds',['--smoke','--environment',environment_file],1)
+    assert 'Truncated DDS mip payload' in log
+    (args.output/'red.dds').write_bytes(dds)
     shader_dir = args.output / 'badshader'
     (shader_dir/'shaders').mkdir(parents=True, exist_ok=True)
     shader_exe = shader_dir / executable.name

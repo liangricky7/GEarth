@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fstream>
+#include "dds.h"
 
 AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 {
@@ -27,7 +29,7 @@ AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags
     return newBuffer;
 }
 
-AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, uint32_t levels)
 {
     AllocatedImage newImage;
     newImage.imageFormat = format;
@@ -38,6 +40,7 @@ AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkIm
     if (mipmapped) {
 		img_info.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(size.width, size.height)))) + 1;
     }
+    if (levels) img_info.mipLevels = levels;
 
     // always allocate images on dedicated GPU memory
     VmaAllocationCreateInfo allocinfo = {};
@@ -61,6 +64,40 @@ AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkIm
     VK_CHECK(vkCreateImageView(_device, &view_info, nullptr, &newImage.imageView));
 
     return newImage;
+}
+
+AllocatedImage VulkanEngine::load_dds(const std::filesystem::path& path, bool srgb) {
+    if (!_textureCompressionBC) throw std::runtime_error("GPU does not support BC texture compression");
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() < 148 || input.tellg() > 256*1024*1024) throw std::runtime_error("Missing or oversized DDS: " + path.string());
+    std::vector<uint8_t> data(size_t(input.tellg())); input.seekg(0);
+    if (!input.read(reinterpret_cast<char*>(data.data()), data.size())) throw std::runtime_error("Cannot read DDS: " + path.string());
+    auto texture = parse_dds(data);
+    if (texture.bytes > 1536ull*1024*1024 - _ddsBytes) throw std::runtime_error("DDS texture budget exceeded (1.5 GiB)");
+    VkFormat format = srgb ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK;
+    VkFormatProperties properties{}; vkGetPhysicalDeviceFormatProperties(_chosenGPU,format,&properties);
+    if (!(properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) throw std::runtime_error("BC7 sampling unavailable");
+    const auto& first = texture.mips.front();
+    auto upload = create_buffer(texture.bytes,VK_BUFFER_USAGE_TRANSFER_SRC_BIT,VMA_MEMORY_USAGE_CPU_TO_GPU);
+    AllocatedImage result{};
+    try {
+        std::memcpy(upload.info.pMappedData,data.data()+first.offset,texture.bytes);
+        VK_CHECK(vmaFlushAllocation(_allocator,upload.allocation,0,VK_WHOLE_SIZE));
+        result = create_image({first.width,first.height,1},format,VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,uint32_t(texture.mips.size()));
+        std::vector<VkBufferImageCopy> copies;
+        for (uint32_t i=0;i<texture.mips.size();++i) {
+            const auto& mip=texture.mips[i]; VkBufferImageCopy copy{};
+            copy.bufferOffset=mip.offset-first.offset; copy.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,i,0,1};
+            copy.imageExtent={mip.width,mip.height,1}; copies.push_back(copy);
+        }
+        immediate_submit([&](VkCommandBuffer cmd) {
+            vkutil::transition_image(cmd,result.image,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            vkCmdCopyBufferToImage(cmd,upload.buffer,result.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,uint32_t(copies.size()),copies.data());
+            vkutil::transition_image(cmd,result.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        });
+        _ddsBytes += texture.bytes;
+    } catch (...) { destroy_image(result); destroy_buffer(upload); throw; }
+    destroy_buffer(upload); return result;
 }
 
 AllocatedImage VulkanEngine::create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)

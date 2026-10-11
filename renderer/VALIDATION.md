@@ -3,6 +3,26 @@
 Windows x64, NVIDIA RTX 3060 Laptop GPU, Vulkan SDK 1.4.357.0,
 Visual Studio 2026/MSVC 19.51, CMake 4.3.1, Node and Python 3.11.
 
+Bistro follow-up: imported Niagara Bistro at revision
+`2bdb6a410f8ebd475d3737e7c8e038ed2b00b02e`. The fetch tool verified every asset
+against its Git blob hash and retained source/license notices under ignored
+`artifacts/local/bistro`. Release and Debug builds and Release CTest passed.
+All 29 graphics smoke tests passed, including BC7 DDS selection over missing PNG
+fallbacks, specular/glossiness materials, imported point lights and truncated DDS
+rejection. All 14 renderer integration tests, including GPU reconnect, passed.
+
+The full scene loaded 551 meshes, 2,909 mesh instances, 96 local lights and its
+authored camera. Selected compressed texture mips used 1,155.9 MiB. A short
+180-frame Release run averaged 53.6 FPS at a 1920x1200 capture size, including
+smoke-test resizing and capture overhead; this is not a sustained benchmark.
+The capture was visually inspected. A separate 24-frame full-scene Debug run
+with synchronization validation reported no validation errors or hazards.
+Evidence is in `artifacts/local/bistro-inspection` (`bistro.png`,
+`bistro-release.log`, `bistro-validation.log`, `smoke.log`, `replay-tests.log`);
+fixture captures are in `artifacts/local/bistro-smoke`.
+Glass and indirect lighting are approximations, local lights do not cast shadows,
+and animation remains static. Other GPUs and operating systems were not tested.
+
 Dependency cleanup: replaced 2,371 bundled library files with a SHA-256-pinned
 vkguide source download managed by CMake. Compared the existing library files
 with that snapshot (normalizing line endings); all matched. The newer ImGui

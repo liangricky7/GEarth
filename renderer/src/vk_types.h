@@ -37,6 +37,7 @@ struct GPUMeshBuffers {
     VkDeviceAddress vertexBufferAddress{};
 };
 struct GPUDrawPushConstants { glm::mat4 worldMatrix{1}; VkDeviceAddress vertexBuffer{}; };
+struct SceneLight { glm::vec4 positionRange{}, colorIntensity{}, directionOuter{}, innerType{}; };
 struct GPUSceneData {
     glm::mat4 viewproj{1}, sunViewProjection{1};
     glm::vec4 cameraPosition{}, sunlightDirection{}, sunlightColor{}, ambientColor{}, shadowSettings{};
@@ -46,8 +47,10 @@ struct GPUSceneData {
     glm::vec4 nightSettings{};
     // Night-view moonlight: xyz = direction toward it, w = intensity (0 = off).
     glm::vec4 moonLight{};
+    glm::vec4 lightInfo{};
+    std::array<SceneLight,128> lights{};
 };
-static_assert(sizeof(GPUSceneData) == 400);
+static_assert(sizeof(GPUSceneData) == 8608);
 struct StarfieldPushConstants {
     glm::mat4 rotationProjection{1};
     glm::vec4 viewport{};

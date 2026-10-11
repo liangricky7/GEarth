@@ -61,12 +61,7 @@ async def check(output, config_path=None):
                 "goal": "Save money for tomorrow",
                 "cash_minor": 100,
             },
-            candidates=[{"action_type": "hold", "params": {}}]
-            + (
-                []
-                if provider.decision_group == "institution"
-                else [{"action_type": "work", "params": {"effort": 1}}]
-            ),
+            candidates=[{"action_type": "hold", "params": {}}],
         )
         result = await worker.decide(job, f"Bearer {worker.TOKEN}")
         if result["source"] != "model":

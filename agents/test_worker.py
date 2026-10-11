@@ -269,6 +269,62 @@ def test_world_rules_form_a_shared_prefix_and_menus_stay_compact():
     assert user["available_actions"] == ["0: hold", "1: set_price change_pct=10"]
 
 
+def test_fixed_numeric_choice_only_accepts_exact_copies_of_menu_parameters():
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    job.candidates.append({"action_type": "household_policy", "params": {"target_stock": 2}})
+    action = worker.validate_action({"choice": 1, "reason": "Build a buffer"}, job)
+    assert action["params"] == {"target_stock": 2}
+    assert worker.render_action(1, job.candidates[1]) == "1: household_policy target_stock=2"
+    for values in ({}, {"target_stock": 2}):
+        repeated = worker.validate_action(
+            {"choice": 1, "reason": "Build a buffer", "values": values}, job
+        )
+        assert repeated == action
+    for values in ({"target_stock": 999}, {"target_stock": True}, {"target_stock": "2"}, {"target_stock": 2.0}, {"cash": 999}, []):
+        with pytest.raises(ValueError, match="INVALID_SCHEMA"):
+            worker.validate_action(
+                {"choice": 1, "reason": "Build a buffer", "values": values}, job
+            )
+
+
+def test_fixed_menus_do_not_invite_free_numeric_values():
+    # Reproduced 8B responses invented price_minor for change_pct and energy
+    # for an import quantity after seeing the unrelated planner instructions.
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    job.candidates.extend([
+        {"action_type": "set_price", "params": {"business_id": "aster_food_2", "change_pct": 10}},
+        {"action_type": "import_goods", "params": {"seller_id": "dune_energy", "good": "energy", "quantity": 55, "objective": "cheapest"}},
+    ])
+    instructions = worker.build_prompt(job)["messages"][0]["content"]
+    assert 'exactly "choice" and "reason"' in instructions
+    assert '"values"' not in instructions
+    for choice, values in ((1, {"price_minor": 62}), (2, {"energy": 55})):
+        with pytest.raises(ValueError, match="INVALID_SCHEMA"):
+            worker.validate_action({"choice": choice, "reason": "Improve profit", "values": values}, job)
+        assert worker.validate_action({"choice": choice, "reason": "Improve profit"}, job)["params"] == job.candidates[choice]["params"]
+
+
+def test_ranged_menus_keep_explicit_numeric_instructions():
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    job.candidates.append({"action_type": "set_plan", "params": {"food": {"min": 0, "max": 1000, "default": 700}}})
+    prompt = worker.build_prompt(job)
+    assert '"values"' in prompt["messages"][0]["content"]
+    assert json.loads(prompt["messages"][1]["content"])["available_actions"][1] == "1: set_plan food=<integer 0-1000, now 700>"
+    assert worker.validate_action({"choice": 1, "reason": "Meet demand", "values": {"food": 720}}, job)["params"] == {"food": 720}
+
+
+def test_failure_logs_safe_validation_code_without_private_response(caplog):
+    job = make_job()
+    worker.decision_result(job, {}, "rule_fallback", worker.time.perf_counter(), ValueError("INVALID_VALUES"))
+    record = json.loads(caplog.records[-1].message.split("decision_failure ", 1)[1])
+    assert record["code"] == "INVALID_VALUES"
+    worker.decision_result(job, {}, "rule_fallback", worker.time.perf_counter(), ValueError("private model response"))
+    assert "private" not in caplog.records[-1].message
+
+
 def test_free_numbers_fill_ranged_fields_within_bounds():
     job = make_job()
     job.observation = {"world_stage": 2}
@@ -290,7 +346,7 @@ def test_free_numbers_fill_ranged_fields_within_bounds():
             worker.validate_action({"choice": 1, "reason": "Plan.", "values": values}, job)
     with pytest.raises(ValueError, match="INVALID_VALUES"):
         worker.validate_action({"choice": 1, "reason": "Plan."}, job)
-    for values in ({"food": 1}, {}, None):  # fixed actions take no values, including explicit null
+    for values in ({"food": 1},):  # fixed choices cannot invent parameters
         with pytest.raises(ValueError, match="INVALID_SCHEMA"):
             worker.validate_action({"choice": 0, "reason": "Wait.", "values": values}, job)
 

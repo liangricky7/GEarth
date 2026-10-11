@@ -23,7 +23,7 @@
     "backend_passed": 147,
     "backend_skipped": 4,
     "skip_reason": "banking paused on main",
-    "python_passed": 210,
+    "python_passed": 214,
     "review": "independent review found no blocker"
   },
   "pilots": [
@@ -1660,5 +1660,12 @@
     "Banking remains paused; daily bank claims do not qualify the complete loan-book lifecycle.",
     "50,000 total agents and 365 ticks are not load-qualified by these pilots.",
     "Public production deployment remains a separate step after PR review/integration."
-  ]
+  ],
+  "integration_review": {
+    "main_commit": "aadb87ccde5776920d37337c690bcd64d16ddd87",
+    "worker_matches_main_exactly": true,
+    "backend_and_analytics_match_pilot_source_exactly": true,
+    "python_passed_after_integration": 214,
+    "independent_review": "No blockers; main prompt, fixed-echo compatibility and safe diagnostic fixes preserved."
+  }
 }

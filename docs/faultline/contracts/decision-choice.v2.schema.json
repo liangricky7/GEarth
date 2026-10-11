@@ -14,7 +14,7 @@
       "pattern": "\\S"
     },
     "values": {
-      "description": "Required only for a selected option with bounded integer fields. Keys and bounds must match that exact menu option; fixed options must omit values.",
+      "description": "Required for a selected option with bounded integer fields. Keys and bounds must match that exact menu option; fixed options should omit values in the canonical response.",
       "type": "object",
       "minProperties": 1,
       "additionalProperties": { "type": "integer" }

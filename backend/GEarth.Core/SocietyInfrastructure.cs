@@ -4,6 +4,7 @@ namespace GEarth.Core;
 
 public sealed partial class Nation
 {
+    public HashSet<string> RepairOrders { get; set; } = [];
     public bool MaintenanceFunded { get; set; } = true;
     public HashSet<string> ConstructionMaterialsUsed { get; set; } = [];
     public Dictionary<string, BorrowedBuilder> BorrowedBuilders { get; set; } = new();
@@ -13,7 +14,7 @@ public sealed record BorrowedBuilder(string EmployerId, string Occupation, long 
 
 public static class SocietyInfrastructure
 {
-    public const string Note = "Governments can build_infrastructure from treasury cash through the state construction contractor: half the cost is advanced when ordered and the rest paid weekly as work progresses, the treasury covers builders' pay when the contractor runs short, and the contractor bids up its wage offer and recruits from non-essential unskilled jobs while builders are missing; shortages of builders or materials delay completion. A port cuts import transit time. Upgrades replace the existing project's boost during construction. Funded upkeep needs builders and costs 1% weekly; set_maintenance can stop it, losing 2 condition per week. ";
+    public const string Note = "Governments can build_infrastructure from treasury cash through the state construction contractor: half the cost is advanced when ordered and the rest paid weekly as work progresses, the treasury covers builders' pay when the contractor runs short, and the contractor bids up its wage offer and recruits from non-essential unskilled jobs while builders are missing; shortages of builders or materials delay completion. A port cuts import transit time. Upgrades replace the existing project's boost during construction. Funded upkeep needs builders and costs 1% weekly; set_maintenance can stop it, losing 2 condition per week. Maintenance prevents ordinary wear but does not repair accumulated damage. repair_infrastructure restores at most 10 condition weekly, uses one builder, proportional materials and 0.5% of build cost per condition point. ";
 
     // Share of a project's cost paid to the contractor when it is ordered, so it can hire and buy materials.
     public const double AdvanceShare = 0.5; // ponytail: tune after runs
@@ -49,11 +50,20 @@ public static class SocietyInfrastructure
             if (CanOrder(world, nation, spec, level))
                 options.Add(SocietyActions.Make("build_infrastructure", new { type = spec.Type, level }));
         }
+        foreach (var project in nation.Infrastructure.Where(project => project.Complete && project.Condition < 100 && !nation.RepairOrders.Contains(project.Id)))
+            options.Add(SocietyActions.Make("repair_infrastructure", new { project_id = project.Id,
+                effect = "Queue repair: up to 10 condition a week, one builder, proportional materials, 0.5% build cost per point; funding is rechecked weekly." }));
         options.Add(SocietyActions.Make("set_maintenance", new { on = !nation.MaintenanceFunded }));
     }
 
     public static bool? Enact(World world, Nation nation, PolicyProposal policy)
     {
+        if (policy.ActionType == "repair_infrastructure")
+        {
+            var id = policy.Params["project_id"]?.GetValue<string>();
+            return id is not null && nation.Infrastructure.Any(project => project.Id == id && project.Complete && project.Condition < 100)
+                && nation.RepairOrders.Add(id);
+        }
         if (policy.ActionType == "set_maintenance")
         {
             if (policy.Params["on"] is not JsonValue on || !on.TryGetValue<bool>(out var funded))
@@ -101,7 +111,7 @@ public static class SocietyInfrastructure
     public static void Autopilot(World world, Nation nation, Agent firm)
     {
         var needed = Active(nation).Sum(project => PhaseContracts.Spec(project.Type).Builders)
-            + (nation.MaintenanceFunded ? Crew(nation) : 0);
+            + (nation.MaintenanceFunded ? Crew(nation) : 0) + nation.RepairOrders.Count;
         firm.TargetHeadcount = Math.Max(0, needed - (firm.OwnerId is { } owner && SocietyLabor.OwnerWorks(world.Agents[owner], firm) ? 1 : 0));
         firm.OvertimeOffered = false;
     }
@@ -196,6 +206,40 @@ public static class SocietyInfrastructure
             }
             if (world.Tick % SocietyLabor.DaysPerWeek == 0)
             {
+                foreach (var project in nation.Infrastructure.Where(project => project.Complete && nation.RepairOrders.Contains(project.Id)).ToArray())
+                {
+                    if (project.Condition >= 100) { nation.RepairOrders.Remove(project.Id); continue; }
+                    if (firm is null || builders <= 0) continue;
+                    var points = Math.Min(10, 100 - project.Condition);
+                    var fee = (long)Math.Ceiling(project.CostMinor * points / 200.0);
+                    var materials = PhaseContracts.Materials(project.Type, project.Level)
+                        .ToDictionary(pair => pair.Key, pair => (int)Math.Ceiling(pair.Value * points / 100.0));
+                    long purchases = 0;
+                    var supplied = true;
+                    foreach (var (good, units) in materials)
+                    {
+                        var remaining = Math.Max(0, units - government.Inventory.GetValueOrDefault(good));
+                        foreach (var offer in SocietyEconomy.Offers(world, nation, good))
+                        {
+                            var take = Math.Min(remaining, offer.Seller.Inventory.GetValueOrDefault(good));
+                            purchases += take * (long)offer.PriceMinor;
+                            remaining -= take;
+                        }
+                        supplied &= remaining == 0;
+                    }
+                    if (!supplied || SocietyBank.Liquid(world, government) < fee + purchases) continue;
+                    foreach (var (good, units) in materials)
+                    {
+                        SocietyEconomy.Acquire(world, government, good, Math.Max(0, units - government.Inventory.GetValueOrDefault(good)), false);
+                        government.Inventory[good] -= units;
+                        world.Society!.ConsumedGoods[good] += units;
+                    }
+                    SocietyEconomy.Sell(world, government, firm, fee, kind: "infrastructure_repair");
+                    project.Condition += points;
+                    builders--;
+                    if (project.Condition == 100) nation.RepairOrders.Remove(project.Id);
+                    world.Emit("infrastructure_repaired", "rule", [nation.Id, project.Id], new { points, project.Condition, fee_minor = fee, materials });
+                }
                 var maintained = 0;
                 foreach (var project in nation.Infrastructure.Where(project => project.Complete && project.Type != PhaseContracts.Missile))
                 {
@@ -205,7 +249,7 @@ public static class SocietyInfrastructure
                     if (nation.MaintenanceFunded && firm is not null && maintained < builders * 4 && government.CashMinor >= upkeep)
                     {
                         SocietyEconomy.Sell(world, government, firm, upkeep, kind: "infrastructure_maintenance");
-                        project.Condition = 100;
+                        project.Condition = before;
                         maintained++;
                     }
                     if (before >= 50 && project.Condition < 50)
@@ -245,6 +289,7 @@ public static class SocietyInfrastructure
         return new
         {
             nation.MaintenanceFunded,
+            repairs_queued = nation.RepairOrders.Order().ToArray(),
             projects = nation.Infrastructure.Select(project => new
             {
                 project.Id, project.Type, project.Level, project.Condition, project.Complete, project.ReadyTick,

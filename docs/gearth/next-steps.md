@@ -279,3 +279,17 @@ Run `world_20261011_101952_a24105` exposed a timeout/admission cascade: at day 4
 
 - 6c aspiration (a desire for more beyond QoL), revolution (until Phase 3), resource depletion.
 - Soldiers left alone until Phase 3.
+
+## Post-infrastructure e1efff decisions (Oct 11, 2026)
+
+User approved I1, I2, I3, and I5 conditional on modest compute cost; declined I4 as out of scope. These entries supersede the earlier one-meal hunger cliff and instant upkeep restoration.
+
+| ID | Decision | Implementation |
+|---|---|---|
+| e1efff-I1 | Preserve starvation as near-incapacitation without deaths/spawns; gradual deterioration/recovery | 21 missed-meal debt days reach 1% nutrition output; fed days recover 2 debt days. Sub-unit effort accumulates for near-incapacitated crews. Parameters are calibration defaults, not empirical physiology. |
+| e1efff-I2 | Recognize sovereign-credit distress | Block advances after any missed payment or outstanding provision; after 3 misses provision 10% of principal, rising 10 percentage points per further missed payment. Reduce bank equity by provision; keep the legal debt and deposit/base-money accounting. Additional draws add installments instead of re-amortizing old principal. |
+| e1efff-I3 | Separate maintenance and repair | Funded routine upkeep prevents the week's 2-point wear. Queued repairs restore at most 10 points/week, need 1 builder, proportional materials, and charge 0.5% build cost per point. |
+| e1efff-I4 | Regime/geography rotations | Deferred at user's request. |
+| e1efff-I5 | Low-cost food perishability | Active stored food loses 1% weekly with an integer fractional accumulator. No age cohorts, path searches, model calls or new infrastructure requirements. Durable goods and in-transit cargo unchanged. |
+
+Decision-problem investigation: `reviews/e1efff-decision-investigation.md`; evidence `reviews/e1efff-decision-evidence.json`. These decision-behavior remedies remain recommendations, not approved behavioral restrictions.

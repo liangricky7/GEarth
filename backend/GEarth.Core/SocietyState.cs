@@ -183,6 +183,7 @@ public sealed class Credit
     public long WeeklyInterestMinor { get; set; }
     public int RatePct { get; set; }
     public int MissedPayments { get; set; }
+    public long ProvisionMinor { get; set; }
     public string? Sector { get; set; }
     public int LaunchPriceMinor { get; set; }
     public int RequestedTick { get; set; }

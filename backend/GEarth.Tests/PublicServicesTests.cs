@@ -80,7 +80,7 @@ public sealed class PublicServicesTests
         var farmer = Employee(world, "aster", "food");
         var healthy = SocietyEconomy.Capacity(farmer);
         farmer.Hungry = true;
-        Assert.Equal(healthy * SocietyEconomy.HungerOutputFactor, SocietyEconomy.Capacity(farmer), 6);
+        Assert.Equal(healthy * SocietyEconomy.NutritionFactor(farmer), SocietyEconomy.Capacity(farmer), 6);
 
         SocietyEconomy.Transfer(world, farmer, world.Agents["aster_government"], farmer.CashMinor);
         farmer.DepositMinor = 0;

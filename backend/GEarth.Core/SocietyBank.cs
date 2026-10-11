@@ -117,7 +117,7 @@ public static class SocietyBank
     public static long LoansOutstanding(World world, Agent bank) => Loans(world, bank, "active").Sum(credit => credit.PrincipalLeftMinor);
 
     // Reserves and loans, less what the bank owes depositors.
-    public static long Equity(World world, Agent bank) => bank.CashMinor + LoansOutstanding(world, bank) - Deposits(world, bank.CountryId);
+    public static long Equity(World world, Agent bank) => bank.CashMinor + LoansOutstanding(world, bank) - Loans(world, bank, "active").Sum(loan => loan.ProvisionMinor) - Deposits(world, bank.CountryId);
 
     public static long RequiredReserves(World world, Agent bank) => Deposits(world, bank.CountryId) * ReserveRatioPct / 100;
 
@@ -335,7 +335,14 @@ public static class SocietyBank
         {
             if (++loan.MissedPayments >= MissedPaymentsToDefault)
             {
-                if (loan.Kind == "business")
+                if (loan.Kind == "treasury")
+                {
+                    var provision = Math.Min(loan.PrincipalLeftMinor, Math.Max(loan.ProvisionMinor, loan.PrincipalLeftMinor * Math.Min(10, loan.MissedPayments - 2) / 10));
+                    if (provision != loan.ProvisionMinor)
+                        world.Emit("treasury_credit_impaired", "rule", [loan.Id, bank.Id, borrower.Id], new { provision_minor = provision, loan.MissedPayments });
+                    loan.ProvisionMinor = provision;
+                }
+                else if (loan.Kind == "business")
                     SocietyLabor.Close(world, nation, borrower, $"missed {MissedPaymentsToDefault} loan payments");
                 else if (loan.Kind == "student" && bank.Role == "business")
                     Guarantee(world, nation, bank, loan);
@@ -350,6 +357,7 @@ public static class SocietyBank
             Ledger(world, bank, borrower, null, principal, "loan_principal_retired", loan.Id);
         }
         loan.MissedPayments = 0;
+        loan.ProvisionMinor = Math.Min(loan.ProvisionMinor, loan.PrincipalLeftMinor); // losses remain reserved until principal is recovered
         society.PeriodRevenueMinor[bank.Id] = society.PeriodRevenueMinor.GetValueOrDefault(bank.Id) + loan.WeeklyInterestMinor;
         society.PeriodCostMinor[borrower.Id] = society.PeriodCostMinor.GetValueOrDefault(borrower.Id) + loan.WeeklyInterestMinor;
         if (loan.PrincipalLeftMinor == 0)
@@ -470,11 +478,14 @@ public static class SocietyBank
     }
 
     // A planned state short of cash borrows from its state bank, up to the reserves the bank can spare; one
-    // loan grows with each draw and is repaid over 26 weeks from the treasury.
+    // loan grows with each draw; new draws add installments without reducing the old schedule.
+    // Delinquency or outstanding impairment blocks new advances.
     public static long BorrowForTreasury(World world, Nation nation, long wanted)
     {
         var bank = BankOf(world, nation.Id);
         var government = world.Agents[nation.Id + "_government"];
+        if (world.Society!.Credit.Any(credit => credit.Kind == "treasury" && credit.BorrowerId == government.Id
+            && credit.Status == "active" && (credit.MissedPayments > 0 || credit.ProvisionMinor > 0))) return 0;
         var amount = Math.Min(wanted, LendingRoom(world, bank));
         if (amount <= 0 || bank.UnmetWithdrawalsMinor > 0)
             return 0;
@@ -482,7 +493,9 @@ public static class SocietyBank
         {
             loan.PrincipalMinor += amount;
             loan.PrincipalLeftMinor += amount;
-            (loan.WeeklyPrincipalMinor, loan.WeeklyInterestMinor) = Installment(loan.PrincipalLeftMinor, loan.RatePct);
+            var installment = Installment(amount, loan.RatePct);
+            loan.WeeklyPrincipalMinor += installment.Item1;
+            loan.WeeklyInterestMinor += installment.Item2;
         }
         else
             loan = Open(world, bank, government, amount, "treasury", bank.LoanRatePct);
@@ -578,6 +591,7 @@ public static class SocietyBank
             deposits_minor = manager ? deposits : (long?)null,
             required_reserves_minor = manager ? RequiredReserves(world, bank) : (long?)null,
             loans_outstanding_minor = manager ? LoansOutstanding(world, bank) : (long?)null,
+            loan_loss_provisions_minor = manager ? Loans(world, bank, "active").Sum(loan => loan.ProvisionMinor) : (long?)null,
             equity_minor = manager ? Equity(world, bank) : (long?)null,
             accounting = AccountingVersion, capital_ratio_pct = CapitalRatioPct,
             lending_room_minor = manager ? LendingRoom(world, bank) : (long?)null,

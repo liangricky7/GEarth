@@ -89,17 +89,18 @@ public sealed class PostBankFollowupTests
     }
 
     [Fact]
-    public void HungerRemainsNearIncapacitationAndEatingRestoresCapacity()
+    public void ProlongedStarvationRemainsNearIncapacitationAndEatingStartsRecovery()
     {
         var world = Create();
         var person = Resident(world);
         var healthyCapacity = SocietyEconomy.Capacity(person);
         person.Hungry = true;
+        person.NutritionDebtDays = SocietyEconomy.StarvationDays;
         Assert.Equal(healthyCapacity * 0.01, SocietyEconomy.Capacity(person), 8);
         SocietyEngine.Advance(world);
         Assert.False(person.Hungry);
         Assert.Same(person, world.Agents[person.Id]);
-        Assert.True(SocietyEconomy.Capacity(person) > healthyCapacity * 0.5);
+        Assert.InRange(SocietyEconomy.Capacity(person), healthyCapacity * 0.01, healthyCapacity * 0.12);
         SocietyEconomy.AssertConservation(world);
     }
 

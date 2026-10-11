@@ -219,6 +219,13 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
         has_ranges = any(is_range(value) for candidate in job.candidates for value in candidate["params"].values())
         output_instructions = RANGED_CHOICE_INSTRUCTIONS if has_ranges else FIXED_CHOICE_INSTRUCTIONS
         citizen = decision_group(job) == "citizen"
+        government_guidance = (
+            " For a government, review pending diplomatic offers and their response deadlines before routine budget changes. "
+            "Choose accept or reject according to the stated consequences; ignoring an offer allows it to expire. "
+            "Clinic funding pays clinics, not construction. Compare treatment demand, actual funding and recent funding history; "
+            "a recent increase alone is not evidence that another increase or immediate reversal helps. Holding is valid while outcomes develop."
+            if job.observation.get("self", {}).get("role") == "government" else ""
+        )
         if citizen:
             output_instructions = output_instructions.replace(
                 "at most 100 characters", f"at most {CITIZEN_REASON_CHARACTERS} characters"
@@ -228,7 +235,7 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
             "messages": [
                 {
                     "role": "system",
-                    "content": WORLD_INSTRUCTIONS + output_instructions
+                    "content": WORLD_INSTRUCTIONS + output_instructions + government_guidance
                     + (f"\n\nWorld rules: {rules}" if rules else ""),
                 },
                 {

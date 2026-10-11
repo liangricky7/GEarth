@@ -127,7 +127,7 @@ public static class SocietyDiplomacy
                 nation.SalesTaxBasisPoints = parameters["sales_tax_basis_points"]!.GetValue<int>();
                 return true;
             case "fund_services":
-                nation.ServiceBudgetPerResidentMinor = parameters["amount_minor"]!.GetValue<int>();
+                SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, parameters["amount_minor"]!.GetValue<int>());
                 return true;
             case "pay":
                 return SocietyPayments.Pay(world, government, parameters, policy.CauseId);
@@ -172,7 +172,8 @@ public static class SocietyDiplomacy
             case "respond_agreement":
                 var relationship = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
                 if (relationship.ProposedBy is null || relationship.ProposedBy == nation.Id
-                    || relationship.ProposalExpiresTick < world.Tick)
+                    || relationship.ProposalExpiresTick < world.Tick
+                    || (relationship.ProposalKind == "peace" ? !relationship.AtWar : relationship.AtWar))
                     return false;
                 if (parameters["accept"]!.GetValue<bool>())
                 {
@@ -232,6 +233,8 @@ public static class SocietyDiplomacy
         foreach (var relation in world.Society!.Relations.Values.Where(relation => relation.ProposedBy is not null
             && relation.ProposalExpiresTick < world.Tick))
         {
+            world.Emit("diplomatic_offer_expired", "rule", [relation.Id], new
+            { relation.ProposedBy, relation.ProposalKind, relation.ProposalTerms, relation.ProposalExpiresTick });
             relation.DiplomacyFailedTick = world.Tick;
             relation.ProposedBy = null;
             relation.ProposalKind = null;

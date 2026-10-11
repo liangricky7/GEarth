@@ -108,6 +108,11 @@ def main():
         action="store_true",
         help="With --world: also write the day-by-day history file for the renderer.",
     )
+    parser.add_argument(
+        "--analytics",
+        action="store_true",
+        help="With --world: preserve daily states, full decisions, and individual transfers for finished-run analysis.",
+    )
     options = parser.parse_args()
     signal.signal(signal.SIGTERM, handle_stop)
 
@@ -136,6 +141,8 @@ def main():
 
     if options.verbose and (not options.world or options.run_id):
         parser.error("--verbose records a new --world run.")
+    if options.analytics and (not options.world or options.run_id):
+        parser.error("--analytics records a new --world run.")
     if options.run_id:
         if options.live:
             parser.error("Saved-run inspection does not need --live.")
@@ -310,6 +317,7 @@ def main():
                 "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
                 "FAULTLINE_SEED": str(options.seed),
                 "FAULTLINE_VERBOSE": str(options.verbose).lower(),
+                "FAULTLINE_ANALYTICS": str(options.analytics).lower(),
                 "FAULTLINE_TICKS": str(options.ticks),
                 "FAULTLINE_INTERVAL_MS": str(round(options.interval * 1000)),
                 "WORKER_TOKEN": token,

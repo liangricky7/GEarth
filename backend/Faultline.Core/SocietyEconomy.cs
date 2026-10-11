@@ -326,6 +326,7 @@ public static class SocietyEconomy
     public static void Sell(World world, Agent buyer, Agent seller, long amount, bool household = false, int units = 0,
         string kind = "purchase")
     {
+        using var auditGroup = RunAudit.Group(world, seller.Specialty, units > 0 ? units : null, seller.PriceMinor);
         var society = world.Society!;
         var nation = society.Nations[seller.CountryId];
         var tax = household ? amount * nation.SalesTaxBasisPoints / 10000 : 0;
@@ -384,6 +385,7 @@ public static class SocietyEconomy
 
     public static long PayWage(World world, Nation nation, Agent government, Agent employer, Agent worker, long wage)
     {
+        using var auditGroup = RunAudit.Group(world);
         Transfer(world, employer, worker, wage, "wage");
         var tax = wage * nation.TaxBasisPoints / 10000;
         Transfer(world, worker, government, tax, "income_tax");
@@ -517,6 +519,7 @@ public static class SocietyEconomy
     // Shipment escrow uses the cargo ID as the giver or recipient.
     public static void RecordFlow(World world, string from, string to, long amount, string kind)
     {
+        RunAudit.Transaction(world, from, to, amount, kind);
         if (world.Flows is not { } flows || amount == 0)
             return;
         var (total, count) = flows.GetValueOrDefault((from, to, kind));

@@ -58,6 +58,7 @@ public static class SocietyPayments
         var good = parameters["good"]!.GetValue<string>();
         var quantity = parameters["quantity"]!.GetValue<int>();
         var total = (long)quantity * seller.PriceMinor;
+        using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor);
         SocietyEconomy.Sell(world, buyer, seller, total, true);
         seller.Inventory[good] -= quantity;
         buyer.Inventory[good] += quantity;

@@ -168,6 +168,8 @@ public sealed class FinanceTests
     private static (Agent Buyer, Agent Seller, Cargo Cargo) Import(World world)
     {
         var buyer = world.Agents["aster_food"];
+        foreach (var firm in world.InCountry("aster").Where(agent => agent.Role == "business" && agent.Specialty is "food" or "energy"))
+            firm.PriceMinor = SocietyLabor.SectorOf(firm.Specialty!).BasePrice * 3; // dear at home, so imports are offered
         Decide(world, buyer.Id, "import_goods");
         var cargo = world.Society!.Cargo.Single();
         return (buyer, world.Agents[cargo.SellerId], cargo);

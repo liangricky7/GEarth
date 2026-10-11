@@ -123,6 +123,34 @@ Energy is power (electricity and fuel): households use 1 a day and every goods f
 | T1 | Prices pass on input costs: marginal cost includes inputs at landed cost (price, shipping, tariff), not only wages | agreed |
 | T2 | Tariff becomes a government lever (steps like tax) instead of a fixed 5% | **open**: default no (stays 5%, 0 with a trade agreement) unless Ricky says yes |
 
+### Resources run fixes (run `092034_dabda2`, day 125; signed off Oct 11, built on `gearth/post-resource-patch-1`)
+
+Findings: market prices about 2x base (owners raise prices +10% 77% of the time, against 23% for cuts), so planned citizens have twice the real income;
+market treasuries hold 40% of cash, and every enacted policy is `fund_services`; every country refounds every sector
+(mine and medicine close-and-refound loops); 18 new energy firms on a glut; beryl's bank hired 5 bankers with no loans
+and failed; imports are 40% of entrepreneur choices and 576 of 621 rejections.
+
+| # | Decision | Status |
+|---|---|---|
+| P1 | Shoppers lean hard away from prices above 1.3x base (extra 8th power of reference/price; 1.3 and 8 arbitrary, tune after runs); each `set_price` option shows expected weekly sales and margin if competitors hold | built |
+| P2 | Government hoarding: (a) welfare and unemployment benefit indexed to the full cost-of-living rise every 28 days (never cut; levers' ranges stretch to include the indexed level); (b) a lever set to its current level is a hold (no policy; `unchanged_lever` on the accepted event). (c) lever effect text and (d) surplus rule wait for the phase 2 infrastructure run | a, b built; c, d deferred |
+| P4 | An empty mine, well or pharma is a gap (and gets an essential grant) only if imports do not land below 1.5x a local firm's unit cost; food, energy and tools always keep a local seller (households only buy at home) | built |
+| P5 | Gap demand is market-wide: buyers turned away at least a tenth of sales (not any one seller turning someone away) | built |
+| P6 | Bank: another banker only when loans fill 80% of banker capacity; deposit-rate options capped at loan rate x loans / deposits | built |
+| P7 | Import options: cheapest landed seller per good and size, with landed cost and cheapest local price; an order fills what the seller still has | built |
+| P8 | Planned economies: fix pricing first, revisit the productivity knob after the next run | agreed |
+
+Day 216 of the same run: dune and ionia (poor farmland, rich ore) ran trade deficits of about 5.5k WLD each under one
+currency and fell into depression (33–39 unemployed, needs met 59–70%). Planned states exported at decree prices and
+re-imported the same goods (cinder: 10.2k ore out, 10.4k in); haven's treasury was about 5 weeks from running out.
+
+| # | Decision | Status |
+|---|---|---|
+| R1 | No import option when the landed cost does not beat the cheapest local seller (no goods crossing a border both ways) | built |
+| R2 | A planned state firm exports at the cheapest market price abroad (world value, never below its decree) and only stock above a week of its quota. Pricing at the buyer's own market price never landed below a local seller, so cinder could not pay for fuel and collapsed in the rule-only year | built |
+| R3 | Raw materials worth more (higher ore/fuel prices or more uses) | deferred: phase 2 infrastructure consumes ore |
+| R4 | Per-country currency index (a): moves weekly by up to 5% x the trade balance's share of trade (0.5–2, tune after runs); applied as its single-money equivalent, an import surcharge and export rebate through each treasury, so exporters keep their own price. Planned economies keep a fixed official rate of 1 (non-convertible; a floating index pinned cinder at 0.5 and starved it of imports). Watch: the net surcharge piles up in deficit treasuries (rule-only year: dune/ionia treasuries +12–17%), which ties to P2(d) | built |
+
 ## Phase 2: Infrastructure (decided; I2, I6, I7, I8 on defaults unless Ricky changes them)
 
 - Governments spend tax money on infrastructure (roads, bridges, etc.) that boosts productivity of some

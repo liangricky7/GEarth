@@ -256,23 +256,25 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
           SELECT COALESCE($3::text,(SELECT string_agg(content,'' ORDER BY part)
             FROM faultline.checkpoint_parts WHERE run_id=$1 AND digest=$7)) AS serialized
         ), ready AS (
-          SELECT serialized::jsonb AS state FROM input WHERE $7::text IS NULL OR
+          SELECT serialized::json AS state FROM input WHERE $7::text IS NULL OR
             ((SELECT count(*) FROM faultline.checkpoint_parts WHERE run_id=$1 AND digest=$7)=$8::int
               AND encode(sha256(convert_to(serialized,'UTF8')),'hex')=$7)
         ), saved AS (
-          INSERT INTO faultline.stage1_runs(run_id,revision,state,checkpoint_digest,checkpoint_part_count)
-          SELECT $1,$2::bigint,state,$7,$8::int FROM ready WHERE $2::bigint=$4::bigint+1 AND ($4::bigint = 0
+          INSERT INTO faultline.stage1_runs(run_id,revision,state,checkpoint_digest,checkpoint_part_count,audit_sequence,run_status,analytics_enabled)
+          SELECT $1,$2::bigint,state,$7,$8::int,(state->>'audit_sequence')::bigint,state->>'status',
+            (state->>'analytics_enabled')::boolean FROM ready WHERE $2::bigint=$4::bigint+1 AND ($4::bigint = 0
             OR EXISTS (SELECT 1 FROM faultline.stage1_runs WHERE run_id=$1))
             AND ($5::text IS NULL OR (SELECT count(*) FROM faultline.run_audit
               WHERE run_id=$1 AND revision=$2::bigint AND batch_id=$5)=$6::bigint)
           ON CONFLICT (run_id) DO UPDATE SET revision=EXCLUDED.revision,state=EXCLUDED.state,updated_at=now(),
-            checkpoint_digest=EXCLUDED.checkpoint_digest,checkpoint_part_count=EXCLUDED.checkpoint_part_count
+            checkpoint_digest=EXCLUDED.checkpoint_digest,checkpoint_part_count=EXCLUDED.checkpoint_part_count,
+            audit_sequence=EXCLUDED.audit_sequence,run_status=EXCLUDED.run_status,analytics_enabled=EXCLUDED.analytics_enabled
             WHERE stage1_runs.revision=$4::bigint
           RETURNING run_id,state
         ), events AS (
           INSERT INTO faultline.stage1_events(run_id,seq,envelope)
-          SELECT saved.run_id,(event->>'seq')::bigint,event FROM saved,
-            jsonb_array_elements(saved.state->'events') event
+          SELECT saved.run_id,(event->>'seq')::bigint,event::jsonb FROM saved,
+            json_array_elements(saved.state->'events') event
           ON CONFLICT DO NOTHING RETURNING seq
         ), audit_committed AS (
           INSERT INTO faultline.run_audit_commits(run_id,revision,batch_id,through_sequence)
@@ -308,13 +310,26 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
             CREATE TABLE IF NOT EXISTS faultline.stage1_runs (
                 run_id text PRIMARY KEY,
                 revision bigint NOT NULL,
-                state jsonb NOT NULL,
+                state json NOT NULL,
                 updated_at timestamptz NOT NULL DEFAULT now()
             )
             """, [], cancellationToken);
+        // json, not jsonb: jsonb reorders object keys, and a forked timeline must reload agents and countries
+        // in the order the engine iterates them, or it drifts from its parent. Converts older tables once.
+        await Query("""
+            DO $$ BEGIN
+              IF (SELECT data_type FROM information_schema.columns WHERE table_schema='faultline'
+                  AND table_name='stage1_runs' AND column_name='state') = 'jsonb' THEN
+                ALTER TABLE faultline.stage1_runs ALTER COLUMN state TYPE json;
+              END IF;
+            END $$
+            """, [], cancellationToken);
         await Query("""
             ALTER TABLE faultline.stage1_runs ADD COLUMN IF NOT EXISTS checkpoint_digest text,
-              ADD COLUMN IF NOT EXISTS checkpoint_part_count integer
+              ADD COLUMN IF NOT EXISTS checkpoint_part_count integer,
+              ADD COLUMN IF NOT EXISTS audit_sequence bigint,
+              ADD COLUMN IF NOT EXISTS run_status text,
+              ADD COLUMN IF NOT EXISTS analytics_enabled boolean
             """, [], cancellationToken);
         await Query("""
             CREATE TABLE IF NOT EXISTS faultline.checkpoint_parts (
@@ -366,6 +381,17 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
                 notes jsonb NOT NULL
             )
             """, [], cancellationToken);
+        // Where each saved checkpoint lands in Neon's history; ops/fork_run.py branches at these LSNs.
+        await Query("""
+            CREATE TABLE IF NOT EXISTS faultline.checkpoints (
+                run_id text NOT NULL REFERENCES faultline.stage1_runs(run_id),
+                tick bigint NOT NULL,
+                revision bigint NOT NULL,
+                lsn pg_lsn NOT NULL,
+                saved_at timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY(run_id, revision)
+            )
+            """, [], cancellationToken);
     }
 
     public async Task SaveNotes(RunNotes notes, CancellationToken cancellationToken)
@@ -390,7 +416,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
         if (!world.AnalyticsEnabled && Encoding.UTF8.GetByteCount(state) > 16 * 1024 * 1024)
             throw new InvalidOperationException("Legacy Neon checkpoint exceeds the application's 16 MiB request safety limit; enable analytics for bounded checkpoint transport");
         var heads = world.AnalyticsEnabled
-            ? await Query("SELECT revision,state->>'audit_sequence' FROM faultline.stage1_runs WHERE run_id=$1", [world.Id], cancellationToken)
+            ? await Query("SELECT revision,COALESCE(audit_sequence,(state->>'audit_sequence')::bigint) FROM faultline.stage1_runs WHERE run_id=$1", [world.Id], cancellationToken)
             : new JsonArray();
         var previousRevision = heads.Count == 0 ? 0 : long.Parse(heads[0]![0]!.GetValue<string>());
         var previousAuditSequence = heads.Count == 0 ? 0 : long.Parse(heads[0]![1]?.GetValue<string>() ?? "0");
@@ -404,6 +430,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
                 if (committed.Count != 1 || committed[0]![0]!.GetValue<string>() != AuditPersistence.Digest(world))
                     throw new InvalidOperationException("Conflicting audit retry");
             }
+            await RegisterCheckpoint(world, cancellationToken);
             world.PendingAudit.Clear();
             return;
         }
@@ -442,6 +469,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
         var rows = await Query(SaveQuery, parameters, cancellationToken);
         if (rows.Count == 1)
         {
+            await RegisterCheckpoint(world, cancellationToken);
             world.PendingAudit.Clear();
             return;
         }
@@ -456,7 +484,18 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
             if (committed.Count != 1 || committed[0]![0]!.GetValue<string>() != digest)
                 throw new InvalidOperationException("Conflicting audit retry");
         }
+        await RegisterCheckpoint(world, cancellationToken);
         world.PendingAudit.Clear();
+    }
+
+    private async Task RegisterCheckpoint(World world, CancellationToken cancellationToken)
+    {
+        // Run after the checkpoint transaction committed. Retry also repairs an interrupted LSN write.
+        await Query("""
+            INSERT INTO faultline.checkpoints(run_id,tick,revision,lsn)
+            SELECT run_id,$2::bigint,$3::bigint,pg_current_wal_lsn() FROM faultline.stage1_runs
+            WHERE run_id=$1 AND revision=$3::bigint ON CONFLICT DO NOTHING
+            """, [world.Id, world.Tick.ToString(), world.Revision.ToString()], cancellationToken);
     }
 
     public async Task<World?> Load(string id, CancellationToken cancellationToken)
@@ -509,11 +548,11 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
 
     public async Task<RunAuditHead?> ReadAuditHead(string runId, CancellationToken cancellationToken)
     {
-        var rows = await Query("SELECT revision,state->>'audit_sequence',state->>'status',state->>'analytics_enabled' FROM faultline.stage1_runs WHERE run_id=$1",
+        var rows = await Query("SELECT revision,COALESCE(audit_sequence,(state->>'audit_sequence')::bigint),COALESCE(run_status,state->>'status'),COALESCE(analytics_enabled,(state->>'analytics_enabled')::boolean) FROM faultline.stage1_runs WHERE run_id=$1",
             [runId], cancellationToken);
         return rows.Count == 0 ? null : new RunAuditHead(runId, long.Parse(rows[0]![0]!.GetValue<string>()),
             long.Parse(rows[0]![1]?.GetValue<string>() ?? "0"), rows[0]![2]!.GetValue<string>(),
-            rows[0]![3]?.GetValue<string>() == "true");
+            rows[0]![3]?.GetValue<string>() is "true" or "t");
     }
 
     public async Task<AuditRecord[]> ReadAudit(string runId, long afterSequence, int limit, CancellationToken cancellationToken)
@@ -526,7 +565,7 @@ public sealed class NeonStore : IWorldStore, IRunAuditStore, IAnalyticsReportSto
               JOIN faultline.run_audit_commits c ON c.run_id=a.run_id AND c.revision=a.revision AND c.batch_id=a.batch_id
               JOIN faultline.stage1_runs r ON r.run_id=a.run_id
               WHERE a.run_id=$1 AND a.sequence>$2::bigint AND a.revision<=r.revision
-                AND a.sequence<=(r.state->>'audit_sequence')::bigint
+                AND a.sequence<=COALESCE(r.audit_sequence,(r.state->>'audit_sequence')::bigint)
               ORDER BY a.sequence LIMIT $3::int
             ), sized AS (
               SELECT *,sum(octet_length(envelope::text)) OVER (ORDER BY sequence) AS bytes,

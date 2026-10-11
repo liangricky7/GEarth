@@ -7,7 +7,9 @@ public sealed record PendingDecision(DecisionJob Job, Task<DecisionResult> Task)
 public sealed class DecisionQueue(int capacity, CancellationToken cancellationToken) : IAsyncDisposable
 {
     private readonly CancellationTokenSource requests = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-    private readonly Dictionary<string, PendingDecision> pending = new();
+    // Ordered so completed decisions apply in dispatch order; a Dictionary reuses freed slots, so its order
+    // depends on past removals and a resumed fork would apply the same decisions in a different order.
+    private readonly OrderedDictionary<string, PendingDecision> pending = new();
 
     public int Count => pending.Count;
     public int FreeSlots => Math.Max(0, capacity - Count);

@@ -28,6 +28,23 @@ public static class SocietyFactory
         ("dockworker", 2), ("teacher", 9), ("soldier", 6), ("unemployed", 9)
     ];
 
+    // A forked timeline's one change: the country switches regime overnight and starts from the new profile's default policies.
+    public static void ChangeGovernment(World world, string countryId, string profileId)
+    {
+        if (world.Society?.Nations.GetValueOrDefault(countryId) is not { } nation)
+            throw new ArgumentException($"Unknown country {countryId}");
+        var profile = Governments.Profiles.FirstOrDefault(item => item.Id == profileId)
+            ?? throw new ArgumentException($"Unknown government {profileId}");
+        var previous = nation.GovernmentId;
+        nation.GovernmentId = profile.Id;
+        nation.TaxBasisPoints = profile.DefaultTaxBasisPoints;
+        nation.WelfareMinor = profile.DefaultWelfareMinor;
+        nation.UnemploymentBenefitMinor = profile.Id switch { "market_democracy" => 300, "social_democracy" => 400, _ => 0 };
+        foreach (var country in world.Countries.OfType<System.Text.Json.Nodes.JsonObject>().Where(item => (string?)item["id"] == countryId))
+            country["government_id"] = profile.Id;
+        world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason = "timeline_fork" });
+    }
+
     public static World Create(string id, bool live, int population, int seed = 20261010, int rotation = 0)
     {
         if (population < Geography.Length * (InstitutionsPerCountry + 1) || population > 100000)

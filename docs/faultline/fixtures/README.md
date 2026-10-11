@@ -8,6 +8,7 @@ All files in this directory are design examples, not recordings of a running app
 - `border-event.json`: the same event as sequence 2 in the timeline.
 - `invalid-negative-loan.json`: must fail action schema validation.
 - `forbidden-role-action.json`: schema-valid proposal that the engine must reject because a citizen cannot control a border.
+- `history-sample.ndjson`: the exception. It is real output from the engine, not a synthetic example: a 400-agent, 14-day rule-mode run recorded with `--verbose` and decompressed. It shows the renderer's history format (header, day lines 0–14, end line). Rule choices are deterministic, so its decisions are not model behavior. Format: [design §8.4](../../../faultline-design.md#84-verbose-history-for-the-renderer).
 
 Typed event payloads in this sample:
 

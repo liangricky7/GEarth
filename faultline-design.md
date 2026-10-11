@@ -63,7 +63,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
 | Agents and prompts | Seeded traits and endowments; role-specific observations; compact numbered menus; `{choice, reason}` answers | Behavioral effect of traits and endowments not evaluated |
 | Scheduling | Weekly cohorts (institutions weekly, citizens every 8 weeks); weekly barrier before payroll; bounded, cancellable queue | Sustained live throughput of the weekly system |
 | Compute | Spark A: Qwen3-8B (institutions) + Qwen3-4B (citizens), verified; AMD Qwen3-4B, verified | Spark B; AMD's second model |
-| Persistence | Local files or Neon over HTTPS; checkpoints every 5 ticks plus ordered events; saved-run inspection | Resuming an interrupted run; Neon branching (planned) |
+| Persistence | Local files or Neon over HTTPS; week-boundary checkpoints plus ordered events; saved-run inspection; Neon branching timelines (`ops/fork_run.py`) | Resuming an interrupted run in place |
 | History for the renderer | `--verbose` writes a day-by-day state, money-flow and event file; served by the API | Kennedy's renderer consuming it |
 | Observer | Read-only API and static observer; automatic run notes; permanent share address | Browser layout not visually inspected since the labor-market changes |
 | Databricks | — | Not implemented (planned) |
@@ -477,18 +477,20 @@ Setup details live in the runbooks listed in [section 15](#15-document-map).
 
 - **Backends:** `--storage local` writes `.data/runs/`. `--storage neon` uses Neon Postgres over HTTPS, because a direct Postgres connection was refused from the laptop.
 - **Neon tables:**
-  - `faultline.stage1_runs`: the whole-world JSON checkpoint plus revision.
+  - `faultline.stage1_runs`: the whole-world JSON checkpoint plus revision. The column is `json`, not `jsonb`: jsonb reorders object keys, and a forked timeline must reload agents and countries in the order the engine iterates them. Older tables are converted on startup.
   - `faultline.stage1_events`: one row per event.
   - `faultline.run_notes`.
+  - `faultline.checkpoints`: the Neon LSN of each saved checkpoint, for branching (12.3).
+  - `faultline.timelines`: the registry of forked timelines (12.3).
 - **Checkpoints:**
-  - Saved every 5 ticks and at the end, in one statement guarded by the expected revision.
+  - Saved at each week boundary (after the week's decisions drain, before payroll: ticks 6, 13, 20, …), at the start and at the end, in one statement guarded by the expected revision. Nothing is in flight at a week boundary, so a run resumes from it exactly.
   - Identical repeated saves are idempotent.
   - Transient failures retry 3 times, then the run pauses. Neon storage never silently falls back to local.
 - **Save cost and window:**
   - Each save serializes the world once, for both the store and the API's read-only copy.
   - The checkpoint keeps the last 512 events, the last 256 decisions, and each agent's last decision without its observation (a slim copy that roughly halved checkpoint size).
   - The full event log is stored separately.
-- **Saved runs:** `--run-id` loads one for inspection. Resuming an interrupted run is not implemented (see [12.3](#123-neon-branching-timelines-planned)).
+- **Saved runs:** `--run-id` loads one for inspection. Forks resume a saved run on its own Neon branch ([12.3](#123-neon-branching-timelines)); resuming an interrupted run in place is not implemented.
 
 ### 8.2 Read API (all read-only)
 
@@ -685,7 +687,7 @@ Report individual runs, means and ranges, and sample counts, including failed ru
 | Best AI | Primary | Individual agency, information boundaries, accepted decisions with effects, real coverage. Built; needs a clean live run |
 | Hugging Face | Core | Pinned open checkpoints (Qwen3-8B/4B) serving real decisions. Verified |
 | AMD | Conditional | Real ROCm inference serving accepted decisions. Qwen3-4B verified; throughput contribution not measured |
-| Neon | Core | Neon must play a meaningful role in how the app works. Today: checkpoints and events. Plan: timelines as Neon branches ([12.3](#123-neon-branching-timelines-planned)) |
+| Neon | Core | Neon must play a meaningful role in how the app works. Checkpoints and events, and every what-if timeline is a Neon branch forked at an exact checkpoint LSN ([12.3](#123-neon-branching-timelines)). Working from the command line |
 | Databricks | Integrated | Analysis over real run data, not a log dump ([12.4](#124-databricks-analysis-planned)). Not started |
 | Full Sail | Integrated | Graph routes, closure-driven reroutes, route tradeoff explanation. Routing built; explanation/debrief not |
 | BNY | Deferred | Financial exposure workflow; depends on the banking branch |
@@ -763,38 +765,45 @@ Collapsing countries fell from 8 to 6.
 
 **Proof required:** one funded and released trade, plus a separate refund.
 
-### 12.3 Neon branching timelines (planned)
+### 12.3 Neon branching timelines
 
-**Why:** for the Neon track, Neon should make the app work in a way plain Postgres can't. The chosen idea is every timeline is a Neon branch.
+**Why:** for the Neon track, Neon should make the app work in a way plain Postgres can't. Every what-if timeline is a Neon branch.
 
 **How it works:**
-- **Seed branch:** the starting world is saved once on Neon's main branch.
-- **Runs:** each rotation run is a branch of the seed.
-- **What-ifs:** each "what if" forks a run at day N into its own branch and replays forward with one change.
-- **Why only Neon:** branches are copy-on-write, so a fork inherits the full history instantly at any size. The observer and Databricks compare timelines with the same SQL against different branches.
+- **Checkpoints with an address:** each week-boundary checkpoint records the Neon LSN right after it commits (`faultline.checkpoints`). Checkpoints in a fast run are milliseconds apart, so the LSN, not a timestamp, picks the fork point.
+- **Fork:** `ops/fork_run.py` creates a branch of the default branch at that LSN (point-in-time branching), with its own compute endpoint. The branch holds the run exactly as it was at that checkpoint, with its full event history, copied on write and instant at any size. Neon's history is the snapshot store; nothing is copied.
+- **One change:** the forked run resumes on the branch with one country's government type changed (`government_changed` and `timeline_forked` events record it). Leaving the change out makes a control fork.
+- **Registry:** `faultline.timelines` on the default branch records each timeline's branch, parent run, fork day, LSN and change.
+- **Comparison:** the same SQL against each branch's endpoint compares timelines; the run ID stays the same on every branch.
+- **Determinism:** an unchanged control fork reproduces its parent exactly (every agent's cash and every daily flow, verified on Neon over days 14–28), so any difference in a changed fork comes from the change. Three things had to hold for that: completed decisions apply in dispatch order (the pending queue is an ordered dictionary), new firms, cargo, loans and policies are numbered by their own counter rather than the event sequence, and checkpoints are stored as `json` (8.1). `ForkTests` guards the engine side.
+
+**Usage:**
+```
+.venv/bin/python ops/fork_run.py RUN_ID --day 14 --country aster --government dictatorship --ticks 360 [--verbose --live --interval 0 --exit-on-complete]
+.venv/bin/python ops/fork_run.py --list
+```
+`--day` forks at the last week boundary at or before that day. Unknown options pass through to `run_stage1.py`. A verbose fork writes `.data/history/<timeline>.ndjson.gz` starting at the fork day.
 
 **Approved choices (B1–B4):**
 
 | # | Choice | Decision |
 |---|---|---|
-| B1 | Fork-day snapshot source | Neon point-in-time branching (Neon's history is the snapshot store); limited to the plan's history window |
-| B2 | Fork points | Save checkpoints on week boundaries (every 7 days instead of 5), so a fork starts with no half-finished week |
+| B1 | Fork-day snapshot source | Neon point-in-time branching at the checkpoint's LSN; limited to the project's restore window (6 hours today) |
+| B2 | Fork points | Checkpoints on week boundaries (every 7 days instead of 5), so a fork starts with no half-finished week |
 | B3 | What a fork changes | One country's government type first; more levers later |
-| B4 | How a fork starts | A command-line script (`ops/fork_run.py`) first; an observer button if time |
+| B4 | How a fork starts | `ops/fork_run.py`; an observer button if time |
 
-**Required before building:**
-- A `NEON_API_KEY` in `.env.local`. Child branches inherit database roles, so only the host changes.
-- Resume-from-checkpoint (N1).
-- Per-day tables in Neon (N2, the verbose history moved into Postgres).
-- A `faultline.timelines` registry on the main branch.
+**Needs:** `DATABASE_URL`, `NEON_API_KEY` and `NEON_PROJECT_ID` in `.env.local`. Child branches inherit roles, so only the host changes.
 
-Live forks share GPU capacity.
-
-**Neon implementation is paused** while the verbose history (8.4) is finished.
+**Limits and next steps:**
+- Forks are only possible within the restore window; raising it in the project settings extends it.
+- Each branch keeps its compute endpoint until deleted; Neon plans cap the number of branches.
+- Only one run at a time locally (port 5080), so forks run one after another. Live forks share GPU capacity.
+- Next: per-day tables in Neon (N2) so branches can be compared day by day in SQL, an observer view of timelines, and more levers for B3.
 
 ### 12.4 Databricks analysis (planned)
 
-Neon is the operational source of truth; Databricks answers what tends to happen across many runs, not within one.
+Neon is the operational source of truth; Databricks answers what tends to happen across many runs, not within one. Handoff for the Databricks developer: [databricks-handoff.md](docs/faultline/databricks-handoff.md).
 
 **Candidate analyses:**
 1. **Government types across rotation runs:** which profile keeps health, employment and budgets up, with country held constant.
@@ -906,7 +915,7 @@ The redesign added:
 - **Solana:** pushed to a mega stretch goal.
 - **Neon:** must be more than storage, which led to branching timelines (12.3).
 - **Databricks:** its value is cross-run analysis, which needs daily history.
-- **Order:** verbose history comes first; Neon branching is paused.
+- **Order:** verbose history came first; Neon branching followed (12.3).
 
 ### 13.10 Verbose history
 
@@ -976,6 +985,7 @@ The redesign added:
 - [Sharing](docs/faultline/09-sharing.md): the permanent observer address and supervisor.
 - [AMD setup](docs/faultline/12-amd-compute.md) and [AMD teammate connection](docs/faultline/13-amd-teammate-connection.md).
 - [Spark B relay](docs/faultline/15-ken-spark-b-relay.md).
+- [Databricks handoff](docs/faultline/databricks-handoff.md): data, features and the Neon contract for the Databricks developer.
 - [All-node Qwen setup](docs/faultline/18-all-node-qwen-setup.md): installers, recovery and rollback.
 - [Contracts](docs/faultline/contracts/), [fixtures](docs/faultline/fixtures/) and [evidence](docs/faultline/evidence/).
 

@@ -23,9 +23,18 @@ public interface IAnalyticsReportStore
 public sealed record AuditContext(string? DecisionId = null, string? EventId = null, string? RoutineId = null,
     string? GroupId = null, string? Good = null, int? Quantity = null, long? UnitPriceMinor = null);
 
+public sealed class AnalyticsTimelineException() : InvalidOperationException(
+    "Analytics capture for resumed/forked timelines requires a distinct dataset identity and is not supported by audit v1; start a fresh analytics run or fork a run captured without analytics.");
+
 public static class RunAudit
 {
     public const int SchemaVersion = 1;
+
+    public static void ValidateResume(World world, bool enableAnalytics)
+    {
+        if (world.AnalyticsEnabled || enableAnalytics)
+            throw new AnalyticsTimelineException();
+    }
 
     public static void Enable(World world, object? metadata = null)
     {

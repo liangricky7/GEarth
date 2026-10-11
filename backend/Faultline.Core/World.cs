@@ -128,6 +128,9 @@ public sealed class World
     public List<AuditRecord> PendingAudit { get; } = [];
     [System.Text.Json.Serialization.JsonIgnore]
     public AuditContext? CurrentAuditContext { get; set; }
+    // Numbers new firms, cargo, loans and policies. Separate from Seq so an extra event (a fork's own) doesn't rename later entities.
+    public long LastEntityNumber { get; set; }
+    public long NextEntityNumber() => ++LastEntityNumber;
     public int SchedulerCursor { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public long InitialCashMinor { get; set; }

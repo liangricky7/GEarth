@@ -24,8 +24,9 @@ public static class SocietyTrade
     {
         if (!CanImport(world, buyer, seller, good, quantity, objective))
             throw new InvalidOperationException("Trade precondition changed");
+        var cargoId = $"cargo_{world.NextEntityNumber()}";
         using var auditContext = RunAudit.Context(world, (world.CurrentAuditContext ?? new()) with { EventId = cause });
-        using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor, $"cargo_{world.Seq}");
+        using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor, cargoId);
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
         buyer.CashMinor -= value;
@@ -40,7 +41,7 @@ public static class SocietyTrade
         seller.Inventory[good] -= quantity;
         var cargo = new Cargo
         {
-            Id = $"cargo_{world.Seq}", BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
+            Id = cargoId, BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
             Quantity = quantity, EscrowMinor = value, LocationId = seller.LocationId,
             DestinationId = buyer.LocationId, Plan = path, CreatedTick = world.Tick,
             DeadlineTick = world.Tick + 60, CauseId = cause

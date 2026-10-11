@@ -37,10 +37,12 @@ public sealed class NeonAuditTests
         Assert.Equal("running", head.Status);
         Assert.True(head.AnalyticsEnabled);
         Assert.True(handler.UsedChunkedCheckpoint);
+        Assert.Equal(1, handler.CheckpointRegistrations);
         Assert.All(handler.CheckpointPartSizes, size => Assert.InRange(size, 1, 512 * 1024));
         Assert.Contains("JOIN faultline.run_audit_commits", handler.ReadSql);
         Assert.Contains("a.revision<=r.revision", handler.ReadSql);
         Assert.Contains("sum(octet_length(envelope::text))", handler.ReadSql);
+        Assert.Contains("COALESCE(r.audit_sequence,(r.state->>'audit_sequence')::bigint)", handler.ReadSql);
     }
 
     [Fact]
@@ -60,6 +62,22 @@ public sealed class NeonAuditTests
         Assert.Equal(world.Agents.Values.First().Goal, loaded!.Agents.Values.First().Goal);
         handler.CorruptFirstPart = true;
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.Load(world.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RetryingAfterInterruptedLsnRegistrationRepairsTheCheckpointMarker()
+    {
+        var handler = new AuditHandler { FailCheckpointRegistrationOnce = true };
+        using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
+        var world = SocietyFactory.Create("neon_lsn", false, 160);
+        RunAudit.Enable(world);
+        world.Revision = 1;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.Save(world, 0, CancellationToken.None));
+        Assert.NotEmpty(world.PendingAudit);
+        Assert.Equal(1, (await store.Load(world.Id, CancellationToken.None))!.Revision);
+        await store.Save(world, 0, CancellationToken.None);
+        Assert.Empty(world.PendingAudit);
+        Assert.Equal(1, handler.CheckpointRegistrations);
     }
 
     [Fact]
@@ -89,6 +107,8 @@ public sealed class NeonAuditTests
         public bool FailCommit { get; set; }
         public bool LoseCommitResponse { get; set; }
         public bool CorruptFirstPart { get; set; }
+        public bool FailCheckpointRegistrationOnce { get; set; }
+        public int CheckpointRegistrations { get; private set; }
         public bool UsedChunkedCheckpoint { get; private set; }
         public List<int> AuditBatchSizes { get; } = [];
         public List<int> CheckpointPartSizes { get; } = [];
@@ -100,13 +120,18 @@ public sealed class NeonAuditTests
             var sql = body["query"]!.GetValue<string>();
             var parameters = body["params"]!.AsArray().Select(value => value?.GetValue<string>()).ToArray();
             var rows = new List<string?[]>();
-            if (sql.StartsWith("SELECT revision,state->>"))
+            if (sql.StartsWith("SELECT revision,COALESCE(audit_sequence,"))
             {
+                if (sql.Contains("state->>'status'"))
+                {
+                    Assert.Contains("COALESCE(run_status,state->>'status')", sql);
+                    Assert.Contains("COALESCE(analytics_enabled,(state->>'analytics_enabled')::boolean)", sql);
+                }
                 if (state is not null)
                 {
                     var node = JsonNode.Parse(state)!;
                     rows.Add(sql.Contains("state->>'status'")
-                        ? [node["revision"]!.ToString(), node["audit_sequence"]!.ToString(), node["status"]!.GetValue<string>(), node["analytics_enabled"]!.ToJsonString()]
+                        ? [node["revision"]!.ToString(), node["audit_sequence"]!.ToString(), node["status"]!.GetValue<string>(), node["analytics_enabled"]!.GetValue<bool>() ? "t" : "f"]
                         : [node["revision"]!.ToString(), node["audit_sequence"]!.ToString()]);
                 }
             }
@@ -129,6 +154,10 @@ public sealed class NeonAuditTests
             }
             else if (sql.StartsWith("WITH input AS"))
             {
+                Assert.Contains("SELECT serialized::json AS state", sql);
+                Assert.Contains("audit_sequence=EXCLUDED.audit_sequence,run_status=EXCLUDED.run_status,analytics_enabled=EXCLUDED.analytics_enabled", sql);
+                Assert.Contains("json_array_elements(saved.state->'events')", sql);
+                Assert.DoesNotContain("serialized::jsonb", sql);
                 Assert.Contains("encode(sha256(convert_to(serialized,'UTF8')),'hex')=$7", sql);
                 Assert.Contains("stage1_runs.revision=$4::bigint", sql);
                 Assert.Contains("audit_committed AS", sql);
@@ -150,6 +179,17 @@ public sealed class NeonAuditTests
                         throw new HttpRequestException("Lost response after commit");
                     }
                 }
+            }
+            else if (sql.StartsWith("INSERT INTO faultline.checkpoints("))
+            {
+                Assert.NotNull(state);
+                Assert.Equal(JsonNode.Parse(state!)!["revision"]!.GetValue<long>(), long.Parse(parameters[2]!));
+                if (FailCheckpointRegistrationOnce)
+                {
+                    FailCheckpointRegistrationOnce = false;
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest);
+                }
+                CheckpointRegistrations++;
             }
             else if (sql.StartsWith("SELECT checkpoint_digest"))
             {

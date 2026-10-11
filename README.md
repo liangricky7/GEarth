@@ -43,6 +43,12 @@ Ctrl+C or SIGTERM stops the launcher and its child services. The observer stays 
 
 Saved-run inspection does not resume execution. Stage 1 remains available by omitting `--world`.
 
+To fork a Neon world run into a what-if timeline on its own Neon branch (needs `NEON_API_KEY` and `NEON_PROJECT_ID`; see [design 12.3](faultline-design.md#123-neon-branching-timelines)):
+
+```bash
+.venv/bin/python ops/fork_run.py YOUR_RUN_ID --day 14 --country aster --government dictatorship
+```
+
 ## Verify
 
 ```bash

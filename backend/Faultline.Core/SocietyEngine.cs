@@ -334,7 +334,7 @@ public static class SocietyEngine
                 var amount = parameters["amount_minor"]!.GetValue<int>();
                 var credit = new Credit
                 {
-                    Id = $"loan_{world.Seq}", BorrowerId = agent.Id, BankId = agent.CountryId + "_bank",
+                    Id = $"loan_{world.NextEntityNumber()}", BorrowerId = agent.Id, BankId = agent.CountryId + "_bank",
                     PrincipalMinor = amount, DueMinor = amount * 105L / 100, DueTick = world.Tick + 60
                 };
                 world.Society!.Credit.Add(credit);

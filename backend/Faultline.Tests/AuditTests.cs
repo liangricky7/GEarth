@@ -203,6 +203,23 @@ public sealed class AuditTests
         Assert.Equal("rejected", results[1].Payload["status"]!.GetValue<string>());
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ResumeCannotReuseTheParentAnalyticsDatasetIdentity(bool inherited, bool requested)
+    {
+        var world = SocietyFactory.Create("audit_resume", false, 160);
+        world.AnalyticsEnabled = inherited;
+        var before = JsonSerializer.Serialize(world, Wire.Json);
+        if (inherited || requested)
+            Assert.Throws<AnalyticsTimelineException>(() => RunAudit.ValidateResume(world, requested));
+        else
+            RunAudit.ValidateResume(world, requested);
+        Assert.Equal(before, JsonSerializer.Serialize(world, Wire.Json));
+    }
+
     [Fact]
     public void CaptureDoesNotChangeSimulationStateOrMoney()
     {
@@ -261,6 +278,7 @@ public sealed class AuditTests
         Assert.Equal(cargo.Id, release.Payload["sender_account_id"]!.GetValue<string>());
         Assert.Equal(escrow.Payload["amount_minor"]!.GetValue<long>(), release.Payload["amount_minor"]!.GetValue<long>());
         Assert.All(transactions, row => Assert.Equal("known_action_event", row.Payload["event_id"]!.GetValue<string>()));
+        Assert.All(transactions, row => Assert.Equal(cargo.Id, row.Payload["transaction_group_id"]!.GetValue<string>()));
         foreach (var agent in world.Agents.Values)
         {
             var incoming = transactions.Where(row => row.Payload["recipient_account_id"]!.GetValue<string>() == agent.Id).Sum(row => row.Payload["amount_minor"]!.GetValue<long>());

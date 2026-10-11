@@ -16,6 +16,8 @@ Capture preserves opening balances, daily and final states, original decision co
 
 This version supports normal runs. Neon forks keep the original run ID; combining them would mix timelines. Analytics capture/export therefore refuses forks until a separate timeline identity and lineage contract are added. Ordinary forks resume with analytics disabled, including when their parent captured analytics. They retain a frozen inherited audit prefix, and export marks their capture incomplete.
 
+Daily states and individual transfers are still captured every simulated day. Neon saves the accumulated detail at each drained week boundary (ticks 6, 13, 20, …), plus the start, completion and graceful shutdown. Local analytics saves remain daily. A hard interruption can lose the unsaved portion of the week; persisted results and the observer checkpoint advance weekly. This changes the application's write cadence, not Neon's backup schedule or restore window. Weekly buffering also needs memory measurement before a large run.
+
 An audit revision becomes visible only with its successful checkpoint commit. Export accepts committed completed, stopped or failed runs. Stopped/failed runs retain a complete captured snapshot but remain partial runs.
 
 ## Analyze a finished run

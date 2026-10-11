@@ -6,7 +6,9 @@ An observable AI society for KnightHacks 2026: ten fictional countries, five ins
 
 Main combines the daily labor-market economy, entrepreneurs, quality of life, clinics, public services, trade and diplomacy with shared Spark/AMD routing, seeded endowments, bounded scheduling, observer consistency and automatic run reports. One tick is one day; payroll runs every seven ticks. Institutions and entrepreneurs decide weekly, and citizens rotate over eight weeks. Weekly decisions finish before payroll.
 
-Spark A's Qwen3-8B and Qwen3-4B services were verified; AMD's Qwen3-4B endpoint also completed decisions. Jayden's private configuration enables 4 institution slots, 8 citizen slots and 1 shared AMD slot. Spark B and AMD's second model are prepared but unverified. These are inference services; the laptop runs one world. The previous simulation is stopped and is not restarted by this merge.
+The [shared cloud simulation](https://8-34-212-187.sslip.io/) runs continuously and saves worlds to Neon. Both Sparks provide Qwen3-8B institution decisions and Qwen3-4B resident decisions; AMD supplements residents with Qwen3-4B. All five providers have completed live requests. The configured pool has 97 slots (16/16/32/32 on the Sparks plus one on AMD); this is not a measured throughput result. The Google Cloud VM runs the world engine, so the owner's laptop can close.
+
+Group members can open the website and unlock controls using the shared team password provided privately by the owner. Stop finishes in-flight decisions, saves and pauses the current world; Start resumes it. Reset saves the current run and starts a fresh world, retaining history. Everyone shares the same world, and closing a browser does not stop it. See the [cloud runbook](docs/faultline/22-google-cloud-deployment.md) for operation and access details.
 
 See the [design](faultline-design.md) for the full specification, current limitations, decisions and their reasons.
 
@@ -70,7 +72,7 @@ For a completed world being served, `ops/check_world.py` checks conservation, du
 
 ## Observer and reports
 
-[The permanent observer](https://diarockets-faultline.finebear64.chatgpt.site/) keeps its address across restarts. The existing share supervisor reconnects when the laptop app is running; the laptop must remain online and awake. See [sharing operations](docs/faultline/09-sharing.md).
+The [HTTPS cloud observer](https://8-34-212-187.sslip.io/) stays available when the laptop closes. Saved runs can be selected from its run menu. The earlier laptop sharing supervisor is documented separately in [sharing operations](docs/faultline/09-sharing.md).
 
 Completed, gracefully stopped and paused runs produce behavior observations, country outcomes, model/backend counts, inequalities, examples of attributed reasoning and inference errors. Reports distinguish accepted model actions, engine rules and fallbacks, with event references and limits on interpretation. Markdown/JSON reports live under ignored `.data/run-notes/` and in configured storage. The observer exposes structured notes and a Markdown download.
 

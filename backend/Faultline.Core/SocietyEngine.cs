@@ -8,7 +8,7 @@ public static class SocietyEngine
     public const int DecisionMaxAgeDays = 7;
 
     // Numbers come from the engine constants so the model is never told a stale rule.
-    public static readonly string RulesNote = $"One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 per day, more with illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met, health, household goods and entertainment bought last week, security (a job or business plus savings) and free time. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after {SocietyLabor.RelatedJobAfterDays} days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay. Several firms compete in most sectors. A citizen with savings can start a business related to their occupation, or an entertainment venue, where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above {SocietyLabor.DividendBufferWeeks} weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for {SocietyLabor.DistressWeeksToClose} weeks closes and returns its cash to the owner. Prices adjust weekly in proportion to shortages or gluts, up to {SocietyLabor.MaxPriceStepPct}%. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within {DecisionMaxAgeDays} days of the observation they were made on.";
+    public static readonly string RulesNote = $"One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 per day, more with illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met, health, household goods and entertainment bought last week, security (a job or business plus savings) and free time. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after {SocietyLabor.RelatedJobAfterDays} days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay. Several firms compete in most sectors. A citizen with savings, or with a bank loan for all but a down payment, can start a business related to their occupation, or an entertainment venue, where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above {SocietyLabor.DividendBufferWeeks} weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for {SocietyLabor.DistressWeeksToClose} weeks closes, repays what it can of its bank loan and returns the rest to the owner. Prices adjust weekly in proportion to shortages or gluts, up to {SocietyLabor.MaxPriceStepPct}%. Banking: each country has one bank, run by its owner (by the state in planned economies). Each week residents keep two weeks of their pay as cash and the rest is deposited automatically, earning the bank's deposit rate; bank_savings keep_in_bank=false withdraws everything and keeps savings as cash until you choose to bank again. The bank lends deposits to businesses (request_loan) and founders, repaid weekly over 26 weeks at the loan rate when funded. Requests are decided weekly against the owner's lending standard (founder down payment strict 50%, normal 25%, loose 10%; installments at most 10/20/35% of weekly revenue), the reserve rule (reserves of 10% of deposits) and banker capacity (10 loans each, owner included). Three missed installments close the borrowing firm; the bank recovers what it can and the owner is not personally liable. When withdrawals exceed reserves the bank cannot pay them all: government deposit insurance (by government type) pays the insured part and the bank lends nothing that week. A bank owing depositors more than its reserves and loans are worth is taken over by the state and the owner loses their stake. The bank's owner sets deposit and loan rates, lending standard, headcount and wage, and receives dividends only from equity above their capital. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within {DecisionMaxAgeDays} days of the observation they were made on.";
 
     private static void DropNulls(JsonNode? node)
     {
@@ -61,10 +61,12 @@ public static class SocietyEngine
         }).DistinctBy(offer => (offer.seller_id, offer.good)).ToArray(); // one row per seller; sizes are in the menu
         // Weekly labor summaries are already in the market block, so they are not repeated as events.
         var observedEvents = world.Events.Where(item => item.EntityIds.Contains(nation.Id)
-            && item.EventType is not ("action_accepted" or "action_rejected" or "economy_cycle" or "labor_market")).TakeLast(2).ToArray();
+            && item.EventType is not ("action_accepted" or "action_rejected" or "economy_cycle" or "labor_market" or "bank_week")).TakeLast(2).ToArray();
         var evidence = new[] { $"country:{nation.Id}:tick{world.Tick}" }
             .Concat(observedEvents.Select(item => item.EventId)).ToArray();
         var firm = agent.OwnedBusinessId is { } owned ? world.Agents[owned] : agent.Role == "business" ? agent : null;
+        var runsBank = firm is not null && SocietyBank.IsBank(firm);
+        var loan = SocietyBank.LoanOf(world, firm?.Id ?? agent.Id);
         var firmGood = firm is null ? null : SocietyLabor.SectorOf(firm.Specialty!).Good;
         var business = firm is null ? null : new
         {
@@ -73,13 +75,13 @@ public static class SocietyEngine
             firm.TargetHeadcount, stock = firmGood is null ? (int?)null : firm.Inventory[firmGood],
             last_week_income_minor = firm.LastWeekInMinor, last_week_spending_minor = firm.LastWeekOutMinor,
             weeks_unable_to_cover_costs = firm.DistressWeeks,
-            competitor_prices = SocietyLabor.Firms(world, nation.Id, firm.Specialty!).Where(other => other != firm)
+            competitor_prices = runsBank ? null : SocietyLabor.Firms(world, nation.Id, firm.Specialty!).Where(other => other != firm)
                 .Select(other => other.PriceMinor).Order().Take(5)
         };
         // Each role sees what its choices depend on; prompts stay small so the model keeps up with the weekly economy.
         var resident = SocietyLabor.IsResident(agent);
         var governing = agent.Role == "government";
-        var market = agent.Role is "bank" or "media" ? null : new
+        var market = agent.Role == "media" || agent.Role == "business" && runsBank ? null : new
         {
             cheapest_price_minor = SocietyLabor.Sectors.Where(sector => sector.BasePrice > 0).ToDictionary(sector => sector.Id,
                 sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (int?)other.PriceMinor).Min()),
@@ -108,8 +110,6 @@ public static class SocietyEngine
                 nation.Id, government = profile.Name, nation.Approval, nation.Stocks, nation.UnmetNeedsLastCycle,
                 nation.TaxBasisPoints, nation.WelfareMinor, treasury_minor = treasury, nation.CrisisGood
             };
-        var loans = world.Society.Credit.Where(credit => credit.Status == "requested"
-            && (credit.BankId == agent.Id || credit.BorrowerId == agent.Id)).Take(4).ToArray();
         var observation = Wire.Node(new
         {
             world_stage = 2, tick = world.Tick,
@@ -118,6 +118,8 @@ public static class SocietyEngine
                 agent.Id, agent.Role, agent.Occupation, specialty = agent.Role == "business" ? agent.Specialty : null,
                 agent.Goal, agent.Traits, agent.Weights, agent.CashMinor,
                 inventory = resident ? agent.Inventory.Where(item => item.Value > 0).ToDictionary() : null,
+                deposit_minor = agent.DepositMinor > 0 ? agent.DepositMinor : (long?)null,
+                keeps_savings_in_bank = resident && !agent.KeepsSavingsInBank ? false : (bool?)null,
                 work_effort = resident ? agent.WorkEffort : (int?)null, target_stock = resident ? agent.TargetStock : (int?)null,
                 quality_of_life = resident ? agent.Wellbeing : (int?)null, health = resident ? agent.Health : (int?)null,
                 health_threshold = resident ? agent.HealthThreshold : (int?)null,
@@ -129,13 +131,19 @@ public static class SocietyEngine
                 unemployed_days = agent.EmployerId is null && agent.UnemployedSinceTick >= 0 ? world.Tick - agent.UnemployedSinceTick : (int?)null
             },
             business, market,
+            bank = resident || runsBank ? SocietyBank.View(world, SocietyBank.BankOf(world, nation.Id), runsBank) : null,
+            loan = loan is null ? null : new
+            {
+                loan.Status, loan.PrincipalMinor, principal_left_minor = loan.Status == "active" ? loan.PrincipalLeftMinor : (long?)null,
+                weekly_payment_minor = loan.Status == "active" ? loan.WeeklyPrincipalMinor + loan.WeeklyInterestMinor : (long?)null,
+                missed_payments = loan.MissedPayments > 0 ? loan.MissedPayments : (int?)null
+            },
             budget_last_week = governing
                 ? new { income_minor = agent.LastWeekInMinor, spending_minor = agent.LastWeekOutMinor,
                     net_minor = agent.LastWeekInMinor - agent.LastWeekOutMinor } : null,
             country,
             neighbors = governing ? neighbors : null,
             import_offers = offers.Length > 0 ? offers : null,
-            requested_loans = loans.Length > 0 ? loans : null,
             public_events = observedEvents.Select(item => new { item.EventType, item.Payload }),
             // The rules are identical for every agent; the worker sends them as a shared, cacheable system prompt.
             note = RulesNote
@@ -232,7 +240,11 @@ public static class SocietyEngine
         if (agent.Role == "entrepreneur" && action.Params.ContainsKey("business_id"))
             return OwnerActionValid(world, agent, action) ? "OK" : "CURRENT_PRECONDITION_FAILED";
         if (action.ActionType == "start_business")
-            return SocietyLabor.CanStart(world, agent, action.Params["sector"]!.GetValue<string>()) ? "OK" : "CURRENT_PRECONDITION_FAILED";
+        {
+            var loan = action.Params["loan_minor"]?.GetValue<long>() ?? 0;
+            return SocietyLabor.CanStart(world, agent, action.Params["sector"]!.GetValue<string>(), loan)
+                && (loan == 0 || SocietyBank.LoanOf(world, agent.Id) is null) ? "OK" : "CURRENT_PRECONDITION_FAILED";
+        }
         if (action.ActionType is "pay" or "buy_goods" && agent.Role != "government")
             return SocietyPayments.StillValid(world, agent, action.Params) ? "OK" : "CURRENT_PRECONDITION_FAILED";
         if (action.ActionType == "migrate" && agent.Role == "citizen")
@@ -255,6 +267,8 @@ public static class SocietyEngine
         if (parameters["business_id"]!.GetValue<string>() != owner.OwnedBusinessId
             || !world.Agents.TryGetValue(owner.OwnedBusinessId!, out var firm) || firm.Role != "business")
             return false;
+        if (action.ActionType == "request_loan")
+            return SocietyBank.LoanOf(world, firm.Id) is null;
         return action.ActionType != "import_goods" || SocietyTrade.CanImport(world, firm,
             world.Agents[parameters["seller_id"]!.GetValue<string>()], parameters["good"]!.GetValue<string>(),
             parameters["quantity"]!.GetValue<int>(), parameters["objective"]!.GetValue<string>());
@@ -288,6 +302,18 @@ public static class SocietyEngine
                         parameters["good"]!.GetValue<string>(), parameters["quantity"]!.GetValue<int>(),
                         parameters["objective"]!.GetValue<string>(), cause);
                     return;
+                case "request_loan":
+                    SocietyBank.Request(world, firm, parameters["amount_minor"]!.GetValue<long>(), null, 0, cause);
+                    return;
+                case "set_deposit_rate":
+                    firm.DepositRatePct = parameters["rate_pct"]!.GetValue<int>();
+                    return;
+                case "set_loan_rate":
+                    firm.LoanRatePct = parameters["rate_pct"]!.GetValue<int>();
+                    return;
+                case "set_lending_standard":
+                    firm.LendingStandard = parameters["standard"]!.GetValue<string>();
+                    return;
             }
         }
         if (agent.Role == "government" && action.ActionType != "hold")
@@ -300,9 +326,16 @@ public static class SocietyEngine
             case "household_policy":
                 agent.TargetStock = parameters["target_stock"]!.GetValue<int>();
                 break;
+            case "start_business" when parameters["loan_minor"] is { } loan:
+                SocietyBank.Request(world, agent, loan.GetValue<long>(), parameters["sector"]!.GetValue<string>(),
+                    parameters["launch_price_minor"]!.GetValue<int>(), cause);
+                break;
             case "start_business":
                 SocietyLabor.Start(world, agent, parameters["sector"]!.GetValue<string>(),
                     parameters["launch_price_minor"]!.GetValue<int>(), cause);
+                break;
+            case "bank_savings":
+                SocietyBank.SetKeepsSavings(world, agent, parameters["keep_in_bank"]!.GetValue<bool>(), cause);
                 break;
             case "health_policy":
                 agent.HealthThreshold = parameters["visit_doctor_below_health"]!.GetValue<int>();
@@ -332,29 +365,6 @@ public static class SocietyEngine
                     parameters["good"]!.GetValue<string>(), parameters["quantity"]!.GetValue<int>(),
                     parameters["objective"]!.GetValue<string>(), cause);
                 break;
-            case "request_loan":
-                var amount = parameters["amount_minor"]!.GetValue<int>();
-                var credit = new Credit
-                {
-                    Id = $"loan_{world.NextEntityNumber()}", BorrowerId = agent.Id, BankId = agent.CountryId + "_bank",
-                    PrincipalMinor = amount, DueMinor = amount * 105L / 100, DueTick = world.Tick + 60
-                };
-                world.Society!.Credit.Add(credit);
-                world.Emit("loan_requested", "rule", [credit.Id, agent.Id, credit.BankId], new
-                {
-                    amount_minor = amount, credit.DueMinor, credit.DueTick
-                }, cause);
-                break;
-            case "approve_loan":
-                var approved = world.Society!.Credit.Single(credit => credit.Id == parameters["loan_id"]!.GetValue<string>());
-                SocietyEconomy.Transfer(world, agent, world.Agents[approved.BorrowerId], approved.PrincipalMinor, "loan");
-                approved.Status = "active";
-                approved.DueTick = world.Tick + 60;
-                world.Emit("loan_funded", "rule", [approved.Id, agent.Id, approved.BorrowerId], new
-                {
-                    approved.PrincipalMinor, approved.DueMinor, approved.DueTick, settlement = "simulated internal ledger"
-                }, cause);
-                break;
             case "pay":
                 SocietyPayments.Pay(world, agent, parameters, cause);
                 break;
@@ -367,6 +377,10 @@ public static class SocietyEngine
     private static void Migrate(World world, Agent agent, string destination, string cause)
     {
         var previous = agent.CountryId;
+        // Savings leave with the migrant; whatever the old bank cannot pay out is left behind.
+        SocietyBank.Withdraw(world, agent, agent.DepositMinor);
+        var leftBehind = agent.DepositMinor;
+        agent.DepositMinor = 0;
         SocietyEconomy.Transfer(world, agent, world.Agents[destination + "_government"], 100, "migration_fee");
         agent.CountryId = destination;
         world.Reindex();
@@ -378,7 +392,8 @@ public static class SocietyEngine
         world.Society.Nations[destination].Population++;
         world.Emit("agent_migrated", "rule", [agent.Id, previous, destination], new
         {
-            from = previous, to = destination, cost_minor = 100, occupation = agent.Occupation
+            from = previous, to = destination, cost_minor = 100, occupation = agent.Occupation,
+            deposit_left_behind_minor = leftBehind
         }, cause);
     }
 }

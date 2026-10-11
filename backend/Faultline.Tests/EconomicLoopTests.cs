@@ -90,7 +90,8 @@ public sealed class EconomicLoopTests
         Assert.InRange(CheapShare(expensive), 0.9, 1.0); // twice the price keeps almost none
     }
 
+    // Deposits count as their holders' money; the bank's reserves (mostly owed to depositors) stand apart.
     private static Dictionary<(string Country, string Role), long> CashByCountryAndRole(World world) =>
-        world.Agents.Values.GroupBy(agent => (agent.CountryId, agent.Role))
-            .ToDictionary(group => group.Key, group => group.Sum(agent => agent.CashMinor));
+        world.Agents.Values.GroupBy(agent => (agent.CountryId, SocietyBank.IsBank(agent) ? "bank" : agent.Role))
+            .ToDictionary(group => group.Key, group => group.Sum(agent => agent.CashMinor + agent.DepositMinor));
 }

@@ -21,7 +21,8 @@ public static class SocietyLabor
     public sealed record Sector(string Id, string Occupation, string? Good, int BasePrice, double DailyOutput, int Firms);
 
     // DailyOutput is per full-strength worker per day (clinic: visits per doctor; entertainment: sessions per
-    // worker). Freight earns shipping fees. Firms is how many compete in each country at the start.
+    // worker). Freight earns shipping fees; the bank earns interest (SocietyBank). Firms is how many compete
+    // in each country at the start.
     public static readonly Sector[] Sectors =
     [
         new("food", "farmer", "food", 40, 7.5, 3),
@@ -30,7 +31,8 @@ public static class SocietyLabor
         new("entertainment", "service_worker", null, 60, 5, 2),
         new("medicine", "researcher", "medicine", 120, 4.5, 1),
         new("clinic", "doctor", null, 450, 8, 1),
-        new("freight", "dockworker", null, 0, 0, 1)
+        new("freight", "dockworker", null, 0, 0, 1),
+        new(SocietyBank.Sector, "banker", null, 0, 0, 1)
     ];
 
     public static Sector SectorOf(string id) => Sectors.Single(sector => sector.Id == id);
@@ -42,15 +44,16 @@ public static class SocietyLabor
     public static readonly Dictionary<string, long> TableWage = new()
     {
         ["farmer"] = 1000, ["service_worker"] = 1100, ["factory_worker"] = 1300, ["soldier"] = 1400, ["dockworker"] = 1450,
-        ["teacher"] = 1750, ["energy_worker"] = 2100, ["researcher"] = 2500, ["doctor"] = 6000
+        ["teacher"] = 1750, ["banker"] = 2000, ["energy_worker"] = 2100, ["researcher"] = 2500, ["doctor"] = 6000
     };
 
     // Unskilled jobs are open to anyone after a spell of unemployment, so skilled workers can step down;
-    // doctors and researchers also move between each other. Teachers and soldiers are public-sector only.
+    // doctors and researchers also move between each other. Banks train their own staff, so anyone can
+    // become a banker. Teachers and soldiers are public-sector only.
     public static readonly string[] Unskilled = ["farmer", "service_worker", "energy_worker", "factory_worker", "dockworker"];
 
     public static bool CanSwitch(string from, string to) => from == to
-        || Unskilled.Contains(to)
+        || Unskilled.Contains(to) || to == "banker"
         || (from, to) is ("doctor", "researcher") or ("researcher", "doctor");
 
     public static bool IsResident(Agent agent) => agent.Role is "citizen" or "entrepreneur";
@@ -90,8 +93,9 @@ public static class SocietyLabor
         (sector == "entertainment" ? ServiceStartupWeeks : StartupWeeks) * TableWage.GetValueOrDefault(founder.Occupation, 1000);
 
     // Founders start firms in their own trade or one they could move into as skilled workers;
-    // anyone can open an entertainment venue.
+    // anyone can open an entertainment venue. Each country has one bank, so none can be started.
     public static string[] StartableSectors(Agent founder) => Sectors
+        .Where(sector => sector.Id != SocietyBank.Sector)
         .Where(sector => sector.Occupation == founder.Occupation || sector.Id == "entertainment"
             || (!Unskilled.Contains(founder.Occupation) && !Unskilled.Contains(sector.Occupation)
                 && CanSwitch(founder.Occupation, sector.Occupation)))
@@ -121,11 +125,14 @@ public static class SocietyLabor
         return incumbents.Length == 0 ? basePrice : Math.Max(1, incumbents.Min(firm => firm.PriceMinor) * 9 / 10);
     }
 
-    public static bool CanStart(World world, Agent founder, string sector)
+    // Founders pay from cash and deposits, or borrow up to the bank's limit for the rest.
+    public static bool CanStart(World world, Agent founder, string sector, long loan = 0)
     {
         var nation = world.Society!.Nations[founder.CountryId];
+        var cost = StartupCost(founder, sector);
         return founder.Role == "citizen" && !IsPlanned(nation) && StartableSectors(founder).Contains(sector)
-            && founder.CashMinor >= StartupCost(founder, sector) && HasOpportunity(world, nation, sector);
+            && SocietyBank.Liquid(world, founder) + loan >= cost && loan <= SocietyBank.StartupLoan(world, founder, cost)
+            && HasOpportunity(world, nation, sector);
     }
 
     public static Agent Start(World world, Agent founder, string sector, int launchPrice, string cause)
@@ -143,6 +150,7 @@ public static class SocietyLabor
             Goal = $"Run a profitable {sector} business owned by {founder.Id}."
         };
         world.Agents.Add(firm.Id, firm);
+        SocietyBank.Draw(world, founder, cost);
         SocietyEconomy.Transfer(world, founder, firm, cost, "business_founding");
         Quit(founder);
         founder.FormerOccupation = founder.Occupation;
@@ -215,7 +223,7 @@ public static class SocietyLabor
     // resident who could run one and can afford it opens one (agents can also choose to start firms).
     private static void FillEmptySectors(World world, Nation nation, Agent[] residents)
     {
-        foreach (var sector in Sectors.Where(sector => sector.Id != "freight" && !Firms(world, nation.Id, sector.Id).Any()))
+        foreach (var sector in Sectors.Where(sector => sector.Id is not ("freight" or SocietyBank.Sector) && !Firms(world, nation.Id, sector.Id).Any()))
         {
             var founder = residents.Where(person => CanStart(world, person, sector.Id))
                 .OrderByDescending(person => person.CashMinor).ThenBy(person => person.Id).FirstOrDefault();
@@ -266,10 +274,18 @@ public static class SocietyLabor
             var capacity = ServiceCapacity(world, firm);
             (shortHanded, idle) = (society.TurnedAwayThisWeek.GetValueOrDefault(firm.Id) > 0, capacity > 0 && served < capacity * 0.4);
         }
+        else if (SocietyBank.IsBank(firm))
+        {
+            // A bank hires a banker when its loan book outgrows its staff and interest covers another salary.
+            var book = SocietyBank.LoanBook(world, firm);
+            var net = revenue - society.PeriodCostMinor.GetValueOrDefault(firm.Id);
+            (shortHanded, idle) = (book >= SocietyBank.LoanCapacity(world, firm) && net >= payroll + firm.WageOfferMinor,
+                staff > 0 && book <= SocietyBank.LoanCapacity(world, firm) - SocietyBank.LoansPerBanker);
+        }
         else
             (shortHanded, idle) = (false, revenue < payroll);
         // A profitable firm that cannot keep up first asks its staff for overtime, then hires.
-        firm.OvertimeOffered = shortHanded && profitable;
+        firm.OvertimeOffered = shortHanded && profitable && !SocietyBank.IsBank(firm);
         var change = idle ? -1 : shortHanded && profitable ? 1 : 0;
         firm.TargetHeadcount = Math.Max(0, firm.TargetHeadcount + change);
     }
@@ -371,13 +387,14 @@ public static class SocietyLabor
             }
             // Dividends: cash beyond a buffer of several weeks' payroll goes to the owner instead of idling.
             var buffer = Math.Max(10000, DividendBufferWeeks * Staff(world, firm).Sum(worker => worker.SalaryMinor));
-            dividend = Math.Max(0, firm.CashMinor - buffer);
+            dividend = SocietyBank.IsBank(firm) ? SocietyBank.Dividend(world, firm) : Math.Max(0, firm.CashMinor - buffer);
             SocietyEconomy.Transfer(world, firm, owner, dividend, "dividend");
             nation.DividendsPaidMinor += dividend;
         }
         society.PeriodRevenueMinor[firm.Id] = 0;
         society.PeriodCostMinor[firm.Id] = 0;
-        if (!planned && firm.DistressWeeks >= DistressWeeksToClose)
+        // A bank never closes for want of cash: its reserves belong to depositors, and insolvency means a takeover.
+        if (!planned && firm.DistressWeeks >= DistressWeeksToClose && !SocietyBank.IsBank(firm))
             Close(world, nation, firm, "unable to cover costs for four weeks");
         return (cuts, layoffs, dividend);
     }
@@ -421,8 +438,8 @@ public static class SocietyLabor
         firm.PriceMinor = Math.Clamp(price, spec.BasePrice / 2, spec.BasePrice * 3);
     }
 
-    // Closing returns the firm's cash to its owner; a competitor buys stock at half price, and
-    // whatever is not bought goes to the owner. Nothing is created or destroyed.
+    // Closing repays the firm's bank loans, then returns its cash to its owner; a competitor buys stock at
+    // half price, and whatever is not bought goes to the owner. Nothing is created or destroyed.
     public static void Close(World world, Nation nation, Agent firm, string reason)
     {
         var staff = Staff(world, firm);
@@ -452,16 +469,12 @@ public static class SocietyLabor
                 continue;
             firm.Inventory[good] = 0;
         }
+        SocietyBank.Recover(world, nation, firm);
         if (owner is not null)
         {
             recovered = firm.CashMinor;
             SocietyEconomy.Transfer(world, firm, owner, firm.CashMinor, "closure_payout");
-            owner.Role = "citizen";
-            owner.Occupation = owner.FormerOccupation ?? "factory_worker";
-            owner.OwnedBusinessId = null;
-            owner.EmployerId = null;
-            owner.UnemployedSinceTick = world.Tick;
-            owner.Goal = $"Find work as a {owner.Occupation.Replace('_', ' ')}, meet household needs and rebuild savings.";
+            ReleaseOwner(world, owner);
         }
         else
             SocietyEconomy.Transfer(world, firm, world.Agents[nation.Id + "_government"], firm.CashMinor, "closure_payout");
@@ -474,6 +487,17 @@ public static class SocietyLabor
             sector = firm.Specialty, owner = firm.OwnerId, reason, workers_laid_off = staff.Length,
             invested_minor = firm.InvestedMinor, recovered_minor = recovered
         });
+    }
+
+    // A former owner returns to the labor market in their old trade.
+    public static void ReleaseOwner(World world, Agent owner)
+    {
+        owner.Role = "citizen";
+        owner.Occupation = owner.FormerOccupation ?? "factory_worker";
+        owner.OwnedBusinessId = null;
+        owner.EmployerId = null;
+        owner.UnemployedSinceTick = world.Tick;
+        owner.Goal = $"Find work as a {owner.Occupation.Replace('_', ' ')}, meet household needs and rebuild savings.";
     }
 
     // Skilled workers who step down into unskilled work keep their qualification, so a matching

@@ -18,17 +18,24 @@ public static class SocietyActions
                 options.Add(Make("express_support", new { support = !agent.SupportsLeadership }));
                 foreach (var threshold in new[] { 0, 50, 70, 85 }.Where(threshold => threshold != agent.HealthThreshold))
                     options.Add(Make("health_policy", new { visit_doctor_below_health = threshold }));
+                if (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank)
+                    options.Add(Make("bank_savings", new { keep_in_bank = !agent.KeepsSavingsInBank }));
                 if (agent.Role == "entrepreneur")
                 {
                     OwnerOptions(world, agent, options);
                     break;
                 }
-                foreach (var sector in SocietyLabor.StartableSectors(agent).Where(sector => SocietyLabor.CanStart(world, agent, sector)))
-                    options.Add(Make("start_business", new
-                    {
-                        sector, startup_cost_minor = SocietyLabor.StartupCost(agent, sector),
-                        launch_price_minor = SocietyLabor.LaunchPrice(world, world.Society!.Nations[agent.CountryId], sector)
-                    }));
+                // Founders who cannot pay in full can ask the bank for the rest beyond the down payment.
+                foreach (var sector in SocietyLabor.StartableSectors(agent))
+                {
+                    var cost = SocietyLabor.StartupCost(agent, sector);
+                    var launch = SocietyLabor.LaunchPrice(world, world.Society!.Nations[agent.CountryId], sector);
+                    var loan = SocietyBank.StartupLoan(world, agent, cost);
+                    if (SocietyLabor.CanStart(world, agent, sector))
+                        options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch }));
+                    else if (SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
+                        options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch, loan_minor = loan }));
+                }
                 if (agent.CashMinor >= 100)
                     foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.Id != agent.CountryId)
                         .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
@@ -41,15 +48,12 @@ public static class SocietyActions
             case "government":
                 GovernmentOptions(world, agent, options);
                 break;
-            case "bank":
-                foreach (var credit in world.Society!.Credit.Where(credit => credit.BankId == agent.Id
-                    && credit.Status == "requested" && agent.CashMinor >= credit.PrincipalMinor).Take(4))
-                    options.Add(Make("approve_loan", new { loan_id = credit.Id }));
-                break;
             case "media":
                 var reportingNation = world.Society!.Nations[agent.CountryId];
+                var bank = SocietyBank.BankOf(world, agent.CountryId);
+                var deposits = SocietyBank.Deposits(world, agent.CountryId);
                 var text = string.Create(CultureInfo.InvariantCulture,
-                    $"{reportingNation.Name}: food stock {reportingNation.Stocks.GetValueOrDefault("food")}; energy stock {reportingNation.Stocks.GetValueOrDefault("energy")}; unmet needs last cycle {reportingNation.UnmetNeedsLastCycle}; approval {reportingNation.Approval:P0}.");
+                    $"{reportingNation.Name}: food stock {reportingNation.Stocks.GetValueOrDefault("food")}; energy stock {reportingNation.Stocks.GetValueOrDefault("energy")}; unmet needs last cycle {reportingNation.UnmetNeedsLastCycle}; approval {reportingNation.Approval:P0}; bank reserves {bank.CashMinor} against deposits {deposits}{(bank.UnmetWithdrawalsMinor > 0 ? $", {bank.UnmetWithdrawalsMinor} in withdrawals unpaid" : "")}.");
                 options.Add(Make("publish", new { text, observed_tick = world.Tick }));
                 break;
         }
@@ -63,6 +67,16 @@ public static class SocietyActions
     {
         if (owner.OwnedBusinessId is not { } id || world.Agents[id] is not { Role: "business" } firm)
             return;
+        if (SocietyBank.IsBank(firm))
+        {
+            BankOptions(firm, options);
+            foreach (var change in new[] { -1, 1 }.Where(change => firm.TargetHeadcount + change >= 0))
+                options.Add(Make("set_headcount", new { business_id = id, change }));
+            foreach (var change in new[] { -10, 10 })
+                options.Add(Make("set_wage", new { business_id = id, change_pct = change }));
+            return;
+        }
+        LoanOptions(world, firm, options);
         if (SocietyLabor.SectorOf(firm.Specialty!).BasePrice > 0)
             foreach (var change in new[] { -10, 10 })
                 options.Add(Make("set_price", new { business_id = id, change_pct = change }));
@@ -76,6 +90,33 @@ public static class SocietyActions
         {
             candidate.Params["business_id"] = id;
             options.Add(candidate);
+        }
+    }
+
+    // The bank's owner (or the state) sets the annual rates and the standard each loan request must meet.
+    private static void BankOptions(Agent bank, List<Candidate> options)
+    {
+        foreach (var rate in SocietyBank.DepositRates.Where(rate => rate != bank.DepositRatePct))
+            options.Add(Make("set_deposit_rate", new { business_id = bank.Id, rate_pct = rate }));
+        foreach (var rate in SocietyBank.LoanRates.Where(rate => rate != bank.LoanRatePct))
+            options.Add(Make("set_loan_rate", new { business_id = bank.Id, rate_pct = rate }));
+        foreach (var standard in SocietyBank.Standards.Keys.Where(standard => standard != bank.LendingStandard))
+            options.Add(Make("set_lending_standard", new { business_id = bank.Id, standard }));
+    }
+
+    // A firm with no loan open can borrow four or eight weeks of its payroll (or its owner's pay) over 26 weeks.
+    private static void LoanOptions(World world, Agent firm, List<Candidate> options)
+    {
+        if (SocietyBank.LoanOf(world, firm.Id) is not null)
+            return;
+        var bank = SocietyBank.BankOf(world, firm.CountryId);
+        var weekly = Math.Max(SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor),
+            SocietyLabor.TableWage[SocietyLabor.SectorOf(firm.Specialty!).Occupation]);
+        foreach (var weeks in new[] { 4, 8 })
+        {
+            var amount = weekly * weeks / 100 * 100;
+            var (principal, interest) = SocietyBank.Installment(amount, bank.LoanRatePct);
+            options.Add(Make("request_loan", new { business_id = firm.Id, amount_minor = amount, weekly_payment_minor = principal + interest }));
         }
     }
 
@@ -111,9 +152,8 @@ public static class SocietyActions
             foreach (var price in new[] { basePrice * 8 / 10, basePrice, basePrice * 12 / 10 }.Where(price => price != agent.PriceMinor))
                 options.Add(Make("set_price", new { price_minor = price }));
         ImportOptions(world, agent, options);
-        if (agent.CashMinor < nation.Population * 200L
-            && !world.Society.Credit.Any(credit => credit.BorrowerId == agent.Id && credit.Status is "active" or "requested"))
-            options.Add(Make("request_loan", new { amount_minor = Math.Clamp(nation.Population * 100, 1000, 30000) }));
+        if (SocietyBank.IsBank(agent)) // state firms draw on the treasury, not loans; the state bank sets rates
+            BankOptions(agent, options);
     }
 
     private static void GovernmentOptions(World world, Agent agent, List<Candidate> options)

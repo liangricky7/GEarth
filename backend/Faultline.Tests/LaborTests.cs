@@ -106,13 +106,13 @@ public sealed class LaborTests
         var farm = world.Agents["aster_food"];
         var owner = world.Agents[farm.OwnerId!];
         SocietyEconomy.Transfer(world, world.Agents["aster_bank"], farm, 100000);
-        var ownerCash = owner.CashMinor;
+        var ownerSavings = SocietyBank.Savings(owner);
 
         AdvanceDays(world, SocietyLabor.DaysPerWeek);
 
         var buffer = Math.Max(10000, SocietyLabor.DividendBufferWeeks * SocietyLabor.Staff(world, farm).Sum(worker => worker.SalaryMinor));
         Assert.True(farm.CashMinor <= buffer);
-        Assert.True(owner.CashMinor > ownerCash + 50000);
+        Assert.True(SocietyBank.Savings(owner) > ownerSavings + 50000); // dividends land in cash, then the bank
         Assert.True(world.Society!.Nations["aster"].DividendsPaidMinor >= 50000);
         SocietyEconomy.AssertConservation(world);
     }

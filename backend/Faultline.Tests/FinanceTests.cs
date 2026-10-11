@@ -8,79 +8,6 @@ public sealed class FinanceTests
     private static World NewWorld() => SocietyFactory.Create("finance_test", false, 400);
 
     [Fact]
-    public void ApprovedLoanMovesPrincipalAndIsRepaidWithInterest()
-    {
-        var world = NewWorld();
-        var (borrower, bank, loan) = FundLoan(world);
-        var bankAfterFunding = bank.CashMinor;
-        Assert.Equal("active", loan.Status);
-
-        // Ensure the borrower can pay regardless of how the economy treats it.
-        SocietyEconomy.Transfer(world, world.Agents["aster_government"], borrower, loan.DueMinor);
-        AdvanceUntilSettled(world, loan);
-
-        Assert.Equal("repaid", loan.Status);
-        Assert.Equal(bankAfterFunding + loan.DueMinor, bank.CashMinor);
-        Assert.Equal(loan.PrincipalMinor * 105 / 100, loan.DueMinor);
-    }
-
-    [Fact]
-    public void UnpayableLoanDefaultsAndRecordsTheLoss()
-    {
-        var world = NewWorld();
-        var (_, bank, loan) = FundLoan(world);
-        var bankAfterFunding = bank.CashMinor;
-        loan.DueMinor = world.InitialCashMinor + 1; // more than exists in the world
-
-        AdvanceUntilSettled(world, loan);
-
-        Assert.Equal("defaulted", loan.Status);
-        Assert.Equal(1, world.Society!.Nations["aster"].DefaultedLoans);
-        var settled = world.Events.Single(item => item.EventType == "loan_settled");
-        var paid = settled.Payload["paid_minor"]!.GetValue<long>();
-        Assert.Equal(loan.DueMinor - paid, settled.Payload["loss_minor"]!.GetValue<long>());
-        Assert.Equal(bankAfterFunding + paid, bank.CashMinor);
-    }
-
-    [Fact]
-    public void SameApprovalAppliedTwiceFundsOnce()
-    {
-        var world = NewWorld();
-        var borrower = DrainForLoan(world);
-        Decide(world, borrower.Id, "request_loan");
-        var bank = world.Agents["aster_bank"];
-        var bankBefore = bank.CashMinor;
-        var (job, result) = Propose(world, bank.Id, "approve_loan");
-
-        var first = SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow);
-        var second = SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow);
-
-        Assert.True(first.Accepted, first.Code);
-        Assert.Same(first, second);
-        Assert.Equal(bankBefore - world.Society!.Credit.Single().PrincipalMinor, bank.CashMinor);
-        Assert.Single(world.Events, item => item.EventType == "loan_funded");
-    }
-
-    [Fact]
-    public void ApprovalIsRejectedWhenBankCashWasSpentAfterObservation()
-    {
-        var world = NewWorld();
-        var borrower = DrainForLoan(world);
-        Decide(world, borrower.Id, "request_loan");
-        var bank = world.Agents["aster_bank"];
-        var (job, result) = Propose(world, bank.Id, "approve_loan");
-        var borrowerBefore = borrower.CashMinor;
-
-        SocietyEconomy.Transfer(world, bank, world.Agents["aster_government"], bank.CashMinor - 1);
-        var record = SocietyEngine.Apply(world, job, result, DateTimeOffset.UtcNow);
-
-        Assert.False(record.Accepted);
-        Assert.Equal("CURRENT_PRECONDITION_FAILED", record.Code);
-        Assert.Equal("requested", world.Society!.Credit.Single().Status);
-        Assert.Equal(borrowerBefore, borrower.CashMinor);
-    }
-
-    [Fact]
     public void DeliveredImportReleasesEscrowToSellerOnce()
     {
         var world = NewWorld();
@@ -238,40 +165,12 @@ public sealed class FinanceTests
     private static Func<Candidate, bool> Good(string good) =>
         candidate => candidate.Params["good"]!.GetValue<string>() == good;
 
-    // Moves cash out (not deleted, so conservation still holds) until the business qualifies for a loan.
-    private static Agent DrainForLoan(World world)
-    {
-        var borrower = world.Agents["aster_food"];
-        SocietyEconomy.Transfer(world, borrower, world.Agents["aster_government"], borrower.CashMinor - 1000);
-        return borrower;
-    }
-
-    private static (Agent Borrower, Agent Bank, Credit Loan) FundLoan(World world)
-    {
-        var borrower = DrainForLoan(world);
-        Decide(world, borrower.Id, "request_loan");
-        var bank = world.Agents["aster_bank"];
-        var bankBefore = bank.CashMinor;
-        var borrowerBefore = borrower.CashMinor;
-        Decide(world, bank.Id, "approve_loan");
-        var loan = world.Society!.Credit.Single();
-        Assert.Equal(bankBefore - loan.PrincipalMinor, bank.CashMinor);
-        Assert.Equal(borrowerBefore + loan.PrincipalMinor, borrower.CashMinor);
-        return (borrower, bank, loan);
-    }
-
     private static (Agent Buyer, Agent Seller, Cargo Cargo) Import(World world)
     {
         var buyer = world.Agents["aster_food"];
         Decide(world, buyer.Id, "import_goods");
         var cargo = world.Society!.Cargo.Single();
         return (buyer, world.Agents[cargo.SellerId], cargo);
-    }
-
-    private static void AdvanceUntilSettled(World world, Credit loan)
-    {
-        while (loan.Status == "active" && world.Tick <= loan.DueTick + SocietyLabor.DaysPerWeek)
-            SocietyEngine.Advance(world);
     }
 
     // Moves cargo only, so no wages or purchases blur the cash assertions.

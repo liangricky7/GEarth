@@ -15,8 +15,8 @@ public static class SocietyFactory
         ("ionia", "Ionia", 8, 80), ("jade", "Jade", 35, 140)
     ];
     public static readonly string[] Goods = ["food", "energy", "tools", "medicine"];
-    // Government, bank, media and every firm.
-    public static readonly int InstitutionsPerCountry = 3 + SocietyLabor.Sectors.Sum(sector => sector.Firms);
+    // Government, media and every firm (the bank is the one firm in the bank sector).
+    public static readonly int InstitutionsPerCountry = 2 + SocietyLabor.Sectors.Sum(sector => sector.Firms);
 
     // Starting job shares per 100 workers, sized so each sector's sales roughly cover its payroll.
     // One of each essential occupation comes first so small test worlds still have every sector staffed;
@@ -78,7 +78,6 @@ public static class SocietyFactory
             world.Locations.Add(Wire.Node(new { id = countryId + "_city", country_id = countryId, lat, lon }));
 
             var government = AddInstitution(world, countryId, "government", "government", 0);
-            AddInstitution(world, countryId, "bank", "bank", Math.Max(20000, citizensPerCountry * 4000L));
             AddInstitution(world, countryId, "media", "journalist", 10000);
             // The first firm in a sector is "<country>_<sector>", later ones "<country>_<sector>_2" and so on.
             var firms = SocietyLabor.Sectors.ToDictionary(sector => sector.Id, sector => Enumerable.Range(1, sector.Firms).Select(number =>
@@ -142,6 +141,14 @@ public static class SocietyFactory
                 var staff = residentsHere.Where(resident => resident.EmployerId == firm.Id).ToArray();
                 firm.TargetHeadcount = staff.Length;
                 firm.CashMinor = Math.Max(10000, staff.Sum(worker => worker.SalaryMinor) * 4);
+                if (SocietyBank.IsBank(firm))
+                {
+                    // The bank opens with its owner's capital (the state's in planned economies) and no
+                    // deposits; it hires bankers as its loan book grows.
+                    firm.CashMinor = firm.InvestedMinor = Math.Max(20000, citizensPerCountry * 4000L);
+                    (firm.DepositRatePct, firm.LoanRatePct, firm.LendingStandard) = (3, 10, "normal");
+                    firm.Goal = "Take deposits and lend them to viable businesses and founders while keeping enough reserves for withdrawals.";
+                }
                 var n = citizensPerCountry / group.Length; // starting stock is shared among a sector's firms
                 switch (sectorId)
                 {
@@ -177,7 +184,7 @@ public static class SocietyFactory
         }
         world.InitialCashMinor = world.Agents.Values.Sum(agent => agent.CashMinor);
         world.ScenarioHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms12:election100:crisis40:{AgentEndowments.Version}"))).ToLowerInvariant();
+            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms12:bank:election100:crisis40:{AgentEndowments.Version}"))).ToLowerInvariant();
         SocietyEconomy.UpdateMetrics(world);
         world.Emit("world_initialized", "scenario", [world.Id], new
         {
@@ -210,7 +217,6 @@ public static class SocietyFactory
                 "citizen" => $"Work as a {occupation.Replace('_', ' ')}, meet household needs, preserve savings and influence leadership according to your values.",
                 "business" => $"Produce and sell {occupation}, pay workers, import scarce inputs and keep the business solvent.",
                 "government" => "Meet public needs with a funded budget, follow institutional rules, manage trade and avoid costly conflict unless justified.",
-                "bank" => "Fund viable requested business loans while preserving liquidity and managing default risk.",
                 _ => "Select factual public reports that help residents understand shortages, trade and government performance."
             }
         };

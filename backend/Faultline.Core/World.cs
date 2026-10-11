@@ -56,6 +56,15 @@ public sealed class Agent
     public int GoodsBoughtLastWeek { get; set; }
     public int ServicesBoughtLastWeek { get; set; }
     public int LastWeekWellbeing { get; set; } = 100;
+    // Banking: residents' savings deposited at their country's bank (the government's deposit is the
+    // insurance claims it took over). Banks: owner-set rates and lending standard, and withdrawals the
+    // reserves could not pay since the last weekly review.
+    public long DepositMinor { get; set; }
+    public bool KeepsSavingsInBank { get; set; } = true;
+    public int DepositRatePct { get; set; }
+    public int LoanRatePct { get; set; }
+    public string? LendingStandard { get; set; }
+    public long UnmetWithdrawalsMinor { get; set; }
     // Money in and out this week and last week, for budgets shown to decision makers.
     public long WeekInMinor { get; set; }
     public long WeekOutMinor { get; set; }

@@ -264,7 +264,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             {
                 var started = DateTimeOffset.UtcNow;
                 ApplyCompleted();
-                if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)
+                var weekBoundary = (world.Tick + 1) % SocietyLabor.DaysPerWeek == 0;
+                if (weekBoundary)
                 {
                     await DrainWeek();
                     // Analytics commits below include the same drained boundary. Other runs keep the fork checkpoints.
@@ -274,7 +275,10 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 if (world.AnalyticsEnabled && world.Tick > 0)
                 {
                     RunAudit.Day(world);
-                    await Commit();
+                    // Retain every day and transfer, but persist Neon audit batches at the drained
+                    // week boundary. Completion and graceful shutdown flush the remaining days.
+                    if (store.Kind != "neon_https" || weekBoundary)
+                        await Commit();
                 }
                 SocietyEngine.Advance(world);
                 if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)

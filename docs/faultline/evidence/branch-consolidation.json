@@ -1,0 +1,151 @@
+{
+  "base_main": "004aae7eac507e930d8e224b30a90f82648d455c",
+  "remote_heads_included": {
+    "amd-compute-source": "b9ad10a7c6de1f80859ab3a1fac5153aa497dfe3",
+    "codex/ahmad/worker-failure-checks": "6198edd1e18b40c2465169d5bc92a7e7a27ae9fb",
+    "codex/continuous-spark-simulations": "a5f4956cfd288c4dc4dedc6abd396dc2946babc3",
+    "codex/kanban-github-workflow": "0aae3be695fd48a50c7e9c020481056ecf4edfe8",
+    "codex/kennedy/observer-saved-runs": "a2e0311553151d8da7e9fc0300673bcd8f433411",
+    "continuous-spark-simulations": "a5f4956cfd288c4dc4dedc6abd396dc2946babc3",
+    "docs/team-workflow": "c10469698cb47e801b87784db28db81f05139970",
+    "feat/decision-metrics": "1d2986a4b5269280217b1ae3e910830a58d81148",
+    "feat/multi-compute-society": "fb73b0f6301de6c138627ba4f2366cba372d0c4c",
+    "feat/run-analytics": "ff548b3f73614c2e810e12b837307c0087ffe366",
+    "labor-market-potential-bank": "6e633d9cbf90c31688d79ddb2210b753d407928c",
+    "stage2-observer-consistency": "bc1c49eb5aa3cb356be830b59b87fbba3f09376a",
+    "stage2-scheduling-api": "f60d36f653878daea9ba28a12642f7ef5dc5f062",
+    "test/worker-failure-checks": "6198edd1e18b40c2465169d5bc92a7e7a27ae9fb"
+  },
+  "validation": {
+    "python": {
+      "passed": 179,
+      "command": "python -m pytest agents ops analytics/tests -q"
+    },
+    "backend": {
+      "passed": 117,
+      "failed": [
+        "Faultline.Tests.EconomicLoopTests.MoneyKeepsCirculatingForAFullYear"
+      ],
+      "command": "dotnet test Faultline.sln --no-restore --nologo --verbosity minimal",
+      "baseline_reproduction": {
+        "ref": "004aae7eac507e930d8e224b30a90f82648d455c",
+        "test": "Faultline.Tests.EconomicLoopTests.MoneyKeepsCirculatingForAFullYear",
+        "failure": "aster health",
+        "independent_clean_source": true
+      }
+    },
+    "observer": {
+      "passed": 8,
+      "skipped": 1,
+      "command": "node --test tests/*.cjs",
+      "optional_skipped": "recorded live and stopped runs render and switch through the real read API"
+    },
+    "browser": {
+      "desktop": "pass",
+      "mobile": "pass",
+      "command": "node ops/check_observer.cjs"
+    }
+  },
+  "combined_rule_run": {
+    "run_id": "world_20261011_013835_7eb04e",
+    "population": 160,
+    "ticks": 20,
+    "storage": "isolated local",
+    "new_model_calls": 0,
+    "decisions": {
+      "accounting_version": 1,
+      "admitted": 451,
+      "applied": 451,
+      "pending": 0,
+      "canceled": 0,
+      "pending_ids": [],
+      "canceled_ids": [],
+      "reconciled": true,
+      "scope": "full archive"
+    },
+    "export_validation": {
+      "status": "pass",
+      "run_id": "world_20261011_013835_7eb04e",
+      "record_count": 6470,
+      "source_manifest_sha256": "28e881750e1f2f3d1fe661d41cecd7202b2f4e307b4da334040b0cc73e23131c"
+    },
+    "report_checks": [
+      {
+        "name": "manifest_integrity",
+        "status": "pass",
+        "details": {
+          "records": 6470
+        },
+        "evidence_refs": []
+      },
+      {
+        "name": "ledger_account_reconciliation",
+        "status": "pass",
+        "details": {
+          "mismatched_accounts": 0,
+          "missing_openings": 0,
+          "missing_final_balances": 0,
+          "examples": []
+        },
+        "evidence_refs": []
+      },
+      {
+        "name": "daily_account_reconciliation",
+        "status": "pass",
+        "details": {
+          "agent_snapshots": 3360,
+          "escrow_snapshots": 0,
+          "mismatches": 0,
+          "unknown_openings": 0,
+          "examples": [],
+          "basis": "opening plus running ledger net at each snapshot audit sequence"
+        },
+        "evidence_refs": [
+          {
+            "run_id": "world_20261011_013835_7eb04e",
+            "sequence": 205,
+            "kind": "agent_day"
+          },
+          {
+            "run_id": "world_20261011_013835_7eb04e",
+            "sequence": 206,
+            "kind": "agent_day"
+          }
+        ]
+      },
+      {
+        "name": "cash_plus_escrow_conservation",
+        "status": "pass",
+        "details": {
+          "opening_minor": 1720000,
+          "latest_minor": 1720000,
+          "ledger_net_minor": 0,
+          "initial_cash_minor": 1720000
+        },
+        "evidence_refs": []
+      },
+      {
+        "name": "offered_choice_index",
+        "status": "pass",
+        "details": {
+          "invalid_indices": 0,
+          "missing_context": 0,
+          "unfinished_requests": 0,
+          "accepted_without_offered_index": 0,
+          "request_count": 451,
+          "result_count": 451
+        },
+        "evidence_refs": []
+      },
+      {
+        "name": "daily_flow_reconciliation",
+        "status": "unknown",
+        "details": {
+          "reason": "Daily aggregate flow records are not part of audit.v1; individual transfers retained."
+        },
+        "evidence_refs": []
+      }
+    ]
+  },
+  "deployment": "Existing cloud collector unchanged; integration was tested locally without Spark, Neon, or Databricks writes."
+}

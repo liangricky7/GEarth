@@ -125,7 +125,7 @@ async function checkInBrowser(fixture) {
     get("country-filter").dispatchEvent(new Event("change"));
     await wait(() => get("agent-page").textContent === "1–30 of 30");
     check([...get("agents").children].every((button) => button.textContent.startsWith("aster_B_")), "Country filter returned wrong agents");
-    get("role-filter").value = "bank";
+    get("role-filter").value = "government";
     get("role-filter").dispatchEvent(new Event("change"));
     await wait(() => get("agent-page").textContent === "0–0 of 0");
     get("country-filter").value = "";
@@ -140,7 +140,7 @@ async function checkInBrowser(fixture) {
     select("A");
     await wait(() => ready("A"));
     get("agents").firstChild.click();
-    await wait(() => get("profile").textContent.includes("decision age at checkpoint 120s"));
+    await wait(() => get("profile").textContent.includes("decision age 120s at checkpoint"));
     check(get("message").textContent === "", "Observer reported an error");
     check(document.documentElement.scrollWidth <= window.innerWidth, "Observer overflows the viewport horizontally");
     document.body.dataset.observerCheck = "passed";

@@ -286,7 +286,7 @@ async function showProfile() {
       profile.append(
         textNode(
           "p",
-          `Accepted model turns: ${data.agent.model_decisions} · decision age at checkpoint ${Math.round(age)}s`,
+          `Accepted model turns: ${data.agent.model_decisions} · decision age ${Math.round(age)}s at checkpoint`,
         ),
       );
     }

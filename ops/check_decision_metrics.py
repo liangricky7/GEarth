@@ -117,7 +117,7 @@ def run_checks():
     def start(saved_id="", ticks=80):
         environment = os.environ.copy()
         environment.update(FAULTLINE_STORAGE="local", FAULTLINE_WORLD="true", FAULTLINE_LIVE="true",
-            FAULTLINE_POPULATION="100", FAULTLINE_CAPACITY="8", FAULTLINE_TICKS=str(ticks),
+            FAULTLINE_POPULATION="160", FAULTLINE_CAPACITY="8", FAULTLINE_TICKS=str(ticks),
             FAULTLINE_INTERVAL_MS="10", FAULTLINE_SAVED_RUN_ID=saved_id,
             FAULTLINE_PORT="5080", WORKER_TOKEN="controlled-local-check",
             ASPNETCORE_CONTENTROOT=str(ROOT / "backend/Faultline.Api"))

@@ -23,9 +23,8 @@ Use PR titles in the form `<type>: <short description>`, with the same types abo
 
 Read the latest branch head before updating it. Preserve unrelated changes. A breaking shared contract change needs the engine, worker, storage and website owners to coordinate their adapters and fixtures in the same reviewed change.
 
-The existing [world-simulation-run-observations](https://github.com/liangricky7/dia-rockets/tree/world-simulation-run-observations) branch already contains expanded-world integration and observer work. [Review its changes](https://github.com/liangricky7/dia-rockets/compare/main...world-simulation-run-observations) before starting those tasks again. It is one commit ahead of main at the inspected revision `6da1096272cce54c8e087ec21c75c318c3fac3cb`; [draft PR #1](https://github.com/liangricky7/dia-rockets/pull/1) now makes this work reviewable.
-
-For new work that requires this unmerged branch, record it as the dependency/base and target the PR at that branch. After the dependency reaches main, update the task branch and retarget the PR to main. Avoid merging copies of the same existing work twice.
+The expanded-world implementation and the subsequent scheduling, compute, observer, metrics, banking and analytics branches are integrated into `main`. Start new tasks from the latest main revision. Original pull requests and commits retain the development history.
+For new work that requires a future unmerged branch, record it as the dependency/base and target the PR at that branch. After the dependency reaches main, update the task branch and retarget the PR to main. Avoid merging copies of the same existing work twice.
 
 ## Status meanings
 
@@ -39,7 +38,7 @@ For new work that requires this unmerged branch, record it as the dependency/bas
 
 Keep active and review cards in their numbered stage. **Optional** is a scope choice; it is not a separate implementation stage.
 
-## Current order and evidence
+## Task order and earlier evidence
 
 1. **Existing simulation:** keep the expanded core complete as reported; share the repository revision and [run instructions](https://github.com/liangricky7/dia-rockets/blob/world-simulation-run-observations/docs/faultline/08-world-runbook.md).
 2. **AI, scheduling and storage:** review existing worker, scheduler, measurements, API, persistence and integrated-run work.
@@ -50,7 +49,7 @@ Keep active and review cards in their numbered stage. **Optional** is a scope ch
 
 The branch README reports 30 C# and 14 Python tests. Workflow setup inspected source and recorded evidence; it did not rerun those tests. A subsequent browser review on October 10 confirmed the new hosted observer loads, but found a saved-run rendering error and mixed run data. See the Stage 4 cards and the local task board for reproduction steps.
 
-## Ahmad's cards
+## Earlier Ahmad card handoff
 
 - [Connect the Python worker to the expanded simulation](https://trello.com/c/Vkps1ook) — stage 2, implemented; awaiting review and integration.
 - [Check bad model responses, timeouts, and fallback behavior](https://trello.com/c/qn0TEGCa) — stage 2, checks passed; awaiting review and integration.
@@ -64,8 +63,12 @@ The branch README reports 30 C# and 14 Python tests. Workflow setup inspected so
 
 For a completed task, record: Trello URL, branch, PR (if applicable), exact revision, check command and result, saved run/report or screenshot, and any remaining limitation. Keep credentials in private configuration.
 
-## GitHub publishing status
+## Historical GitHub publishing status
 
 GitHub MCP access was verified on October 10, 2026. The connector lists `liangricky7`'s installation with `dia-rockets`; branch and draft PR creation succeeded. The workflow setup is on `docs/team-workflow`. Existing expanded-world work is in [draft PR #1](https://github.com/liangricky7/dia-rockets/pull/1). No application code was changed or merged by this setup.
 
 Ahmad's authorized worker failure checks are implemented on `test/worker-failure-checks`: 21 Python tests and 44 C# tests passed, with no runtime changes needed. Review and integration remain pending.
+
+## Branch consolidation evidence
+
+The branch cleanup integrates all remote branch heads while preserving their commit ancestry. See [integration evidence](evidence/branch-consolidation.json) for tests, a combined banking/analytics rule run and the independently reproduced upstream calibration failure. Source integration does not itself finish every Trello acceptance criterion or update the running cloud release.

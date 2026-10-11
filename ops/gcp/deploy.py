@@ -83,6 +83,12 @@ def cloud_config(config):
               if value is not None and (key == "DATABASE_URL" or key.startswith(("SPARK_A_", "SPARK_B_")))}
     if not result.get("DATABASE_URL"):
         raise ValueError("Neon DATABASE_URL is required")
+    if str(config.get("GEARTH_EXPERIMENTS_ENABLED", "false")).lower() == "true":
+        for key in ("NEON_API_KEY", "NEON_PROJECT_ID"):
+            if not config.get(key):
+                raise ValueError("Timeline experiments require NEON_API_KEY and NEON_PROJECT_ID")
+            result[key] = config[key]
+        result["GEARTH_EXPERIMENTS_ENABLED"] = "true"
     for prefix in ("SPARK_A", "SPARK_A_CITIZEN", "SPARK_B", "SPARK_B_CITIZEN"):
         for suffix in ("_MODEL", "_API_KEY"):
             if not result.get(prefix + suffix):
@@ -124,6 +130,9 @@ def main():
     parser.add_argument("--after-current", action="store_true", help="Wait for the active experiment before switching releases")
     parser.add_argument("--start", action="store_true", help="Start the verified collector after installation")
     options = parser.parse_args()
+    configured = dotenv_values(options.config, interpolate=False)
+    if options.base_archive and str(configured.get("GEARTH_EXPERIMENTS_ENABLED", "false")).lower() == "true":
+        parser.error("Timeline experiments require a full engine release; omit --base-archive.")
     directory = ROOT / ".data/gcp"
     directory.mkdir(parents=True, exist_ok=True)
     archive = directory / "source.tar.gz"
@@ -132,7 +141,7 @@ def main():
     keys = subprocess.check_output(["ssh-keygen", "-F", "100.70.23.23", "-f", str(Path.home() / ".ssh/known_hosts")])
     known_hosts.write_bytes(keys)
     source = bundle_source(ROOT, archive, options.base_archive)
-    write_config(private, cloud_config(dotenv_values(options.config, interpolate=False)))
+    write_config(private, cloud_config(configured))
     print("Prepared source", source["source_sha256"], flush=True)
     if options.prepare_only:
         return

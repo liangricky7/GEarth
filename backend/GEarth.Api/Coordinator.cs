@@ -162,11 +162,25 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             });
             if (change is [var countryId, var profileId])
                 SocietyFactory.ChangeGovernment(world, countryId, profileId);
+            if (Environment.GetEnvironmentVariable("GEARTH_EXPERIMENT_EDIT") is { Length: > 0 } editPath)
+            {
+                var edit = System.Text.Json.JsonSerializer.Deserialize<ExperimentEdit>(
+                    await File.ReadAllTextAsync(editPath, cancellationToken), Wire.Json)
+                    ?? throw new ArgumentException("Experiment edit missing");
+                ExperimentInterventions.Apply(world, edit,
+                    Environment.GetEnvironmentVariable("GEARTH_EXPERIMENT_ID") ?? throw new ArgumentException("Experiment ID missing"));
+            }
         }
         world.Society!.WorkerCapacity = capacity;
         // Renderer history belongs to fresh run identities; forks cannot append to the parent's replay.
         world.RendererCaptureEnabled = store is IRendererStore && string.IsNullOrEmpty(resumeId);
         world.Society.TickIntervalMilliseconds = interval;
+        using var experimentMetrics = Environment.GetEnvironmentVariable("GEARTH_EXPERIMENT_METRICS") is { Length: > 0 } metricPath
+            ? new ExperimentMetricWriter(metricPath,
+                Environment.GetEnvironmentVariable("GEARTH_EXPERIMENT_SCOPE") ?? "",
+                Environment.GetEnvironmentVariable("GEARTH_EXPERIMENT_TARGET") ?? "",
+                Environment.GetEnvironmentVariable("GEARTH_TIMELINE") ?? "", world) : null;
+        experimentMetrics?.Day(world);
         var providerConfig = Environment.GetEnvironmentVariable("GEARTH_COMPUTE_PROVIDERS");
         if (!string.IsNullOrEmpty(providerConfig))
             world.Society.ComputeProviders = System.Text.Json.JsonSerializer.Deserialize<ComputeProvider[]>(providerConfig, Wire.Json) ?? [];
@@ -344,6 +358,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     Dispatch();
                 ApplyCompleted();
                 history?.Day(world);
+                experimentMetrics?.Day(world);
                 var nextTick = started.AddMilliseconds(interval);
                 while (DateTimeOffset.UtcNow < nextTick)
                 {
@@ -383,6 +398,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             SocietyEconomy.AssertConservation(world);
             RunAudit.Day(world, terminal: true);
             await Commit();
+            experimentMetrics?.Day(world);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

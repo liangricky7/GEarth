@@ -15,6 +15,7 @@
     byId("simulation-reset").disabled = transition;
     byId("team-logout").disabled = transition;
     if (state) byId("simulation-state").textContent = ({running:"Running continuously",paused:"Stopped · world saved",pausing:"Stopping · saving decisions",stopped:"Stopped",starting:"Starting",error:"Needs attention"})[state.state] || state.state;
+    document.dispatchEvent(new CustomEvent("gearth-controls", {detail:{authenticated,enabled}}));
   }
   async function request(path, body) {
     const response = await fetch("/api/control/" + path, body === undefined ? {cache:"no-store"} : {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});

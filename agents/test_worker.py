@@ -335,6 +335,34 @@ def test_citizens_sample_with_some_randomness_and_institutions_do_not():
     assert worker.build_prompt(government)["temperature"] == 0
 
 
+@pytest.mark.parametrize("role", ["citizen", "resident", "government", "entrepreneur"])
+@pytest.mark.parametrize("ranged", [False, True])
+def test_short_citizen_generation_preserves_institution_budget_and_action_validation(role, ranged):
+    job = make_job()
+    job.observation = {"world_stage": 2, "self": {"role": role}}
+    if ranged:
+        job.candidates = [{"action_type": "household_policy", "params": {
+            "food": {"min": 0, "max": 20, "default": 8},
+        }}]
+    citizen = role in {"citizen", "resident"}
+    prompt = worker.build_prompt(job, "Qwen/Qwen3-4B")
+    assert prompt["max_tokens"] == (128 if citizen else 512)
+    assert prompt["chat_template_kwargs"] == {"enable_thinking": False}
+    assert f"at most {40 if citizen else 100} characters" in prompt["messages"][0]["content"]
+    action = {"choice": 0, "reason": "Meet needs within budget"}
+    if ranged:
+        values = worker.build_values_prompt(job, 0, action["reason"], "Qwen/Qwen3-4B")
+        assert values["max_tokens"] == (128 if citizen else 512)
+        assert values["response_format"]["type"] == "json_schema"
+        action["values"] = {"food": 8}
+        assert worker.validate_action(action, job)["params"] == {"food": 8}
+        action["values"]["food"] = 21
+        with pytest.raises(ValueError, match="INVALID_VALUES"):
+            worker.validate_action(action, job)
+    else:
+        assert worker.validate_action(action, job)["action_type"] == "hold"
+
+
 def test_free_numbers_fill_ranged_fields_within_bounds():
     job = make_job()
     job.observation = {"world_stage": 2}

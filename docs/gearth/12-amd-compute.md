@@ -1,6 +1,8 @@
 # AMD compute integration
 
-The [all-node Qwen setup](18-all-node-qwen-setup.md) adds a notebook that loads both pinned Qwen3-8B and Qwen3-4B models. Use that guide for the planned matching deployment across AMD and both Sparks. The live measurements below describe the existing 4B-only server, which remains unchanged until the new notebook is run.
+**October 11 update:** the existing 4B endpoint now uses bounded microbatch serving with 32 AMD slots and generation pacing targeting 90% average GPU utilization. Brief dashboard spikes above 95% remain possible. The live worker and private configuration have been updated while preserving the running world. See [deployment, measurements and recovery](25-amd-batch-optimization.md). The single-slot measurements and installation steps below describe the original deployment; do not restart that original server alongside the batch server.
+
+The [all-node Qwen setup](18-all-node-qwen-setup.md) adds a notebook that loads both pinned Qwen3-8B and Qwen3-4B models. AMD currently serves the existing cached Qwen3-4B weights; the Sparks serve both role-specific models.
 
 ## Current status
 

@@ -100,6 +100,13 @@ for field in ("active_features", "features", "economy_configuration"):
 projections["run_metadata"][2].update(banking_paused=p("banking_paused", "boolean"), capture_contract_version=p("capture_contract_version"))
 projections["run_metadata"][2].update(condition_signature=F.lit(conditions["signature"]), conditions_known=F.lit(conditions["known"]),
     conditions_unknown_json=F.lit(canonical(conditions["unknown"]).decode()))
+projections["bank_ledger"] = ("bank_ledger", ["run_id", "sequence"], {
+    "bank_id": p("bank_id"), "sender_account_id": p("from"), "recipient_account_id": p("to"),
+    "transfer_kind": p("kind"), "amount_minor": p("amount_minor", "long"),
+    "credit_id": p("credit_id"), "event_id": p("event_id"), "transaction_group_id": p("transaction_group_id"),
+    "decision_id": p("decision_id"),
+    "reserves_minor": p("reserves_minor", "long"), "deposits_minor": p("deposits_minor", "long"),
+    "loans_minor": p("loans_minor", "long"), "equity_minor": p("equity_minor", "long")})
 projections["decision_request"][2]["menu_parameter_contract"] = p("menu_parameter_contract")
 projections["decision_result"][2].update(selected_params_json=F.coalesce(p("selected_params"), p("result.action.params")),
     selection_match_count=p("selection_match_count", "long"), selection_provenance=p("selection_provenance"))

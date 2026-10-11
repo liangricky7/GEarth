@@ -43,8 +43,10 @@ public sealed class BankTests
         SocietyBank.Week(world, world.Society.Nations["aster"]);
         var loan = Assert.Single(world.Society.Credit);
         Assert.Equal("active", loan.Status);
-        Assert.Equal(bankBefore - loan.PrincipalMinor, bank.CashMinor);
-        Assert.Equal(firmBefore + loan.PrincipalMinor, firm.CashMinor);
+        Assert.Equal(bankBefore, bank.CashMinor);
+        Assert.Equal(firmBefore, firm.CashMinor);
+        Assert.Equal(loan.PrincipalMinor, firm.DepositMinor);
+        Assert.True(loan.DepositCreated);
         return (firm, bank, loan);
     }
 
@@ -71,14 +73,16 @@ public sealed class BankTests
     {
         var world = NewWorld();
         var (firm, bank, loan) = FundLoan(world);
-        var bankAfterFunding = bank.CashMinor;
+        var equityAfterFunding = SocietyBank.Equity(world, bank);
+        bank.DepositRatePct = 0; // isolate interest income from interest owed to other depositors
         Give(world, firm, loan.PrincipalMinor); // enough for every installment
 
         for (var week = 0; week < SocietyBank.LoanWeeks && loan.Status == "active"; week++)
             SocietyBank.Week(world, world.Society!.Nations["aster"]);
 
         Assert.Equal("repaid", loan.Status);
-        Assert.True(bank.CashMinor > bankAfterFunding + loan.PrincipalMinor); // principal back plus interest
+        Assert.Equal(equityAfterFunding + loan.WeeklyInterestMinor * SocietyBank.LoanWeeks, SocietyBank.Equity(world, bank));
+        Assert.Equal(loan.PrincipalMinor, world.Society!.CreditRetiredMinor);
         Assert.Single(world.Events, item => item.EventType == "loan_settled");
         SocietyEconomy.AssertConservation(world);
     }
@@ -90,7 +94,7 @@ public sealed class BankTests
         var (firm, bank, loan) = FundLoan(world);
         var government = world.Agents["aster_government"];
         var owner = world.Agents[firm.OwnerId!];
-        SocietyEconomy.Transfer(world, firm, government, firm.CashMinor);
+        SocietyEconomy.Transfer(world, firm, government, SocietyBank.Liquid(world, firm));
         SocietyEconomy.Transfer(world, owner, government, owner.CashMinor - 1000); // the owner can cover only 1,000
         foreach (var good in SocietyFactory.Goods) // nothing left to sell on closure
         {

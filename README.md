@@ -12,7 +12,7 @@ Group members can open the website and unlock controls using the shared team pas
 
 See the [design](gearth-design.md) for the full specification, current limitations, decisions and their reasons. Existing deployments require the [GEarth cutover](docs/gearth/24-gearth-rename.md) to preserve saved data.
 
-The full-year calibration test passes in the current rename verification. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
+The full-year calibration test covers the economic loop; no sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Banks create deposits when lending, subject to simplified capital and reserve constraints. Ore, fuel, industrial inputs and freight costs constrain production in both market and planned economies. See the [post-bank follow-up](docs/gearth/post-bank-followup.md) for the model protocol, economic fixes and validation limits. Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
 
 ## Run locally
 
@@ -67,6 +67,8 @@ npm run test:observer
 Earlier consolidation results, including the previous calibration failure, remain in [historical integration evidence](docs/gearth/evidence/main-integration.json). Current rename checks passed 156 C# and 231 Python tests; see [rename verification](docs/gearth/evidence/gearth-rename-20261011.json). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures. Browser visual layout remains unverified.
 
 For observer changes, `node ops/check_observer.cjs` checks desktop/mobile rendering, saved-run switching with delayed responses, agent filters and pagination using API fixtures and installed Chrome or Edge. Screenshots are saved under ignored `artifacts/local/`.
+
+For Kenny's visual renderer, see the [weekly replay contract and client](renderer/README.md). Fresh runs capture all-agent weekly frames independently of analytics; the read-only API and `ops/export_renderer.py` feed live or saved playback. Older runs retain their recorded data without fabricated missing weeks.
 
 For a completed world being served, `ops/check_world.py` checks conservation, durable ordered events, checkpoint readback, pagination, request bounds and read-only assets. Add `--require-model` for real model turns and `--require-full-coverage` only when explicitly qualifying coverage; coverage uses actual decision makers rather than owner-controlled firms. `ops/check_stage2_api.py` checks the committed API without new inference.
 

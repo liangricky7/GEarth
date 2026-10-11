@@ -14,7 +14,7 @@ public static class SocietyFactory
         ("grove", "Dyland", 3, 23), ("haven", "Haven", 25, 110),
         ("ionia", "Ionia", 8, 80), ("jade", "Jade", 35, 140)
     ];
-    public static readonly string[] Goods = ["food", "energy", "tools", "medicine"];
+    public static readonly string[] Goods = ["food", "energy", "tools", "medicine", "ore", "fuel"];
     // Government, media and every firm (the bank is the one firm in the bank sector).
     public static readonly int InstitutionsPerCountry = 2 + SocietyLabor.Sectors.Sum(sector => sector.Firms);
 
@@ -25,7 +25,7 @@ public static class SocietyFactory
     // Teachers staff the state school (about 5 in 100 workers, near the real 3-6%).
     private static readonly (string Occupation, int Weight)[] JobShares =
     [
-        ("farmer", 21), ("energy_worker", 6), ("factory_worker", 25), ("service_worker", 24),
+        ("farmer", 21), ("energy_worker", 6), ("factory_worker", 25), ("service_worker", 16), ("miner", 8),
         ("dockworker", 2), ("teacher", 5), ("soldier", 6), ("unemployed", 9)
     ];
 
@@ -112,6 +112,7 @@ public static class SocietyFactory
                 EnergyMultiplier = new[] { 0.8, 0.55, 1.25, 1.6, 1.1 }[index % 5]
             };
             world.Society.Nations.Add(countryId, nation);
+            SocietyResources.Setup(world, nation);
             world.Countries.Add(Wire.Node(new { id = countryId, name, lat, lon, government_id = profile.Id }));
             world.Locations.Add(Wire.Node(new { id = countryId + "_city", country_id = countryId, lat, lon }));
 
@@ -126,11 +127,14 @@ public static class SocietyFactory
                 firm.WageOfferMinor = SocietyLabor.TableWage[sector.Occupation];
                 return firm;
             }).ToArray());
-            var hiring = SocietyLabor.Sectors.ToDictionary(sector => sector.Occupation, _ => 0);
+            var hiring = SocietyLabor.Sectors.Select(sector => sector.Occupation).Distinct().ToDictionary(occupation => occupation, _ => 0);
             Agent NextFirm(string occupation)
             {
-                var sector = SocietyLabor.Sectors.Single(sector => sector.Occupation == occupation);
-                return firms[sector.Id][hiring[occupation]++ % sector.Firms];
+                var number = hiring[occupation]++;
+                var sector = occupation == "miner"
+                    ? SocietyLabor.SectorOf(SocietyResources.MiningSector(nation, number))
+                    : SocietyLabor.Sectors.Single(sector => sector.Occupation == occupation);
+                return firms[sector.Id][number % sector.Firms];
             }
             var number = 0;
             Agent NewResident(string occupation, long cash)
@@ -199,8 +203,11 @@ public static class SocietyFactory
                 switch (sectorId)
                 {
                     case "food": firm.Inventory["food"] = n * 10; firm.Inventory["energy"] = n * 2; break;
-                    case "energy": firm.Inventory["energy"] = n * 10; break;
-                    case "tools": firm.Inventory["tools"] = n * 9; firm.Inventory["energy"] = n; break;
+                    case "energy": firm.Inventory["energy"] = n * 10; firm.Inventory["fuel"] = n * 2; break;
+                    case "tools": firm.Inventory["tools"] = n * 9; firm.Inventory["energy"] = n; firm.Inventory["ore"] = n * 3; break;
+                    case "mine": firm.Inventory["ore"] = n * 3; firm.Inventory["energy"] = n; break;
+                    case "well": firm.Inventory["fuel"] = n * 3; firm.Inventory["energy"] = n; break;
+                    case "entertainment" or "school": firm.Inventory["energy"] = n / 2 + 1; break;
                     case "medicine": firm.Inventory["medicine"] = n; firm.Inventory["energy"] = n / 2 + 1; firm.Inventory["tools"] = n / 2 + 1; break;
                     case "clinic": firm.Inventory["medicine"] = n / 3 + 1; break;
                 }
@@ -232,7 +239,7 @@ public static class SocietyFactory
         }
         world.InitialCashMinor = world.Agents.Values.Sum(agent => agent.CashMinor);
         world.ScenarioHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms12:bank:election100:crisis40:{AgentEndowments.Version}"))).ToLowerInvariant();
+            $"earthlike_v3:{world.Agents.Count}:{seed}:{rotation}:daily:labor:qol:firms16:resources_v1:bank:election100:crisis40:{AgentEndowments.Version}"))).ToLowerInvariant();
         SocietyEconomy.UpdateMetrics(world);
         world.Emit("world_initialized", "scenario", [world.Id], new
         {
@@ -272,7 +279,7 @@ public static class SocietyFactory
 
     private static IEnumerable<string> AllocateJobs(int workers, bool planned)
     {
-        var essentials = new[] { "farmer", "energy_worker", "factory_worker", "service_worker", "researcher", "doctor", "dockworker", "teacher" };
+        var essentials = new[] { "farmer", "energy_worker", "factory_worker", "service_worker", "researcher", "doctor", "dockworker", "teacher", "miner", "miner" };
         var jobs = essentials.Take(workers).ToList();
         var rest = workers - jobs.Count;
         foreach (var (occupation, weight) in JobShares)
@@ -285,7 +292,7 @@ public static class SocietyFactory
     public static double Sample(int seed, string id, string trait) =>
         SHA256.HashData(Encoding.UTF8.GetBytes($"{seed}:{id}:{trait}"))[0] / 255.0;
 
-    public static int BasePrice(string good) => SocietyLabor.SectorOf(good).BasePrice;
+    public static int BasePrice(string good) => SocietyResources.SectorForGood(good).BasePrice;
 
     private static void AddRoutes(World world)
     {

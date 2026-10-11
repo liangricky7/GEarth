@@ -6,7 +6,9 @@ namespace GEarth.Core;
 public sealed record RunObservation(string Category, string Text, string[] EvidenceIds);
 public sealed record BehaviorCount(string Role, string Action, string Source, int Count, int Agents);
 public sealed record CountryOutcome(string Id, string Government, double NeedsMet, double Approval,
-    double GiniCash, long TreasuryMinor, long TradeValueMinor, int UnmetNeeds);
+    double GiniCash, long TreasuryMinor, long TradeValueMinor, int UnmetNeeds,
+    int EmployedResidents = 0, int Unemployed = 0, int LaborForce = 0, int Nonparticipants = 0,
+    double GiniDisposableIncome = 0, double? GiniNetWealth = null, long MedianRealDisposableIncomeMinor = 0);
 public sealed record DecisionExample(string AgentId, string Action, string Reason, string EventId, int Tick);
 public sealed record RunNotes(string RunId, string Status, string Mode, int Seed, int Tick, long ThroughSequence,
     DateTimeOffset GeneratedAt, bool HistoryComplete, int Population, int ModelCoverage,
@@ -117,9 +119,10 @@ public static class RunAnalysis
         var closed = events.Where(item => item.EventType == "business_closed").ToArray();
         if (world.Society is { } labor)
         {
-            var residents = world.Agents.Values.Count(agent => agent.Role is "citizen" or "entrepreneur");
+            var residents = world.Agents.Values.Count(SocietyLabor.IsResident);
             var unemployed = labor.Nations.Values.Sum(nation => nation.Unemployed);
-            observations.Add(new("labor", $"{started.Length} businesses were started ({started.Count(item => item.CauseIds.Length > 0)} by agent decision, the rest by the empty-sector rule) and {closed.Length} closed; {unemployed} of {residents} residents ({(residents == 0 ? 0 : unemployed / (double)residents):P0}) were unemployed at the last weekly review. Wages follow employer offers; entrepreneurs are paid from profit and receive business cash above 8 weeks of payroll as dividends.", Evidence(started.Concat(closed))));
+            var force = labor.Nations.Values.Sum(nation => nation.LaborForce);
+            observations.Add(new("labor", $"{started.Length} businesses were started ({started.Count(item => item.CauseIds.Length > 0)} by agent decision, the rest by the empty-sector rule) and {closed.Length} closed; {unemployed} unemployed in a labor force of {force} ({(force == 0 ? "unavailable" : (unemployed / (double)force).ToString("P1", CultureInfo.InvariantCulture))}), among {residents} residents. Available citizens participate in automatic job matching; students and work refusals are excluded. Active business owners count as employed. Wages follow employer offers; entrepreneurs receive profit draws and dividends.", Evidence(started.Concat(closed))));
         }
         if (world.MedicineRoutePlan is { } plan)
             observations.Add(new("routing", $"The final medicine route plan required {plan.TravelTicks} travel ticks and {Money(plan.CostMinor)} WLD. A route plan is not a completed delivery.", Evidence(accepted.Where(item => Action(item) == "choose_route"))));
@@ -129,14 +132,35 @@ public static class RunAnalysis
                 .Select(group => $"{group.Key}: {group.Count()}");
             observations.Add(new("reliability", $"{fallback.Length} inference fallback results and {rejected.Length} rejected decisions were recorded{(rejected.Length > 0 ? $" ({string.Join(", ", codes)})" : "")}. They do not count toward accepted model coverage.", Evidence(rejected.Concat(fallback))));
         }
+        // Worker latency per backend, for tuning the decision timeout (a timed-out decision becomes a fallback hold).
+        foreach (var group in events.Where(item => item.EventType is "action_accepted" or "action_rejected" && item.Source is "model" or "rule_fallback")
+            .GroupBy(item => item.Payload["backend"]?.GetValue<string>() ?? "unrecorded").OrderBy(group => group.Key))
+        {
+            var seconds = group.Select(item => (item.Payload["latency_ms"]?.GetValue<double>() ?? 0) / 1000).Order().ToArray();
+            var timeouts = group.Count(item => item.Payload["error_category"]?.GetValue<string>() is "model_timeout" or "worker_timeout");
+            observations.Add(new("latency", string.Create(CultureInfo.InvariantCulture,
+                $"{group.Key}: worker latency p50 {seconds[(seconds.Length - 1) / 2]:0.0}s, p95 {seconds[(int)Math.Ceiling(seconds.Length * 0.95) - 1]:0.0}s, max {seconds[^1]:0.0}s over {seconds.Length} decisions; {timeouts} timed out."),
+                Evidence(group.Where(item => item.Payload["error_category"]?.GetValue<string>() is "model_timeout" or "worker_timeout"))));
+        }
+        foreach (var group in events.Where(item => item.EventType is "action_accepted" or "action_rejected").GroupBy(item => Role(world, item)))
+        {
+            var holds = group.Count(item => item.Source == "rule_fallback");
+            var failures = group.Where(item => item.Source == "rule_fallback").GroupBy(item =>
+                item.Payload["error_code"]?.GetValue<string>() ?? item.Payload["error_category"]?.GetValue<string>() ?? "unrecorded")
+                .Select(errors => $"{errors.Key}: {errors.Count()}");
+            observations.Add(new("reliability_by_role", $"{group.Key}: {holds}/{group.Count()} completed turns became inference fallbacks{(holds > 0 ? $" ({string.Join(", ", failures)})" : "")}; {group.Count(item => item.EventType == "action_rejected")} engine rejections.", Evidence(group.Where(item => item.Source == "rule_fallback"))));
+        }
         var countries = world.Society?.Nations.Values.Select(nation => new CountryOutcome(nation.Id,
             Governments.Get(nation.GovernmentId).Name, nation.History.LastOrDefault()?.NeedsMet ?? 1,
             nation.Approval, nation.GiniCash, world.Agents[nation.Id + "_government"].CashMinor,
-            nation.TradeValueMinor, nation.UnmetNeeds)).ToArray() ?? [];
+            nation.TradeValueMinor, nation.UnmetNeeds, nation.EmployedResidents, nation.Unemployed, nation.LaborForce,
+            nation.Nonparticipants, nation.GiniDisposableIncome, nation.GiniNetWealth, nation.MedianRealDisposableIncomeMinor)).ToArray() ?? [];
         foreach (var country in countries.OrderBy(item => item.NeedsMet).Take(3))
-            observations.Add(new("outcome", $"{country.Id} ({country.Government}) met {country.NeedsMet:P0} of needs in its latest economic cycle; cumulative unmet needs were {country.UnmetNeeds}, support {country.Approval:P0}, and cash Gini {country.GiniCash:F3}.", Evidence(events.Where(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(country.Id)).TakeLast(1))));
+            observations.Add(new("outcome", $"{country.Id} ({country.Government}) met {country.NeedsMet:P0} of needs in its latest economic cycle; cumulative unmet needs were {country.UnmetNeeds}, support {country.Approval:P0}, and cash-plus-deposits Gini {country.GiniCash:F3}.", Evidence(events.Where(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(country.Id)).TakeLast(1))));
         var cash = world.Agents.Values.Sum(agent => agent.CashMinor) + (world.Society?.Cargo.Sum(cargo => cargo.EscrowMinor) ?? 0);
         observations.Add(new("accounting", $"Cash plus goods escrow at this checkpoint was {Money(cash)} WLD against {Money(world.InitialCashMinor)} WLD initially; {(cash == world.InitialCashMinor ? "the totals reconcile" : "the totals do not reconcile")}. This is a checkpoint comparison, not a causal economic conclusion.", []));
+        if (world.Society is { } money)
+            observations.Add(new("accounting", $"Broad money (non-bank cash, deposits and goods escrow) was {Money(SocietyBank.BroadMoney(world))} WLD. Deposit-creating loans issued {Money(money.CreditCreatedMinor)} WLD of credit and retired {Money(money.CreditRetiredMinor)} WLD of principal. Base cash is conserved; broad money can expand and contract.", []));
         var initialized = events.FirstOrDefault(item => item.EventType == "world_initialized");
         if (initialized?.Payload["agent_weights"]?.GetValue<string>() == AgentEndowments.Version)
         {
@@ -153,6 +177,8 @@ public static class RunAnalysis
             "These are descriptive observations from one configured fictional run, not causal conclusions about real governments.",
             "Government profiles share an economic engine; geography, resources, personality, timing and migration also affect outcomes.",
             "Model explanations are attributed statements, not proof of private motives or factual accuracy.",
+            "Cash Gini is the legacy field for resident cash plus deposits, not income or net wealth. Net wealth includes debt, wage claims and estimated business equity, excludes land/fixed capital, and its Gini can exceed one with negative balances.",
+            "Real disposable income uses a fixed seven-food/seven-energy basket including sales tax, before subsidy; agent-day records allow matched-person comparisons. Historical roles absent from older events are unrecorded, not inferred from current roles.",
             "Fallbacks and rule choices are separated from accepted model behavior. Wall duration may include host or network interruptions.",
             "When multiple models supply decisions, model assignment can affect behavior and is an additional comparison confound.",
             complete ? "Complete ordered event history was used through the stated sequence." : "Event history is incomplete; behavior counts describe only the retrieved events."
@@ -170,7 +196,7 @@ public static class RunAnalysis
             notes.Add(new(category, $"{label}: {selected.Length}.", Evidence(selected)));
     }
 
-    private static string Role(World world, WorldEvent item) => world.Agents.GetValueOrDefault(item.EntityIds[0])?.Role ?? "unknown";
+    private static string Role(World world, WorldEvent item) => item.Payload["role_at_decision"]?.GetValue<string>() ?? "unrecorded";
     private static string Action(WorldEvent item) => item.Payload["action"]?["action_type"]?.GetValue<string>() ?? "unknown";
     private static string[] Evidence(IEnumerable<WorldEvent> events) => events.TakeLast(3).Select(item => item.EventId).Distinct().ToArray();
     private static string Money(long minor) => (minor / 100m).ToString("0.00", CultureInfo.InvariantCulture);
@@ -201,7 +227,7 @@ public static class RunAnalysis
         {
             text.AppendLine("\n## Country outcomes at the final observed checkpoint\n");
             text.AppendLine("Needs met is for the latest economic cycle; unmet needs and delivered trade value are cumulative.\n");
-            text.AppendLine("| Country | Government | Needs met | Support | Cash Gini | Treasury WLD | Trade WLD | Unmet needs |\n|---|---|---:|---:|---:|---:|---:|---:|");
+            text.AppendLine("| Country | Government | Needs met | Support | Cash + deposits Gini | Treasury WLD | Trade WLD | Unmet needs |\n|---|---|---:|---:|---:|---:|---:|---:|");
             foreach (var country in notes.Countries)
                 text.AppendLine(FormattableString.Invariant($"| {country.Id} | {country.Government} | {country.NeedsMet:P0} | {country.Approval:P0} | {country.GiniCash:F3} | {Money(country.TreasuryMinor)} | {Money(country.TradeValueMinor)} | {country.UnmetNeeds} |"));
         }

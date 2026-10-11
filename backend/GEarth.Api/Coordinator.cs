@@ -164,6 +164,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 SocietyFactory.ChangeGovernment(world, countryId, profileId);
         }
         world.Society!.WorkerCapacity = capacity;
+        // Renderer history belongs to fresh run identities; forks cannot append to the parent's replay.
+        world.RendererCaptureEnabled = store is IRendererStore && string.IsNullOrEmpty(resumeId);
         world.Society.TickIntervalMilliseconds = interval;
         var providerConfig = Environment.GetEnvironmentVariable("GEARTH_COMPUTE_PROVIDERS");
         if (!string.IsNullOrEmpty(providerConfig))
@@ -183,32 +185,79 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             ? new HistoryWriter(HistoryWriter.PathFor(Environment.GetEnvironmentVariable("GEARTH_TIMELINE") is { Length: > 0 } timeline
                 ? timeline : world.Id), world) : null;
         history?.Day(world);
+        // A background checkpoint upload and the checkpoint it carries until the store confirms it.
+        var saving = Task.CompletedTask;
+        (World World, string Json)? unsaved = null;
 
-        async Task Commit(CancellationToken? token = null)
+        // A Neon upload takes seconds, so in-loop commits can run in the background while the next tick
+        // dispatches decisions; the tick awaits it before ending. A background upload saves the API copy
+        // (holding the pending audit rows), never the live world.
+        async Task Commit(CancellationToken? token = null, bool background = false)
         {
+            await saving;
             world.UpdatedAt = DateTimeOffset.UtcNow;
             SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, world.UpdatedAt);
             world.Revision = revision + 1;
             // One serialization feeds both the store and the API's read-only copy.
             var serialized = System.Text.Json.JsonSerializer.Serialize(world, Wire.Json);
-            await store.Save(world, revision, token ?? cancellationToken, serialized);
-            revision = world.Revision;
+            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+            var target = world;
+            if (background)
+            {
+                copy.PendingAudit.AddRange(world.PendingAudit);
+                world.PendingAudit.Clear();
+                target = copy;
+            }
+            unsaved = (target, serialized);
+            saving = Save(target, serialized, copy, token ?? cancellationToken, pending.Count);
+            if (!background)
+                await saving;
             history?.Flush();
             world.Events = world.Events.TakeLast(512).ToList();
-            var copy = System.Text.Json.JsonSerializer.Deserialize<World>(serialized, Wire.Json)!;
+        }
+
+        async Task Save(World target, string serialized, World copy, CancellationToken token, int pendingCount)
+        {
+            await store.Save(target, target.Revision - 1, token, serialized);
+            revision = target.Revision;
+            unsaved = null;
             copy.Events = copy.Events.TakeLast(512).ToList();
             current = copy;
             logger.LogInformation("World tick {Tick}: {Coverage}/{Population} model coverage, {Pending} pending",
-                world.Tick, world.Agents.Values.Count(agent => agent.ModelDecisions > 0), world.Agents.Count, pending.Count);
+                copy.Tick, copy.Agents.Values.Count(agent => agent.ModelDecisions > 0), copy.Agents.Count, pendingCount);
         }
 
         void ApplyCompleted()
         {
             foreach (var request in pending.TakeCompleted())
             {
-                SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), DateTimeOffset.UtcNow);
+                var now = DateTimeOffset.UtcNow;
+                var record = SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), now);
                 dispatched.Remove(request.Job.RequestId);
+                if (live && !pause.Requested && SocietyEngine.Refresh(world, record, now) is { } refreshed)
+                    Start(refreshed, now);
             }
+        }
+
+        bool Start(DecisionJob job, DateTimeOffset now)
+        {
+            if (!pending.TryStart(job, (request, token) =>
+            {
+                var task = Decide(request, live, token);
+                dispatched.Add(request.RequestId, new PendingDecision(request, task));
+                return task;
+            }))
+                return false;
+            RunAudit.Request(world, job, now);
+            world.Emit("decision_requested", "rule", [job.AgentId], new
+            {
+                decision_id = job.RequestId, requested_at = now, role_at_decision = world.Agents[job.AgentId].Role,
+                observation_tick = job.ObservationTick, job.Deadline, mode = world.Mode, job.RefreshAttempt
+            });
+            var agent = world.Agents[job.AgentId];
+            agent.LastAttemptAt = now;
+            agent.LastAttemptTick = world.Tick;
+            return true;
         }
 
         void Dispatch()
@@ -223,23 +272,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             {
                 var now = DateTimeOffset.UtcNow;
                 var job = SocietyEngine.Observe(world, agent.Id, now);
-                if (pending.TryStart(job, (request, token) =>
-                {
-                    var task = Decide(request, live, token);
-                    dispatched.Add(request.RequestId, new PendingDecision(request, task));
-                    return task;
-                }))
-                {
-                    RunAudit.Request(world, job, now);
-                    world.Emit("decision_requested", "rule", [agent.Id], new
-                    {
-                        decision_id = job.RequestId, requested_at = now,
-                        observation_tick = job.ObservationTick, job.Deadline, mode = world.Mode
-                    });
-                    agent.LastAttemptAt = now;
-                    agent.LastAttemptTick = world.Tick;
+                if (Start(job, now))
                     started.Add(agent.Id);
-                }
             }
             queue = new Queue<string>(queue.Where(id => !started.Contains(id)));
             SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, DateTimeOffset.UtcNow);
@@ -289,7 +323,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     await DrainWeek();
                     // Analytics commits below include the same drained boundary. Other runs keep the fork checkpoints.
                     if (!world.AnalyticsEnabled && tick > firstTick)
-                        await Commit();
+                        await Commit(background: store.Kind == "neon_https");
                 }
                 if (world.AnalyticsEnabled && world.Tick > 0)
                 {
@@ -297,9 +331,12 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     // Retain every day and transfer, but persist Neon audit batches at the drained
                     // week boundary. Completion and graceful shutdown flush the remaining days.
                     if (store.Kind != "neon_https" || weekBoundary)
-                        await Commit();
+                        await Commit(background: store.Kind == "neon_https");
                 }
                 SocietyEngine.Advance(world);
+                // Capture the actual seven-day endpoint after payroll, before next week's model turns.
+                if (world.RendererCaptureEnabled && world.Tick % SocietyLabor.DaysPerWeek == 0 && tick < tickLimit)
+                    await Commit();
                 if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)
                     foreach (var agent in SocietyScheduler.WeeklyCohort(world))
                         queue.Enqueue(agent.Id);
@@ -332,6 +369,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     ApplyCompleted();
                     Dispatch();
                 }
+                await saving;
             }
             await DrainWeek();
             RunAudit.Day(world);
@@ -350,10 +388,19 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         {
             // Cancellation can arrive after the database committed but before its response reached us.
             // Resolve that exact revision first, then write the stopped status as a new revision.
-            if (world.Revision > revision)
+            try
             {
-                await store.Save(world, revision, CancellationToken.None);
-                revision = world.Revision;
+                await saving;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            saving = Task.CompletedTask;
+            if (unsaved is { } checkpoint)
+            {
+                await store.Save(checkpoint.World, revision, CancellationToken.None, checkpoint.Json);
+                revision = checkpoint.World.Revision;
+                unsaved = null;
             }
             var abandoned = await pending.CancelAndDrainRequests();
             foreach (var job in abandoned)
@@ -381,6 +428,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         }
         finally
         {
+            // Let an upload still in flight after a failure finish; its own error was already observed or is moot.
+            await Task.WhenAny(saving);
             history?.End(world);
         }
     }

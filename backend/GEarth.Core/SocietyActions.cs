@@ -24,7 +24,7 @@ public static class SocietyActions
                     options.Add(Make("health_policy", new { visit_doctor_below_health = threshold }));
                 // Seeing a doctor now, when unwell and a clinic can take the visit.
                 if (agent.Health < 70 && SocietyEconomy.OpenClinic(world, world.Society!.Nations[agent.CountryId]) is { } clinic
-                    && agent.CashMinor >= clinic.PriceMinor)
+                    && SocietyBank.Liquid(world, agent) >= clinic.PriceMinor)
                     options.Add(Make("visit_doctor", new { }));
                 if (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank)
                     options.Add(Make("bank_savings", agent.KeepsSavingsInBank
@@ -53,9 +53,9 @@ public static class SocietyActions
                     else if (SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
                         options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch, loan_minor = loan }));
                 }
-                if (agent.CashMinor >= 100)
+                if (SocietyBank.Liquid(world, agent) >= 100)
                     foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.Id != agent.CountryId)
-                        .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
+                        .Where(nation => SocietyEngine.CanMigrate(world, agent, nation.Id))
                         .OrderByDescending(nation => nation.Approval).Take(2))
                         options.Add(Make("migrate", new { country_id = nation.Id, cost_minor = 100 }));
                 break;
@@ -118,19 +118,31 @@ public static class SocietyActions
             return;
         if (SocietyBank.IsBank(firm))
         {
-            BankOptions(firm, options);
-            foreach (var change in new[] { -1, 1 }.Where(change => firm.TargetHeadcount + change >= 0))
+            BankOptions(world, firm, options);
+            // Another banker only when the loans already fill most of what the current staff can service.
+            var busy = SocietyBank.LoanBook(world, firm) * 10 >= SocietyBank.LoanCapacity(world, firm) * 8;
+            foreach (var change in new[] { -1, 1 }.Where(change => firm.TargetHeadcount + change >= 0 && (change < 0 || busy)))
                 options.Add(Make("set_headcount", new { business_id = id, change }));
             foreach (var change in new[] { -10, 10 })
                 options.Add(Make("set_wage", new { business_id = id, change_pct = change }));
             return;
         }
         LoanOptions(world, firm, options);
-        // A change that the price limits (half to three times the base price) would undo is not offered.
+        // A change that the price limits (half to three times the base price) would undo is not offered. Each
+        // option says what it should do to weekly sales and margin if competitors keep their prices.
         var spec = SocietyLabor.SectorOf(firm.Specialty!);
         if (spec.BasePrice > 0 && spec.Id != "school")
-            foreach (var change in new[] { -10, 10 }.Where(change => SocietyLabor.ClampPrice(spec, firm.PriceMinor * (100 + change) / 100) != firm.PriceMinor))
-                options.Add(Make("set_price", new { business_id = id, change_pct = change }));
+        {
+            var unitCost = SocietyLabor.UnitCost(world, world.Society!.Nations[firm.CountryId], firm);
+            string Forecast(int price) => $"about {SocietyEconomy.ExpectedUnits(world, firm, price)} sold a week, margin about {(long)(SocietyEconomy.ExpectedUnits(world, firm, price) * (price - unitCost))}";
+            foreach (var change in new[] { -10, 10 })
+            {
+                var price = SocietyLabor.ClampPrice(spec, firm.PriceMinor * (100 + change) / 100);
+                if (price != firm.PriceMinor)
+                    options.Add(Make("set_price", new { business_id = id, change_pct = change,
+                        effect = $"price {firm.PriceMinor} -> {price}: {Forecast(price)} (now {Forecast(firm.PriceMinor)})" }));
+            }
+        }
         foreach (var change in new[] { -10, 10 })
             options.Add(Make("set_wage", new { business_id = id, change_pct = change }));
         foreach (var change in new[] { -1, 1, 2 }.Where(change => firm.TargetHeadcount + change >= 0))
@@ -145,9 +157,14 @@ public static class SocietyActions
     }
 
     // The bank's owner (or the state) sets the annual rates and the standard each loan request must meet.
-    private static void BankOptions(Agent bank, List<Candidate> options)
+    // Deposit rates go no higher than the loan book can pay for (the loan rate times loans over deposits).
+    private static void BankOptions(World world, Agent bank, List<Candidate> options)
     {
-        foreach (var rate in SocietyBank.DepositRates.Where(rate => rate != bank.DepositRatePct))
+        var deposits = SocietyBank.Deposits(world, bank.CountryId);
+        var affordable = deposits == 0 ? SocietyBank.DepositRates.Max()
+            : (double)bank.LoanRatePct * SocietyBank.LoansOutstanding(world, bank) / deposits;
+        foreach (var rate in SocietyBank.DepositRates.Where(rate => rate != bank.DepositRatePct
+                     && (rate <= affordable || rate == SocietyBank.DepositRates.Min())))
             options.Add(Make("set_deposit_rate", new { business_id = bank.Id, rate_pct = rate }));
         foreach (var rate in SocietyBank.LoanRates.Where(rate => rate != bank.LoanRatePct))
             options.Add(Make("set_loan_rate", new { business_id = bank.Id, rate_pct = rate }));
@@ -171,26 +188,34 @@ public static class SocietyActions
         }
     }
 
-    // Imports of the firm's own good (or a clinic's medicine supplies) and energy, in three sizes.
+    // Imports of the firm's output and production/service inputs, in three sizes, each from the seller whose
+    // goods land cheapest, showing that landed cost beside the cheapest local price, and only when it beats it.
     private static void ImportOptions(World world, Agent buyer, List<Candidate> options)
     {
         var nation = world.Society!.Nations[buyer.CountryId];
         var own = buyer.Specialty == "clinic" ? "medicine" : SocietyLabor.SectorOf(buyer.Specialty!).Good;
-        if (own is null) // freight and entertainment use no imported inputs
-            return;
-        foreach (var good in new[] { own, "energy" }.OfType<string>().Distinct())
+        foreach (var good in new[] { own }.OfType<string>()
+                     .Concat(SocietyResources.Inputs(buyer.Specialty!).Select(input => input.Good)).Distinct())
         {
             if (buyer.Inventory[good] > nation.Population * 3)
                 continue;
+            var local = SocietyEconomy.Offers(world, nation, good).FirstOrDefault(offer => offer.Seller != buyer);
             foreach (var quantity in new[] { nation.Population / 2, nation.Population, nation.Population * 2 }
                          .Select(size => Math.Clamp(size, 10, 600)).Distinct())
             {
-                var sellers = world.Agents.Values.Where(seller => seller.Role == "business" && seller.Specialty == good
-                        && seller.CountryId != buyer.CountryId && seller.Inventory[good] >= quantity)
-                    .OrderBy(seller => seller.PriceMinor).ThenBy(seller => seller.Id).Take(2);
-                foreach (var seller in sellers)
-                    if (SocietyTrade.CanImport(world, buyer, seller, good, quantity, "cheapest"))
-                        options.Add(Make("import_goods", new { seller_id = seller.Id, good, quantity, objective = "cheapest" }));
+                var best = SocietyResources.Quotes(world, buyer, good, quantity)
+                    .Select(quote => (quote.Seller, Landed: SocietyResources.LandedUnitCost(world, buyer, quote.Seller, quote.Path, quantity)))
+                    .OrderBy(quote => quote.Landed).ThenBy(quote => quote.Seller.Id, StringComparer.Ordinal)
+                    .FirstOrDefault(quote => SocietyTrade.CanImport(world, buyer, quote.Seller, good, quantity, "cheapest"));
+                // No import that lands dearer than a local seller: goods do not cross the border both ways.
+                if (best.Seller is not { } seller || local is not null && best.Landed >= local.PriceMinor)
+                    continue;
+                var landed = best.Landed;
+                options.Add(Make("import_goods", new
+                {
+                    seller_id = seller.Id, good, quantity, objective = "cheapest",
+                    effect = $"lands at about {Math.Round(landed)} a unit; cheapest here {(local is null ? "none" : local.PriceMinor.ToString())}"
+                }));
             }
         }
     }
@@ -204,7 +229,7 @@ public static class SocietyActions
                 options.Add(Make("set_price", new { price_minor = price }));
         ImportOptions(world, agent, options);
         if (SocietyBank.IsBank(agent)) // state firms draw on the treasury, not loans; the state bank sets rates
-            BankOptions(agent, options);
+            BankOptions(world, agent, options);
     }
 
     private static void GovernmentOptions(World world, Agent agent, List<Candidate> options)
@@ -223,17 +248,18 @@ public static class SocietyActions
             }));
         }
         // Budget levers are ranges showing the current level, so a raise and a cut are told apart.
-        options.Add(new("set_unemployment_benefit", new JsonObject { ["amount_minor"] = Range(0, 900, nation.UnemploymentBenefitMinor) }));
-        options.Add(new("set_welfare", new JsonObject { ["amount_minor"] = Range(0, 200, nation.WelfareMinor) }));
+        // Indexation can carry a benefit past its usual ceiling, so the range always includes the current level.
+        options.Add(new("set_unemployment_benefit", new JsonObject { ["amount_minor"] = Range(0, Math.Max(900, nation.UnemploymentBenefitMinor), nation.UnemploymentBenefitMinor) }));
+        options.Add(new("set_welfare", new JsonObject { ["amount_minor"] = Range(0, Math.Max(200, nation.WelfareMinor), nation.WelfareMinor) }));
         options.Add(new("set_sales_tax", new JsonObject { ["sales_tax_basis_points"] = Range(0, 1000, nation.SalesTaxBasisPoints) }));
         options.Add(new("fund_services", new JsonObject { ["amount_minor"] = Range(0, 150, nation.ServiceBudgetPerResidentMinor) }));
-        if (agent.CashMinor >= 1500 && nation.Productivity < 2)
+        if (SocietyBank.Liquid(world, agent) >= 1500 && nation.Productivity < 2 && SocietyLabor.Firms(world, nation.Id, "tools").Any())
             options.Add(Make("invest", new { amount_minor = 1500 }));
         SocietyInfrastructure.AddOptions(world, nation, agent, options);
         // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
         // a food subsidy when residents went hungry with food on the shelves, and schooling when people are
         // out of work (each also shows while in force, so it can be changed or ended).
-        foreach (var sector in nation.NeededSince.Keys.Order().Where(sector => agent.CashMinor >= SocietyLabor.StartupCost(sector)))
+        foreach (var sector in nation.NeededSince.Keys.Order().Where(sector => SocietyBank.Liquid(world, agent) >= SocietyLabor.StartupCost(sector)))
             options.Add(Make("subsidize_startup", new { sector, grant_minor = SocietyLabor.StartupCost(sector) }));
         var residents = world.InCountry(nation.Id).Count(SocietyLabor.IsResident);
         if (nation.PricedOutLastWeek * 10 >= residents || nation.FoodSubsidyPct > 0)
@@ -266,7 +292,7 @@ public static class SocietyActions
                     options.Add(Make("propose_agreement", new { country_id = countryId }));
             }
             // Conflict comes only after diplomacy between the two has failed, and the option says what it does.
-            if (!relation.AtWar && relation.Tension >= 60 && relation.DiplomacyFailedTick >= 0 && agent.CashMinor >= 5000)
+            if (!relation.AtWar && relation.Tension >= 60 && relation.DiplomacyFailedTick >= 0 && SocietyBank.Liquid(world, agent) >= 5000)
                 options.Add(Make("declare_conflict", new
                 {
                     country_id = countryId,

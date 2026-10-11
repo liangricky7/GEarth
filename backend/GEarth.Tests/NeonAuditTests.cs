@@ -9,6 +9,33 @@ namespace GEarth.Tests;
 public sealed class NeonAuditTests
 {
     [Fact]
+    public async Task RendererArchiveWithoutAnalyticsCommitsAtomicallyAndRetainsPastWeeks()
+    {
+        var handler = new AuditHandler { FailCommit = true };
+        using var store = new NeonStore("postgresql://test:test@ep-test.us-east-2.aws.neon.tech/neondb", handler);
+        var world = SocietyFactory.Create("neon_renderer", false, 200);
+        world.RendererCaptureEnabled = true;
+        world.Revision = 1;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.Save(world, 0, CancellationToken.None));
+        Assert.Empty(await store.ReadRendererFrames(world.Id, 0, 100, CancellationToken.None));
+        handler.FailCommit = false;
+        handler.LoseCommitResponse = true;
+        await store.Save(world, 0, CancellationToken.None);
+        for (var day = 0; day < 7; day++) SocietyEngine.Advance(world);
+        world.Revision = 2;
+        await store.Save(world, 1, CancellationToken.None);
+        var frames = await store.ReadRendererFrames(world.Id, 0, 100, CancellationToken.None);
+        Assert.Equal([0, 7], frames.Select(frame => frame.Tick));
+        Assert.Equal(0, (await store.LoadRendererFrame(world.Id, 1, CancellationToken.None))!.Tick);
+        Assert.Equal(7, (await store.Load(world.Id, CancellationToken.None))!.Tick);
+        Assert.False((await store.LoadRendererFrame(world.Id, 1, CancellationToken.None))!.AnalyticsEnabled);
+        Assert.All(handler.CheckpointPartSizes, size => Assert.InRange(size, 1, 512 * 1024));
+        Assert.Null(await store.LoadRendererFrame(world.Id, 3, CancellationToken.None));
+        handler.CorruptFirstPart = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.LoadRendererFrame(world.Id, 1, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task BoundedStagingSurvivesFailedCommitAndLostCommitResponse()
     {
         var handler = new AuditHandler { FailCommit = true };
@@ -144,6 +171,7 @@ public sealed class NeonAuditTests
         private readonly Dictionary<string, SortedDictionary<long, string>> audit = new();
         private readonly Dictionary<string, SortedDictionary<int, string>> parts = new();
         private readonly Dictionary<long, string> committed = new();
+        private readonly SortedDictionary<long, string?[]> rendererFrames = new();
         private string? state;
         private string? digest;
         private int partCount;
@@ -204,6 +232,8 @@ public sealed class NeonAuditTests
                 Assert.Contains("encode(sha256(convert_to(serialized,'UTF8')),'hex')=$7", sql);
                 Assert.Contains("stage1_runs.revision=$4::bigint", sql);
                 Assert.Contains("audit_committed AS", sql);
+                Assert.Contains("renderer_saved AS", sql);
+                Assert.Contains("FROM saved WHERE $9::text IS NOT NULL", sql);
                 if (FailCommit)
                     return new HttpResponseMessage(HttpStatusCode.BadRequest);
                 var previousRevision = state is null ? 0 : JsonNode.Parse(state)!["revision"]!.GetValue<long>();
@@ -213,6 +243,13 @@ public sealed class NeonAuditTests
                     digest = parameters[6];
                     partCount = int.Parse(parameters[7]!);
                     state = parameters[2] ?? string.Concat(parts[digest!].Values);
+                    if (parameters[8] is { } frameKind)
+                    {
+                        var node = JsonNode.Parse(state)!;
+                        rendererFrames.TryAdd(long.Parse(parameters[1]!), [parameters[1], node["tick"]!.ToString(),
+                            ((node["tick"]!.GetValue<int>() + 6) / 7).ToString(), frameKind,
+                            node["seq"]!.ToString(), digest, partCount.ToString()]);
+                    }
                     if (parameters[4] is { } batch)
                         committed[long.Parse(parameters[1]!)] = batch;
                     rows.Add([parameters[0]]);
@@ -233,6 +270,12 @@ public sealed class NeonAuditTests
                     return new HttpResponseMessage(HttpStatusCode.BadRequest);
                 }
                 CheckpointRegistrations++;
+            }
+            else if (sql.StartsWith("SELECT f.revision,f.tick"))
+            {
+                Assert.Contains("f.revision<=r.revision", sql);
+                rows.AddRange(rendererFrames.Where(item => item.Key > long.Parse(parameters[1]!))
+                    .Take(int.Parse(parameters[2]!)).Select(item => item.Value));
             }
             else if (sql.StartsWith("SELECT checkpoint_digest"))
             {

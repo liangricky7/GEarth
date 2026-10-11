@@ -306,12 +306,13 @@ def test_fixed_menus_do_not_invite_free_numeric_values():
         assert worker.validate_action({"choice": choice, "reason": "Improve profit"}, job)["params"] == job.candidates[choice]["params"]
 
 
-def test_ranged_menus_keep_explicit_numeric_instructions():
+def test_ranged_menus_select_before_filling_only_the_selected_fields():
     job = make_job()
     job.observation = {"world_stage": 2}
     job.candidates.append({"action_type": "set_plan", "params": {"food": {"min": 0, "max": 1000, "default": 700}}})
     prompt = worker.build_prompt(job)
-    assert '"values"' in prompt["messages"][0]["content"]
+    assert 'separate request' in prompt["messages"][0]["content"]
+    assert '"values"' not in prompt["messages"][0]["content"]
     assert json.loads(prompt["messages"][1]["content"])["available_actions"][1] == "1: set_plan food=<integer 0-1000, now 700>"
     assert worker.validate_action({"choice": 1, "reason": "Meet demand", "values": {"food": 720}}, job)["params"] == {"food": 720}
 
@@ -360,7 +361,8 @@ def test_free_numbers_fill_ranged_fields_within_bounds():
             worker.validate_action({"choice": 0, "reason": "Wait.", "values": values}, job)
 
 
-def test_numeric_request_falls_back_then_numbered_menu_roundtrip_recovers(monkeypatch):
+@pytest.mark.parametrize("invalid", [{"food": True, "energy": 810}, {"food": 1001, "energy": 810}, {"food": 1}])
+def test_numeric_request_repairs_once_without_changing_choice_or_defaulting(monkeypatch, invalid):
     monkeypatch.setattr(worker, "TOKEN", "test-token")
     job = make_job()
     job.observation = {"world_stage": 2, "self": {"role": "planner"}}
@@ -371,18 +373,24 @@ def test_numeric_request_falls_back_then_numbered_menu_roundtrip_recovers(monkey
 
     def model_response(request):
         prompt = json.loads(request.content)
-        menu = json.loads(prompt["messages"][1]["content"])["available_actions"]
-        assert menu == ["0: hold", "1: set_plan food=<integer 0-1000, now 700> energy=<integer 0-900, now 800>"]
         calls.append(request)
-        values = {"food": True, "energy": 810} if len(calls) == 1 else {"food": 0, "energy": 900}
-        content = json.dumps({"choice": 1, "reason": "Set the weekly targets.", "values": values})
+        user = json.loads(prompt["messages"][1]["content"])
+        if len(calls) == 1:
+            assert user["available_actions"] == ["0: hold", "1: set_plan food=<integer 0-1000, now 700> energy=<integer 0-900, now 800>"]
+            content = json.dumps({"choice": 1, "reason": "Set the weekly targets."})
+        else:
+            schema = prompt["response_format"]["json_schema"]["schema"]
+            assert schema["properties"]["values"]["required"] == ["food", "energy"]
+            assert "business_id" not in user["fields"]
+            assert user["correction"] is not None if len(calls) == 3 else user["correction"] is None
+            content = json.dumps({"values": invalid if len(calls) == 2 else {"food": 0, "energy": 900}})
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
     async def request():
         async with httpx.AsyncClient(transport=httpx.MockTransport(model_response)) as model_client:
             monkeypatch.setattr(worker.app.state, "model_client", model_client, raising=False)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=worker.app), base_url="http://test") as client:
-                for expected_source in ("rule_fallback", "model"):
+                for expected_source in ("model",):
                     response = await client.post("/decide", json=job.model_dump(mode="json"),
                                                  headers={"Authorization": "Bearer test-token"})
                     assert response.status_code == 200
@@ -397,9 +405,53 @@ def test_numeric_request_falls_back_then_numbered_menu_roundtrip_recovers(monkey
                         assert result["error"] is None
                         assert result["action"]["params"] == {"business_id": "state_firm", "food": 0, "energy": 900}
                         assert result["action"]["evidence_ids"] == job.evidence_ids
+                        assert result["validation_retries"] == 1
+                        assert len(calls) == 3
                 assert job.candidates[1]["params"] == params  # Resolving numbers never changes the offered menu.
 
     asyncio.run(request())
+
+
+@pytest.mark.parametrize("mode", ["exhausted", "schema_unsupported"])
+def test_numeric_failure_is_bounded_and_schema_fallback_remains_validated(monkeypatch, mode):
+    job = make_job()
+    job.observation = {"world_stage": 2, "self": {"role": "government"}}
+    job.candidates.append({"action_type": "set_welfare", "params": {"amount_minor": {"min": 0, "max": 200, "default": 50}}})
+    calls = []
+
+    def respond(request):
+        prompt = json.loads(request.content)
+        calls.append(prompt)
+        if len(calls) == 1:
+            content = {"choice": 1, "reason": "Support residents."}
+        elif mode == "schema_unsupported" and len(calls) == 2:
+            assert prompt["response_format"]["type"] == "json_schema"
+            return httpx.Response(400, json={"error": "schema unsupported"})
+        else:
+            if mode == "schema_unsupported":
+                assert prompt["response_format"]["type"] == "json_object"
+            content = {"values": {"amount_minor": 175 if mode == "schema_unsupported" else True}}
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(content)}}]})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            monkeypatch.setattr(worker.app.state, "model_client", client, raising=False)
+            provider = load_providers({})[0]
+            if mode == "exhausted":
+                with pytest.raises(worker.ActionValidationError) as caught:
+                    await worker.resolve_model_action(job, provider, {})
+                assert caught.value.detail == "not_integer"
+                result = worker.decision_result(job, {}, "rule_fallback", worker.time.perf_counter(), caught.value)
+                assert result["error_code"] == "INVALID_VALUES"
+                assert result["error_field"] == "amount_minor"
+            else:
+                action, retries = await worker.resolve_model_action(job, provider, {})
+                assert action["params"] == {"amount_minor": 175}
+                assert retries == 0
+            assert len(calls) == 3
+            assert job.candidates[1]["params"]["amount_minor"]["default"] == 50
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("choice", [True, -1, 1, "0", None])

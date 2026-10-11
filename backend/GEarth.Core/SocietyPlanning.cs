@@ -9,7 +9,7 @@ namespace GEarth.Core;
 public static class SocietyPlanning
 {
     public const int PlanningWeeks = 4;
-    public static readonly string[] PlannedSectors = ["food", "energy", "tools", "medicine", "clinic", "entertainment"];
+    public static readonly string[] PlannedSectors = ["food", "energy", "tools", "medicine", "clinic", "entertainment", "mine", "well"];
 
     private static bool Applies(Nation nation, Agent firm) =>
         SocietyLabor.IsPlanned(nation) && firm.OwnerId is null && nation.Plan.ContainsKey(firm.Specialty!);
@@ -20,6 +20,9 @@ public static class SocietyPlanning
     // A state firm's daily production quota, or null where no plan applies.
     public static int? Quota(World world, Nation nation, Agent firm) =>
         Applies(nation, firm) ? (Share(world, nation, firm) + SocietyLabor.DaysPerWeek - 1) / SocietyLabor.DaysPerWeek : null;
+
+    // A state firm's share of its sector's weekly quota, or 0 where no plan applies.
+    public static int WeekQuota(World world, Nation nation, Agent firm) => Applies(nation, firm) ? Share(world, nation, firm) : 0;
 
     // Visits or sessions a state service may deliver over the given days, capped by the plan.
     public static int Cap(World world, Nation nation, Agent firm, int capacity, int days) =>
@@ -37,10 +40,12 @@ public static class SocietyPlanning
         return sector switch
         {
             "food" => residents * 7,
-            "energy" => residents * 8,
+            "energy" => residents * 10, // household power plus extraction, workshops and powered services
             "tools" => residents * 3,
             "medicine" => residents / 6 + 1,
             "clinic" => residents / 8 + 1,
+            "mine" => residents * 3, // tools need one ore per unit
+            "well" => (residents * 10 + 3) / 4 + SocietyLabor.DaysPerWeek, // fuel for power, including batch rounding
             _ => residents * 5
         };
     }

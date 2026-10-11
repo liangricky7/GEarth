@@ -1,0 +1,27 @@
+{
+  "schema_version": "gearth.renderer.v1",
+  "run_id": "synthetic_renderer_fixture",
+  "revision": 3,
+  "tick": 7,
+  "week": 1,
+  "frame_kind": "week",
+  "complete_week": true,
+  "through_event_sequence": 0,
+  "fixture": { "synthetic": true, "complete_population": false },
+  "units": { "days_per_tick": 1, "days_per_week": 7, "minor_units_per_wld": 100, "hungry_output_factor": 0.01 },
+  "snapshot": {
+    "run": { "id": "synthetic_renderer_fixture", "status": "running", "mode": "RULE", "population": 2, "revision": 3 },
+    "countries": [{ "id": "aster", "name": "Jaypan", "government_id": "market_democracy" }],
+    "locations": [{ "id": "aster_port", "country_id": "aster", "kind": "port" }],
+    "routes": [],
+    "nations": [{ "id": "aster", "government_id": "market_democracy", "labor_force": 2, "unemployed": 1 }],
+    "agents": [
+      { "id": "fixture_farmer", "role": "citizen", "country_id": "aster", "location_id": "aster_port", "occupation": "farmer", "employer_id": "fixture_farm", "cash_minor": 900, "deposit_minor": 1200, "inventory": { "food": 5, "energy": 3, "ore": 0, "fuel": 0, "tools": 0, "medicine": 0 }, "health": 80, "wellbeing": 65, "hungry": false },
+      { "id": "fixture_jobseeker", "role": "citizen", "country_id": "aster", "location_id": "aster_port", "occupation": "unemployed", "employer_id": null, "cash_minor": 15, "deposit_minor": 0, "inventory": { "food": 0, "energy": 0, "ore": 0, "fuel": 0, "tools": 0, "medicine": 0 }, "health": 35, "wellbeing": 10, "hungry": true }
+    ],
+    "banks": [],
+    "shipments": [],
+    "loans": [],
+    "metrics": { "cash_minor": 915, "escrow_minor": 0, "initial_cash_minor": 915 }
+  }
+}

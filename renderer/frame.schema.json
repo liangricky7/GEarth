@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GEarth renderer frame v1",
+  "type": "object",
+  "required": ["schema_version", "run_id", "revision", "tick", "week", "frame_kind", "complete_week", "through_event_sequence", "snapshot"],
+  "properties": {
+    "schema_version": { "const": "gearth.renderer.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "tick": { "type": "integer", "minimum": 0 },
+    "week": { "type": "integer", "minimum": 0 },
+    "frame_kind": { "enum": ["opening", "week", "terminal", "checkpoint"] },
+    "complete_week": { "type": "boolean" },
+    "through_event_sequence": { "type": "integer", "minimum": 0 },
+    "snapshot": {
+      "type": "object",
+      "required": ["run", "countries", "locations", "routes", "nations", "agents", "banks", "shipments", "loans", "metrics"],
+      "properties": {
+        "run": { "type": "object" },
+        "countries": { "type": "array" },
+        "locations": { "type": "array" },
+        "routes": { "type": "array" },
+        "nations": { "type": "array" },
+        "banks": { "type": "array" },
+        "shipments": { "type": "array" },
+        "loans": { "type": "array" },
+        "metrics": { "type": "object" },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "role", "country_id", "location_id", "cash_minor", "deposit_minor", "inventory", "health", "wellbeing", "hungry"],
+            "properties": {
+              "id": { "type": "string" },
+              "role": { "type": "string" },
+              "country_id": { "type": "string" },
+              "location_id": { "type": "string" },
+              "cash_minor": { "type": "integer" },
+              "deposit_minor": { "type": "integer" },
+              "inventory": { "type": "object", "additionalProperties": { "type": "integer" } },
+              "health": { "type": "number" },
+              "wellbeing": { "type": "number" },
+              "hungry": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

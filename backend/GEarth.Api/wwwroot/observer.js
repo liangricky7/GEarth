@@ -894,7 +894,7 @@ function showWorld(snapshot) {
       ),
       textNode(
         "p",
-        `Support ${Math.round(nation.approval * 100)}% · cash Gini ${nation.gini_cash.toFixed(2)}`,
+        `Support ${Math.round(nation.approval * 100)}% · cash + deposits Gini ${nation.gini_cash.toFixed(2)}`,
       ),
       textNode(
         "p",

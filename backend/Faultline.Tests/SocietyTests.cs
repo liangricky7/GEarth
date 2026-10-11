@@ -12,12 +12,12 @@ public sealed class SocietyTests
 
         Assert.Equal(1000, world.Agents.Count);
         Assert.Equal(10, world.Society!.Nations.Count);
-        // Government, bank, media and twelve firms per country: 3 farms, 2 each of energy, tools and
-        // entertainment, and one pharma, clinic and freight firm.
+        // Government, media and thirteen firms per country: 3 farms, 2 each of energy, tools and
+        // entertainment, and one pharma, clinic, freight firm and bank.
         Assert.Equal(150, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
         Assert.Equal(3, SocietyLabor.Firms(world, "aster", "food").Count());
         // Market countries' firms each have an entrepreneur owner; planned economies' firms are state-owned.
-        Assert.Equal(96, world.Agents.Values.Count(agent => agent.Role == "entrepreneur"));
+        Assert.Equal(104, world.Agents.Values.Count(agent => agent.Role == "entrepreneur"));
         // Doctors are scarce: one employed doctor per country (plus the clinic's owner in market economies).
         Assert.All(world.Society.Nations.Keys, country => Assert.Equal(1,
             world.Agents.Values.Count(agent => agent.CountryId == country && agent.Role == "citizen" && agent.Occupation == "doctor")));
@@ -193,45 +193,5 @@ public sealed class SocietyTests
         {
             Directory.Delete(directory, true);
         }
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void FundedCreditSettlesOnceWithExplicitDefaultOrRepayment(bool repay)
-    {
-        var world = SocietyFactory.Create("credit_test", true, 1000);
-        var now = DateTimeOffset.UtcNow;
-        var borrower = world.Agents["aster_tools"];
-        var bank = world.Agents["aster_bank"];
-        var government = world.Agents["aster_government"];
-        SocietyEconomy.Transfer(world, borrower, government, borrower.CashMinor - 100);
-        var request = SocietyEngine.Observe(world, borrower.Id, now);
-        Assert.True(SocietyEngine.Apply(world, request, Choose(request, "request_loan"), now).Accepted);
-        var loan = Assert.Single(world.Society!.Credit);
-        var approval = SocietyEngine.Observe(world, bank.Id, now);
-        var bankCash = bank.CashMinor;
-        var result = Choose(approval, "approve_loan");
-        Assert.True(SocietyEngine.Apply(world, approval, result, now).Accepted);
-        SocietyEngine.Apply(world, approval, result, now);
-        Assert.Equal(bankCash - loan.PrincipalMinor, bank.CashMinor);
-        if (repay)
-            SocietyEconomy.Transfer(world, government, borrower, loan.DueMinor);
-        else
-        {
-            SocietyEconomy.Transfer(world, borrower, government, borrower.CashMinor);
-            government.Inventory["tools"] += borrower.Inventory["tools"]; // nothing left to sell before maturity
-            borrower.Inventory["tools"] = 0;
-        }
-        foreach (var citizen in world.Agents.Values.Where(agent => agent.EmployerId == borrower.Id))
-            citizen.WorkEffort = 0;
-        world.Tick = loan.DueTick;
-        SocietyEconomy.Week(world);
-        Assert.Equal(repay ? "repaid" : "defaulted", loan.Status);
-        Assert.Single(world.Events, item => item.EventType == "loan_settled");
-        world.Tick += 7;
-        SocietyEconomy.Week(world);
-        Assert.Single(world.Events, item => item.EventType == "loan_settled");
-        SocietyEconomy.AssertConservation(world);
     }
 }

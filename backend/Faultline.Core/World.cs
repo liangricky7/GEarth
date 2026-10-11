@@ -56,6 +56,15 @@ public sealed class Agent
     public int GoodsBoughtLastWeek { get; set; }
     public int ServicesBoughtLastWeek { get; set; }
     public int LastWeekWellbeing { get; set; } = 100;
+    // Banking: residents' savings deposited at their country's bank (the government's deposit is the
+    // insurance claims it took over). Banks: owner-set rates and lending standard, and withdrawals the
+    // reserves could not pay since the last weekly review.
+    public long DepositMinor { get; set; }
+    public bool KeepsSavingsInBank { get; set; } = true;
+    public int DepositRatePct { get; set; }
+    public int LoanRatePct { get; set; }
+    public string? LendingStandard { get; set; }
+    public long UnmetWithdrawalsMinor { get; set; }
     // Money in and out this week and last week, for budgets shown to decision makers.
     public long WeekInMinor { get; set; }
     public long WeekOutMinor { get; set; }
@@ -101,7 +110,8 @@ public record DecisionJob(string RequestId, string RunId, string AgentId, int Ob
     DateTimeOffset Deadline, Dictionary<string, int> Dependencies, string[] EvidenceIds,
     JsonNode Observation, Candidate[] Candidates);
 public record DecisionResult(string RequestId, ActionProposal Action, string Source, string Model,
-    double LatencyMs, string? Error = null, string? Backend = null);
+    double LatencyMs, string? Error = null, string? Backend = null,
+    double? CoordinatorLatencyMs = null, string? ErrorCategory = null, int? ErrorHttpStatus = null);
 public record DecisionRecord(DecisionJob Job, DecisionResult Result, bool Accepted, string Code);
 public record WorldEvent(int SchemaVersion, string EventId, string RunId, int Tick, long Seq,
     string EventType, string Source, string[] EntityIds, string[] CauseIds, JsonNode Payload);
@@ -117,6 +127,17 @@ public sealed class World
     public int Tick { get; set; }
     public long Revision { get; set; }
     public long Seq { get; set; }
+    public bool AnalyticsEnabled { get; set; }
+    public long AuditSequence { get; set; }
+    public int AuditSchemaVersion { get; set; }
+    public int? AuditStartTick { get; set; }
+    public DateTimeOffset? AuditStartedAt { get; set; }
+    public bool AuditOpeningBalancesCaptured { get; set; }
+    public int AuditDailyThroughTick { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<AuditRecord> PendingAudit { get; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public AuditContext? CurrentAuditContext { get; set; }
     // Numbers new firms, cargo, loans and policies. Separate from Seq so an extra event (a fork's own) doesn't rename later entities.
     public long LastEntityNumber { get; set; }
     public long NextEntityNumber() => ++LastEntityNumber;
@@ -161,6 +182,7 @@ public sealed class World
             source, entities, causes, Wire.Node(payload));
 
         Events.Add(worldEvent);
+        RunAudit.Append(this, "event", worldEvent);
         return worldEvent;
     }
 

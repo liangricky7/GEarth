@@ -10,7 +10,7 @@ Spark A's Qwen3-8B and Qwen3-4B services were verified; AMD's Qwen3-4B endpoint 
 
 See the [design](faultline-design.md) for the full specification, current limitations, decisions and their reasons.
 
-The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Databricks and Solana settlement remain unimplemented.
+The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/faultline/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
 
 ## Run locally
 
@@ -51,6 +51,8 @@ To fork a Neon world run into a what-if timeline on its own Neon branch (needs `
 
 ## Verify
 
+For unattended simulation experiments while developing locally, see the [Google Cloud deployment runbook](docs/faultline/22-google-cloud-deployment.md).
+
 ```bash
 dotnet test Faultline.sln
 .venv/bin/python -m pytest agents ops/test_amd_model_server.py ops/test_compute_config.py ops/test_spark_qwen.py -q
@@ -61,6 +63,8 @@ npm run test:observer
 ```
 
 Exact consolidation results and the known calibration failure are recorded in [integration evidence](docs/faultline/evidence/main-integration.json). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures. Browser visual layout remains unverified.
+
+For observer changes, `node ops/check_observer.cjs` checks desktop/mobile rendering, saved-run switching with delayed responses, agent filters and pagination using API fixtures and installed Chrome or Edge. Screenshots are saved under ignored `artifacts/local/`.
 
 For a completed world being served, `ops/check_world.py` checks conservation, durable ordered events, checkpoint readback, pagination, request bounds and read-only assets. Add `--require-model` for real model turns and `--require-full-coverage` only when explicitly qualifying coverage; coverage uses actual decision makers rather than owner-controlled firms. `ops/check_stage2_api.py` checks the committed API without new inference.
 
@@ -76,6 +80,7 @@ Completed, gracefully stopped and paused runs produce behavior observations, cou
 | `backend/Faultline.Api` | Bounded coordination, persistence, read API, observer and run notes |
 | `backend/Faultline.Tests` | Engine, queue, accounting, profiles, scheduling and persistence tests |
 | `agents` | Authenticated worker, model pool, compact prompts and validation |
+| `analytics` | Finished-run exports, integrity checks, Databricks notebooks and cached analytics |
 | `ops` | Launcher, synthetic checks, Spark installer, AMD setup and private relays |
 | `docs/faultline` | Operational guides, contracts, fixtures and historical/integration evidence |
 

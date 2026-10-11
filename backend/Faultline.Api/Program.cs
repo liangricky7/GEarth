@@ -1,6 +1,43 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Faultline.Api;
 using Faultline.Core;
+
+IWorldStore CreateStore() => Environment.GetEnvironmentVariable("FAULTLINE_STORAGE") == "neon"
+    ? new NeonStore(Environment.GetEnvironmentVariable("DATABASE_URL")
+        ?? throw new InvalidOperationException("DATABASE_URL missing"))
+    : new LocalStore(Path.GetFullPath(Environment.GetEnvironmentVariable("FAULTLINE_RUNS_DIRECTORY") ?? ".data/runs"));
+
+// Operator command exits before starting the observer or any simulation/inference services.
+if (args.Contains("--publish-analytics-report"))
+{
+    try
+    {
+        var reportIndex = Array.IndexOf(args, "--publish-analytics-report");
+        var manifestIndex = Array.IndexOf(args, "--source-manifest");
+        if (reportIndex + 1 >= args.Length || manifestIndex < 0 || manifestIndex + 1 >= args.Length)
+            throw new ArgumentException("Usage: --publish-analytics-report REPORT.json --source-manifest MANIFEST.json");
+        var reportPath = Path.GetFullPath(args[reportIndex + 1]);
+        var manifestPath = Path.GetFullPath(args[manifestIndex + 1]);
+        if (new FileInfo(reportPath).Length > AnalyticsService.MaximumReportBytes)
+            throw new ArgumentException("Analytics report exceeds the 8 MiB limit.");
+        if (new FileInfo(manifestPath).Length > AnalyticsService.MaximumManifestBytes)
+            throw new ArgumentException("Source manifest exceeds the 16 MiB limit.");
+        var report = JsonNode.Parse(await File.ReadAllBytesAsync(reportPath)) as JsonObject
+            ?? throw new ArgumentException("Report must be a JSON object.");
+        var publicationStore = CreateStore();
+        await publicationStore.Initialize(CancellationToken.None);
+        await new AnalyticsService(publicationStore).Publish(report,
+            await File.ReadAllBytesAsync(manifestPath), CancellationToken.None);
+        Console.WriteLine($"Published cached analytics report for {report["run_id"]}.");
+    }
+    catch (Exception error)
+    {
+        Console.Error.WriteLine($"Analytics publication failed: {(error is AnalyticsException or ArgumentException ? error.Message : error.GetType().Name)}");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 var port = int.TryParse(Environment.GetEnvironmentVariable("FAULTLINE_PORT"), out var configuredPort)
@@ -9,19 +46,19 @@ builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
 
-IWorldStore store = Environment.GetEnvironmentVariable("FAULTLINE_STORAGE") == "neon"
-    ? new NeonStore(Environment.GetEnvironmentVariable("DATABASE_URL")
-        ?? throw new InvalidOperationException("DATABASE_URL missing"))
-    : new LocalStore(Path.GetFullPath(".data/runs"));
+IWorldStore store = CreateStore();
 
 builder.Services.AddSingleton(store);
 builder.Services.AddSingleton<RunNotesService>();
+builder.Services.AddSingleton<AnalyticsService>();
 builder.Services.AddSingleton<Coordinator>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<Coordinator>());
 
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+app.MapAnalytics();
 
 app.MapGet("/api/health", (Coordinator coordinator) => Results.Ok(new
 {

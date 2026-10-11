@@ -8,6 +8,8 @@ import httpx
 import jsonschema
 from dotenv import dotenv_values
 
+from decision_metrics import reconcile_decisions
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -39,11 +41,11 @@ def read_checkpoint(run_id, storage):
     return json.loads(row[0]), int(row[1])
 
 
-def check_run(base_url, require_model=False, require_full_coverage=False):
+def check_run(base_url, require_model=False, require_full_coverage=False, request_id=None):
     with httpx.Client(base_url=base_url, timeout=30) as client:
         health = client.get("/api/health").raise_for_status().json()
-        if health["status"] != "ok" or health["run_status"] != "completed":
-            raise RuntimeError("Wait for the run to complete before checking it.")
+        if health["status"] != "ok" or health["run_status"] not in {"completed", "stopped"}:
+            raise RuntimeError("Wait for the run to complete or stop before checking it.")
         run_id = health["run_id"]
         path = f"/api/runs/{run_id}"
         snapshot = client.get(path + "/snapshot").raise_for_status().json()
@@ -149,6 +151,8 @@ def check_run(base_url, require_model=False, require_full_coverage=False):
         for event in decisions
         if event["source"] == "model"
     )
+    decision_metrics = reconcile_decisions(events, snapshot["metrics"], snapshot["run"]["status"],
+        snapshot["compute"][0]["pending_decisions"], request_id)
     return {
         "run_id": run_id,
         "mode": snapshot["run"]["mode"],
@@ -160,7 +164,9 @@ def check_run(base_url, require_model=False, require_full_coverage=False):
         ),
         "metrics": snapshot["metrics"],
         "compute": snapshot["compute"],
-        "decision_attempts": len(decisions),
+        "completed_decision_results": len(decisions),
+        "decision_metrics": decision_metrics,
+        "latency_sample_scope": "full-run model-source worker durations; excludes coordinator duration and decision age",
         "accepted_actions": dict(
             Counter(
                 event["payload"]["action"]["action_type"]
@@ -197,6 +203,7 @@ def check_run(base_url, require_model=False, require_full_coverage=False):
             "goods_conservation",
             "nonnegative_resources",
             "bounded_requests",
+            "decision_counter_reconciliation",
             "checkpoint_readback",
             "event_archive",
             "agent_pagination",
@@ -220,9 +227,10 @@ def main():
     parser.add_argument("--require-model", action="store_true")
     parser.add_argument("--require-full-coverage", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--request-id", help="Include the events for one request")
     options = parser.parse_args()
     report = check_run(
-        options.url, options.require_model, options.require_full_coverage
+        options.url, options.require_model, options.require_full_coverage, options.request_id
     )
     serialized = json.dumps(report, indent=2)
     if options.output:

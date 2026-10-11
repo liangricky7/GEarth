@@ -66,11 +66,11 @@ public sealed class SchedulerProjectionTests
         var resident = world.Agents.Values.First(agent => agent.Role == "citizen");
         var ownedFirm = world.Agents.Values.First(agent => agent.Role == "business" && agent.OwnerId is not null);
         var pending = new HashSet<string> { "aster_government", resident.Id };
-        SocietyScheduler.UpdateMetrics(world, pending, ["aster_bank", ownedFirm.Id, resident.Id], world.Society!.StartedAt);
+        SocietyScheduler.UpdateMetrics(world, pending, ["aster_journalist", ownedFirm.Id, resident.Id], world.Society!.StartedAt);
         Assert.Equal(2, world.Society.MaxPendingObserved);
         Assert.Equal(1, world.Society.PendingByRole["citizen"]);
         Assert.Equal(1, world.Society.PendingByRole["government"]);
-        Assert.Equal(["aster_bank"], world.Society.QueuedAgentIds);
+        Assert.Equal(["aster_journalist"], world.Society.QueuedAgentIds);
         Assert.Equal(1, world.Society.DueAgents);
         SocietyScheduler.UpdateMetrics(world, new HashSet<string>(), [], world.Society.StartedAt);
         Assert.Empty(world.Society.PendingByRole);
@@ -95,8 +95,8 @@ public sealed class SchedulerProjectionTests
         var citizen = snapshot["compute"]![0]!["by_role"]!.AsArray().Single(item => item!["role"]!.GetValue<string>() == "citizen")!;
         Assert.Equal(1, citizen["eligible_agents"]!.GetValue<int>());
         Assert.Equal(660, citizen["model_decision_age_p95_seconds"]!.GetValue<double>());
-        Assert.Null(SocietyProjection.ModelDecisionAgeSeconds(world, world.Agents["aster_bank"]));
-        var next = SocietyScheduler.NextTurnTick(world, world.Agents["aster_bank"]);
+        Assert.Null(SocietyProjection.ModelDecisionAgeSeconds(world, world.Agents["aster_journalist"]));
+        var next = SocietyScheduler.NextTurnTick(world, world.Agents["aster_journalist"]);
         Assert.Equal(14, next);
         Assert.Null(SocietyScheduler.NextTurnTick(world, world.Agents.Values.First(agent => agent.OwnerId is not null)));
     }

@@ -106,6 +106,8 @@ public static class SocietyProjection
                 society.StartedAt,
                 society.CoverageCompletedAt,
                 elapsed_seconds = (world.UpdatedAt - society.StartedAt).TotalSeconds,
+                latency_sample_scope = "last_200_positive_worker_durations_all_sources",
+                latency_sample_count = society.LatenciesMs.Count,
                 latency_p95_ms = society.LatenciesMs.Count == 0 ? 0 : society.LatenciesMs.Order().ElementAt(Math.Min(society.LatenciesMs.Count - 1, (int)(society.LatenciesMs.Count * 0.95)))
             },
             compute = new[]

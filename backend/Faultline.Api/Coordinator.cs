@@ -1,6 +1,4 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json.Nodes;
 using Faultline.Core;
 
 namespace Faultline.Api;
@@ -42,6 +40,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             var runId = $"stage1_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}";
             var initialWorld = Engine.Create(scenario, runId, live);
             initialWorld.Revision = 1;
+            EnableAudit(initialWorld, tickLimit);
 
             await store.Save(initialWorld, 0, cancellationToken);
             current = initialWorld;
@@ -58,6 +57,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     .Select(agentId => Engine.Observe(nextWorld, agentId, DateTimeOffset.UtcNow))
                     .ToArray();
 
+                foreach (var job in jobs)
+                    RunAudit.Request(nextWorld, job, DateTimeOffset.UtcNow);
                 var results = await Task.WhenAll(jobs.Select(job => Decide(job, live, cancellationToken)));
 
                 for (var index = 0; index < jobs.Length; index++)
@@ -73,6 +74,9 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                     });
                 }
 
+                RunAudit.Day(nextWorld);
+                if (nextWorld.Status == "completed")
+                    RunAudit.Day(nextWorld, terminal: true);
                 nextWorld.UpdatedAt = DateTimeOffset.UtcNow;
                 nextWorld.Revision = current.Revision + 1;
 
@@ -90,6 +94,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 var stopped = Wire.Copy(current);
                 stopped.Status = "stopped";
                 stopped.Emit("run_stopped", "rule", [stopped.Id], new { reason = "host_shutdown", checkpoint_only = true });
+                RunAudit.Day(stopped, terminal: true);
                 stopped.Revision++;
                 stopped.UpdatedAt = DateTimeOffset.UtcNow;
                 await store.Save(stopped, current.Revision, CancellationToken.None);
@@ -98,7 +103,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         }
         catch (Exception exception)
         {
-            Error = exception is InvalidOperationException
+            Error = exception is AnalyticsTimelineException ? exception.Message
+                : exception is InvalidOperationException
                 ? "Storage or configuration failure; simulation paused"
                 : $"{exception.GetType().Name}; simulation paused";
 
@@ -136,11 +142,13 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             world = SocietyFactory.Create(id, live, population,
                 ReadNumber("FAULTLINE_SEED", 20261010, 1, int.MaxValue),
                 ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
+            world.Emit("decision_accounting_started", "rule", [world.Id], new { version = 1 });
         }
         else
         {
             // A forked timeline: continue a saved run (on its own Neon branch) from a week-boundary checkpoint.
             world = await store.Load(resumeId, cancellationToken) ?? throw new InvalidOperationException("Resume run missing");
+            RunAudit.PrepareResume(world, Environment.GetEnvironmentVariable("FAULTLINE_ANALYTICS") == "true");
             if (world.Society is null || world.Status != "running"
                 || (world.Tick != 0 && (world.Tick + 1) % SocietyLabor.DaysPerWeek != 0))
                 throw new InvalidOperationException("Resume needs a running week-boundary checkpoint");
@@ -164,7 +172,9 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             foreach (var group in new[] { "institution", "citizen" })
                 if (!world.Society.ComputeProviders.Any(provider => provider.Capacity > 0 && (provider.DecisionGroup == group || provider.DecisionGroup == "all")))
                     throw new InvalidOperationException($"No model provider serves {group} decisions");
+        EnableAudit(world, tickLimit);
         await using var pending = new DecisionQueue(capacity, cancellationToken);
+        var dispatched = new Dictionary<string, PendingDecision>();
         var queue = new Queue<string>();
         long revision = world.Revision;
         // Verbose runs also write the day-by-day history file the renderer replays (a fork's file is named after its timeline).
@@ -196,6 +206,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             foreach (var request in pending.TakeCompleted())
             {
                 SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), DateTimeOffset.UtcNow);
+                dispatched.Remove(request.Job.RequestId);
             }
         }
 
@@ -209,8 +220,19 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             {
                 var now = DateTimeOffset.UtcNow;
                 var job = SocietyEngine.Observe(world, agent.Id, now);
-                if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
+                if (pending.TryStart(job, (request, token) =>
                 {
+                    var task = Decide(request, live, token);
+                    dispatched.Add(request.RequestId, new PendingDecision(request, task));
+                    return task;
+                }))
+                {
+                    RunAudit.Request(world, job, now);
+                    world.Emit("decision_requested", "rule", [agent.Id], new
+                    {
+                        decision_id = job.RequestId, requested_at = now,
+                        observation_tick = job.ObservationTick, job.Deadline, mode = world.Mode
+                    });
                     agent.LastAttemptAt = now;
                     agent.LastAttemptTick = world.Tick;
                     started.Add(agent.Id);
@@ -245,9 +267,14 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)
                 {
                     await DrainWeek();
-                    // Week-boundary checkpoint: nothing in flight or queued, so a fork resumes from it exactly.
-                    if (tick > firstTick)
+                    // Analytics commits below include the same drained boundary. Other runs keep the fork checkpoints.
+                    if (!world.AnalyticsEnabled && tick > firstTick)
                         await Commit();
+                }
+                if (world.AnalyticsEnabled && world.Tick > 0)
+                {
+                    RunAudit.Day(world);
+                    await Commit();
                 }
                 SocietyEngine.Advance(world);
                 if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)
@@ -284,6 +311,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 }
             }
             await DrainWeek();
+            RunAudit.Day(world);
             world.Status = "completed";
             world.Emit("run_completed", "rule", [world.Id], new
             {
@@ -292,21 +320,40 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 model_coverage = world.Agents.Values.Count(agent => agent.ModelDecisions > 0)
             });
             SocietyEconomy.AssertConservation(world);
+            RunAudit.Day(world, terminal: true);
             await Commit();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            var abandoned = await pending.CancelAndDrain();
+            // Cancellation can arrive after the database committed but before its response reached us.
+            // Resolve that exact revision first, then write the stopped status as a new revision.
+            if (world.Revision > revision)
+            {
+                await store.Save(world, revision, CancellationToken.None);
+                revision = world.Revision;
+            }
+            var abandoned = await pending.CancelAndDrainRequests();
+            foreach (var job in abandoned)
+                world.Emit("decision_canceled", "rule", [job.AgentId], new
+                {
+                    decision_id = job.RequestId, observation_tick = job.ObservationTick,
+                    canceled_at = DateTimeOffset.UtcNow, reason = "host_shutdown"
+                });
+            foreach (var request in dispatched.Values)
+                RunAudit.Canceled(world, request.Job, request.Task.IsCompletedSuccessfully ? request.Task.Result : null);
+            dispatched.Clear();
             var queued = queue.Count;
             queue.Clear();
             world.Status = "stopped";
             world.Emit("run_stopped", "rule", [world.Id], new
             {
                 reason = "host_shutdown",
-                canceled_pending_requests = abandoned,
+                canceled_pending_requests = abandoned.Length,
                 canceled_queued_requests = queued,
                 canceled_requests_applied = false
             });
+            RunAudit.Day(world);
+            RunAudit.Day(world, terminal: true);
             await Commit(CancellationToken.None);
         }
         finally
@@ -339,41 +386,25 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         return selected;
     }
 
-    private async Task<DecisionResult> Decide(DecisionJob job, bool live, CancellationToken cancellationToken)
+    private Task<DecisionResult> Decide(DecisionJob job, bool live, CancellationToken cancellationToken)
+        => WorkerClient.Decide(worker, job, live, cancellationToken);
+
+    private static void EnableAudit(World world, int tickLimit)
     {
-        if (!live)
+        if (Environment.GetEnvironmentVariable("FAULTLINE_ANALYTICS") != "true")
+            return;
+        RunAudit.Enable(world, new
         {
-            var stageTwo = job.Observation["world_stage"]?.GetValue<int>() == 2;
-            var choice = System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes($"{job.AgentId}:{job.ObservationTick}"))[0] % job.Candidates.Length;
-            var candidate = stageTwo ? job.Candidates[choice]
-                : job.Candidates.FirstOrDefault(item => item.ActionType is "purchase" or "choose_route") ?? job.Candidates[0];
-
-            var action = new ActionProposal(candidate.ActionType, (JsonObject)candidate.Params.DeepClone(),
-                "Deterministic rule choice; no model inference.", []);
-
-            return new DecisionResult(job.RequestId, action, "rule", "none", 0);
-        }
-
-        try
-        {
-            using var response = await worker.PostAsJsonAsync("http://127.0.0.1:8100/decide", job,
-                Wire.Json, cancellationToken);
-
-            response.EnsureSuccessStatusCode();
-
-            return await response.Content.ReadFromJsonAsync<DecisionResult>(Wire.Json, cancellationToken)
-                ?? throw new InvalidOperationException("Empty worker result");
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException
-            or System.Text.Json.JsonException or InvalidOperationException)
-        {
-            var action = new ActionProposal("hold", new JsonObject(),
-                "Inference unavailable; explicit fallback hold.", []);
-
-            return new DecisionResult(job.RequestId, action, "rule_fallback", "none", 0,
-                exception.GetType().Name);
-        }
+            world.Seed, world.Mode, initial_population = world.Agents.Count,
+            capture_start_tick = world.Tick, capture_started_at = DateTimeOffset.UtcNow,
+            schema_version = RunAudit.SchemaVersion,
+            engine_commit = Environment.GetEnvironmentVariable("FAULTLINE_ENGINE_COMMIT"),
+            government_rotation = ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4),
+            tick_limit = tickLimit, worker_capacity = world.Society?.WorkerCapacity,
+            tick_interval_ms = world.Society?.TickIntervalMilliseconds,
+            compute_providers = world.Society?.ComputeProviders.Select(provider => new
+                { id = provider.Name, provider.Model, provider.Capacity, provider.DecisionGroup }).ToArray()
+        });
     }
 
     private static int ReadNumber(string name, int defaultValue, int minimum, int maximum)

@@ -72,6 +72,18 @@ def wait_for_service(url, process, seconds=30):
     raise RuntimeError("Service startup timed out. Check its local log.")
 
 
+def clean_engine_commit():
+    """Only identify reproducible source; uncommitted source remains unknown."""
+    try:
+        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
+                               capture_output=True, text=True, check=True).stdout
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                                capture_output=True, text=True, check=True).stdout.strip()
+        return commit if not dirty and len(commit) == 40 and all(c in "0123456789abcdef" for c in commit) else None
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def stop_process(process):
     if process.poll() is not None:
         return
@@ -108,10 +120,16 @@ def main():
         action="store_true",
         help="With --world: also write the day-by-day history file for the renderer.",
     )
+    parser.add_argument(
+        "--analytics",
+        action="store_true",
+        help="With --world: preserve daily states, full decisions, and individual transfers for finished-run analysis.",
+    )
     # Set by ops/fork_run.py: continue a run on its Neon branch from a week-boundary checkpoint.
     parser.add_argument("--resume", help=argparse.SUPPRESS)
     parser.add_argument("--fork-government", help=argparse.SUPPRESS)
     parser.add_argument("--timeline", help=argparse.SUPPRESS)
+    parser.add_argument("--skip-build", action="store_true", help="Use an already built API (deployment/collection only)")
     options = parser.parse_args()
     signal.signal(signal.SIGTERM, handle_stop)
 
@@ -140,6 +158,10 @@ def main():
 
     if options.verbose and (not options.world or options.run_id):
         parser.error("--verbose records a new --world run.")
+    if options.analytics and (not options.world or options.run_id):
+        parser.error("--analytics records a new --world run.")
+    if options.analytics and options.resume:
+        parser.error("Analytics currently supports normal runs; fork analytics needs separate timeline identities.")
     if options.resume and (not options.world or options.run_id or options.storage != "neon"):
         parser.error("--resume continues a --world run on Neon; start forks with ops/fork_run.py.")
     if options.run_id:
@@ -154,7 +176,7 @@ def main():
     os.chdir(ROOT)
     config = {
         key: value
-        for key, value in dotenv_values(ROOT / ".env.local").items()
+        for key, value in dotenv_values(ROOT / ".env.local", interpolate=False).items()
         if value is not None
     }
     # A fork runs against its own Neon branch; ops/fork_run.py passes that branch's connection string.
@@ -188,11 +210,12 @@ def main():
         for local_port, _ in managed_forwards:
             ensure_port_available(local_port)
 
-    subprocess.run(
-        ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
-        check=True,
-        cwd=ROOT,
-    )
+    if not options.skip_build:
+        subprocess.run(
+            ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
+            check=True,
+            cwd=ROOT,
+        )
 
     logs = ROOT / ".logs"
     logs.mkdir(exist_ok=True)
@@ -320,6 +343,7 @@ def main():
                 "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
                 "FAULTLINE_SEED": str(options.seed),
                 "FAULTLINE_VERBOSE": str(options.verbose).lower(),
+                "FAULTLINE_ANALYTICS": str(options.analytics).lower(),
                 "FAULTLINE_RESUME_RUN_ID": options.resume or "",
                 "FAULTLINE_FORK_GOVERNMENT": options.fork_government or "",
                 "FAULTLINE_TIMELINE": options.timeline or "",
@@ -329,6 +353,13 @@ def main():
                 "ASPNETCORE_CONTENTROOT": str(ROOT / "backend/Faultline.Api"),
             }
         )
+
+        if options.analytics:
+            commit = clean_engine_commit()
+            if commit:
+                api_environment["FAULTLINE_ENGINE_COMMIT"] = commit
+            else:
+                api_environment.pop("FAULTLINE_ENGINE_COMMIT", None)
 
         api = start(
             ["dotnet", "backend/Faultline.Api/bin/Debug/net10.0/Faultline.Api.dll"],

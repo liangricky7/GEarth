@@ -71,4 +71,23 @@ public sealed class DecisionQueueTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => request.Task);
         Assert.Equal(1, faulted.FreeSlots);
     }
+
+    [Fact]
+    public async Task ShutdownReturnsEveryUnappliedIdIncludingAlreadyCompletedWorkExactlyOnce()
+    {
+        await using var queue = new DecisionQueue(3, CancellationToken.None);
+        var slow = new TaskCompletionSource<DecisionResult>();
+        queue.TryStart(Job("slow"), (_, token) => slow.Task.WaitAsync(token));
+        queue.TryStart(Job("completed_but_unapplied"), (job, _) => Task.FromResult(Result(job)));
+        queue.TryStart(Job("applied"), (job, _) => Task.FromResult(Result(job)));
+        // Both completed results leave the queue before shutdown; start a new completed request.
+        var applied = queue.TakeCompleted();
+        Assert.Equal(2, applied.Length);
+        queue.TryStart(Job("late_completed"), (job, _) => Task.FromResult(Result(job)));
+        var abandoned = await queue.CancelAndDrainRequests();
+        Assert.Equal(new[] { "late_completed_request", "slow_request" }, abandoned.Select(job => job.RequestId).Order().ToArray());
+        Assert.DoesNotContain(abandoned, job => applied.Any(item => item.Job.RequestId == job.RequestId));
+        Assert.Empty(await queue.CancelAndDrainRequests());
+        Assert.Equal(0, queue.Count);
+    }
 }

@@ -31,7 +31,8 @@ async def lifespan(application):
         timeout=TIMEOUT_SECONDS,
         trust_env=False,
         limits=httpx.Limits(
-            max_connections=CAPACITY, max_keepalive_connections=CAPACITY
+            max_connections=CAPACITY,
+            max_keepalive_connections=max(0, min(CAPACITY, int(os.environ.get("WORKER_KEEPALIVE_CONNECTIONS", CAPACITY)))),
         ),
     ) as client:
         application.state.model_client = client
@@ -247,11 +248,20 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         headers = {"Authorization": f"Bearer {provider.api_key}"}
 
         async with asyncio.timeout(min(TIMEOUT_SECONDS, remaining_seconds)):
-            response = await app.state.model_client.post(
-                f"{provider.base_url}/chat/completions",
-                headers=headers,
-                json=build_prompt(job, provider.model),
-            )
+            # SSH relays can close a reused connection between requests. Retry once
+            # inside the original deadline; a transient disconnect must not put a
+            # healthy model into cooldown and reject the remaining weekly cohort.
+            for attempt in range(2):
+                try:
+                    response = await app.state.model_client.post(
+                        f"{provider.base_url}/chat/completions",
+                        headers=headers,
+                        json=build_prompt(job, provider.model),
+                    )
+                    break
+                except httpx.RemoteProtocolError:
+                    if attempt == 1:
+                        raise
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
             action = validate_action(json.loads(content), job)
@@ -280,7 +290,7 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
             "evidence_ids": [],
         }
         return decision_result(
-            job, action, "rule_fallback", started_at, type(error).__name__, provider
+            job, action, "rule_fallback", started_at, error, provider
         )
 
     finally:
@@ -298,6 +308,18 @@ def decision_result(
     error=None,
     provider=None,
 ):
+    category = None
+    status = None
+    if error is not None:
+        if isinstance(error, (TimeoutError, httpx.TimeoutException)):
+            category = "model_timeout"
+        elif isinstance(error, httpx.HTTPStatusError):
+            category = "model_http_error"
+            status = error.response.status_code
+        elif isinstance(error, httpx.HTTPError):
+            category = "model_transport_error"
+        else:
+            category = "model_invalid_response"
     return {
         "request_id": job.request_id,
         "action": action,
@@ -305,5 +327,7 @@ def decision_result(
         "model": provider.model if provider else MODEL,
         "backend": provider.name if provider else "spark_a",
         "latency_ms": round((time.perf_counter() - started_at) * 1000, 2),
-        "error": error,
+        "error": type(error).__name__ if error is not None else None,
+        "error_category": category,
+        "error_http_status": status,
     }

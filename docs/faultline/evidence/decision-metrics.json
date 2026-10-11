@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-10",
+  "task": "https://trello.com/c/lswO2Gu9",
+  "dependency_revision": "f60d36f653878daea9ba28a12642f7ef5dc5f062",
+  "main_revision": "0833da5d4d9c07f3d67da5084b12064eb8e1e341",
+  "tested_combined_code_tree": "de698761c760c4e573f553b0bbef58321166c1fe",
+  "focused_branch_tests": {
+    "python_passed": 34,
+    "csharp_passed": 52
+  },
+  "combined_main_tests": {
+    "python_passed": 41,
+    "csharp_passed": 68,
+    "failed": 0,
+    "skipped": 0,
+    "merge_conflicts": false
+  },
+  "controlled_integration": {
+    "passed": true,
+    "new_spark_calls": 0,
+    "completed": {
+      "admitted": 100,
+      "applied": 100,
+      "pending": 0,
+      "canceled": 0
+    },
+    "stopped": {
+      "admitted": 8,
+      "applied": 0,
+      "pending": 0,
+      "canceled": 8
+    },
+    "checks": [
+      "full API/event/storage reconciliation",
+      "valid but engine-rejected responses",
+      "model failure categories",
+      "worker HTTP rejection",
+      "malformed worker JSON",
+      "coordinator duration",
+      "request trace",
+      "graceful cancellation IDs",
+      "saved stopped-run readback"
+    ]
+  },
+  "historical_saved_run": {
+    "source": "https://diarockets-faultline.finebear64.chatgpt.site/api/runs/world_20261010_125750_6d3812/events",
+    "run_id": "world_20261010_125750_6d3812",
+    "event_count": 3362,
+    "completed_results": 2086,
+    "valid_model_responses": 2017,
+    "by_source": {
+      "model": {
+        "accepted": 1881,
+        "rejected": 136
+      },
+      "rule": {
+        "accepted": 0,
+        "rejected": 0
+      },
+      "rule_fallback": {
+        "accepted": 56,
+        "rejected": 13
+      }
+    },
+    "model_timeouts": 11,
+    "engine_rejection_codes": {
+      "CURRENT_PRECONDITION_FAILED": 19,
+      "EXPIRED_PROPOSAL": 130
+    },
+    "accounting_scope": "legacy applied results only; admissions/cancellations unknown",
+    "event_archive_sha256": "6040babea9f56d21c9d1fd62566f2ba1b12f7ef64a95274dbce46ae02ed6562b",
+    "snapshot_sha256": "8737b3a93264ae110d3715cc0f3df50b9646e6338bd253e0ad805380a12d343d"
+  },
+  "code_sha256": {
+    "agents/test_worker.py": "84f2e0f900dd4f95da89d50b3d0532728b938767a1ed580d1e6a95f47102af09",
+    "agents/worker.py": "556af328efad5d916ccd2435bb3ef2fe367df1d7d2b01e71f25faf1b55db2e75",
+    "backend/Faultline.Api/Coordinator.cs": "b87a453aeb784656d08369126e6134e1ccd60cc0bfd7f00b21265bef08e01a8f",
+    "backend/Faultline.Api/DecisionQueue.cs": "f4616c6a10725192007c8afc97cc099d0013089abda0f537d116b1c2bbc342b9",
+    "backend/Faultline.Api/WorkerClient.cs": "4035893d747f17b7622032c3e502abe8f1cc64a0123e7b30d6045e37605c4c4c",
+    "backend/Faultline.Core/SocietyEngine.cs": "edc0a5861e21cfc960dc70ce5466cef411dcd423d03e3aff611b78be3f1af6f2",
+    "backend/Faultline.Core/SocietyProjection.cs": "fc1cc1d2e6191b009cf57a025e4a06b68d99f043695d397a8a07e4389fe718aa",
+    "backend/Faultline.Core/World.cs": "21d6786377bde61a50129252225d1d8e890a927f91f482c876b24c7b801c8463",
+    "backend/Faultline.Tests/DecisionQueueTests.cs": "26161a58ba5e0b4abf36d0d0c35a46e0a4b8f414176dbc3f04317e86c2953e7e",
+    "backend/Faultline.Tests/WorkerClientTests.cs": "d8c3a080cb5e3f2d54060794542692f1fd4b5315f72b000ac92ff6939ba38efb",
+    "docs/faultline/contracts/event.v2.schema.json": "6a05dbe435f34f9113b40fdcc822598330092df7d4c3ec7b12e912e315ba382c",
+    "ops/check_decision_metrics.py": "a89d14e4cfefbf53b740b6b215f9f91a22f95ab9848a82b6a986fdb230b7535b",
+    "ops/check_world.py": "bcdcf5e468543bef9616773debd4a30626d17889a5057d25775828746ec04b0c",
+    "ops/decision_metrics.py": "c1bb6ac6ffa5fbf0cc21ad228a8c466705435f0b9dadd916dbace4278d06eb66",
+    "ops/test_decision_metrics.py": "553b9d998e12d38f0d061fca1cc26ea1c0d2400b096f460eaf026001fc8a60de"
+  },
+  "trello_changed": false,
+  "integration_status": "Awaiting scheduling dependency integration and pull request review",
+  "limits": [
+    "Controlled worker cases do not measure Spark capacity.",
+    "Legacy admissions/cancellations remain unknown.",
+    "Forced termination preserves the last committed boundary, not an inferred cancellation result."
+  ]
+}

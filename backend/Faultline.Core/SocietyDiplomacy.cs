@@ -55,6 +55,9 @@ public static class SocietyDiplomacy
         foreach (var policy in world.Society!.Policies.Where(policy => policy.EffectiveTick <= world.Tick).ToArray())
         {
             var nation = world.Society.Nations[policy.CountryId];
+            using var auditContext = RunAudit.Context(world, new(EventId: policy.CauseId));
+            using var effects = RunAudit.Effects(world, world.Agents[nation.Id + "_government"],
+                new ActionProposal(policy.ActionType, policy.Params, "policy enactment", []), null, policy.CauseId);
             var accepted = HasAuthority(world, nation) && Enact(world, nation, policy);
             world.Emit(accepted ? "policy_enacted" : "policy_blocked", "rule", [nation.Id, policy.Id], new
             {

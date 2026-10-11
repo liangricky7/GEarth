@@ -1,5 +1,16 @@
 # GEarth renderer integration verification — 2026-10-11
 
+Main integration follow-up: combined current main with the Bistro import,
+meadow walk, country statistics and market-square inspection. Release build,
+CTest (including town parsing and walking checks), and the complete graphics
+smoke suite passed. All 54 enabled JavaScript tests passed, including native
+recording parsing and GPU reconnect; the optional live-API check was skipped.
+The unchanged backend passed all 379 .NET tests. The Python suite in WSL passed
+339 tests and 191 subtests; its real-engine process integration test was skipped
+because WSL has no .NET runtime. Windows cannot run the Linux deployment tests
+that use `fcntl`, `pwd` and process groups. Evidence is retained in the ignored
+`artifacts/local/main-integration` worktree and its `renderer/build/final-smoke`.
+
 Windows x64, NVIDIA RTX 3060 Laptop GPU, Vulkan SDK 1.4.357.0,
 Visual Studio 2026/MSVC 19.51, CMake 4.3.1, Node and Python 3.11.
 

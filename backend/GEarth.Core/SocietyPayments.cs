@@ -14,7 +14,7 @@ public static class SocietyPayments
     public static void AddOptions(World world, Agent agent, List<Candidate> options)
     {
         var amount = PayAmount(agent);
-        if (agent.CashMinor >= amount)
+        if (SocietyBank.Liquid(world, agent) >= amount)
             foreach (var recipient in Recipients(world, agent))
                 options.Add(SocietyActions.Make("pay", new { recipient_id = recipient.Id, amount_minor = amount }));
         if (!SocietyLabor.IsResident(agent))
@@ -69,7 +69,7 @@ public static class SocietyPayments
     }
 
     private static bool CanPay(World world, Agent payer, string recipientId, long amount) =>
-        amount > 0 && payer.CashMinor >= amount && recipientId != payer.Id
+        amount > 0 && SocietyBank.Liquid(world, payer) >= amount && recipientId != payer.Id
         && world.Agents.TryGetValue(recipientId, out var recipient) && recipient.CountryId == payer.CountryId;
 
     // The quoted price is part of the choice: a repriced seller invalidates it rather than charging more.
@@ -77,7 +77,7 @@ public static class SocietyPayments
         SocietyLabor.IsResident(buyer) && world.Agents.TryGetValue(sellerId, out var seller)
         && seller.Role == "business" && seller.Specialty == good && seller.CountryId == buyer.CountryId
         && seller.PriceMinor == price && seller.Inventory[good] >= quantity
-        && buyer.CashMinor >= (long)quantity * price;
+        && SocietyBank.Liquid(world, buyer) >= (long)quantity * price;
 
     private static IEnumerable<Agent> Recipients(World world, Agent payer)
     {

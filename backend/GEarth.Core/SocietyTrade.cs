@@ -16,7 +16,7 @@ public static class SocietyTrade
             return false;
         var path = Path(world, seller.LocationId, buyer.LocationId, objective);
         var value = (long)quantity * seller.PriceMinor;
-        return path is not null && buyer.CashMinor >= value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value)
+        return path is not null && SocietyBank.CashAvailable(world, buyer) >= value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value)
             && world.Society!.Cargo.Count(cargo => cargo.BuyerId == buyer.Id && cargo.Good == good && cargo.Status == "in_transit") < 2;
     }
 
@@ -96,6 +96,7 @@ public static class SocietyTrade
         using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor, cargoId);
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
+        SocietyBank.Draw(world, buyer, value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value));
         buyer.CashMinor -= value;
         // A domestic freight firm (dockworkers) carries the goods; without one the port authority collects the fee.
         var carrier = SocietyLabor.Firms(world, buyer.CountryId, "freight").OrderBy(agent => agent.Id).FirstOrDefault()

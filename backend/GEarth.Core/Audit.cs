@@ -61,10 +61,13 @@ public static class RunAudit
         configuration["features"] = Wire.Node(new
         {
             public_services = world.Society is null ? null : "v1",
-            bounded_integer_choices = "v1"
+            bounded_integer_choices = "v1",
+            banking = world.Society is null ? null : SocietyBank.AccountingVersion,
+            resources = world.Society is null ? null : "phase1_v1",
+            labor_distribution = world.Society is null ? null : "v1"
         });
         configuration["active_features"] = Wire.Node(world.Society is null ? new[] { "bounded_integer_choices" }
-            : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices" });
+            : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices", "deposit_creation", "resources", "labor_distribution" });
         configuration["banking_paused"] = world.Society is null ? null : JsonValue.Create(SocietyBank.Paused);
         configuration["economy_configuration"] = world.Society is null ? null : Wire.Node(EconomyConfiguration());
         Append(world, "run_metadata", configuration);
@@ -118,17 +121,17 @@ public static class RunAudit
             SocietyEconomy.SavingsHorizonWeeks, parts_basis = "snapshot_state_recomputed",
             wellbeing_basis = "engine_smoothed_score", adjustment_divisor = 4 },
         planning = new { SocietyPlanning.PlanningWeeks, SocietyPlanning.PlannedSectors },
-        banking = new { SocietyBank.Paused, SocietyBank.ReserveRatioPct, SocietyBank.CashBufferWeeks,
+        banking = new { SocietyBank.Paused, SocietyBank.ReserveRatioPct, SocietyBank.CapitalRatioPct, SocietyBank.AccountingVersion, SocietyBank.CashBufferWeeks,
             SocietyBank.LoanWeeks, SocietyBank.LoansPerBanker, SocietyBank.MissedPaymentsToDefault,
             SocietyBank.WeeksPerYear, SocietyBank.DepositRates, SocietyBank.LoanRates,
             lending_standards = SocietyBank.Standards.ToDictionary(pair => pair.Key, pair => new
                 { pair.Value.DownPaymentPct, pair.Value.RevenueSharePct }) },
         accounting = new
         {
-            conserved_money = "agent_cash_plus_cargo_escrow",
-            deposit_minor = "claim_on_bank_cash_not_additional_money",
+            conserved_money = "base_cash_including_bank_reserves_plus_cargo_escrow",
+            deposit_minor = "bank_liability_created_by_cash_deposits_and_credit; broad_money_is_not_conserved",
             in_kind_minor = "wage_deduction_owed_not_money_transfer",
-            bank_capture_scope = "cash_transfers_and_daily_claim_balances; loan_lifecycle_events_only"
+            bank_capture_scope = "cash_transactions_and_bank_ledger_claim_changes; daily_balance_sheets"
         }
     };
 
@@ -160,7 +163,11 @@ public static class RunAudit
             ? SocietyPlanning.Quota(world, society.Nations[agent.CountryId], agent) : null,
         agent.DepositMinor, agent.KeepsSavingsInBank, agent.DepositRatePct, agent.LoanRatePct,
         agent.LendingStandard, agent.UnmetWithdrawalsMinor,
-        agent.WeekInMinor, agent.WeekOutMinor, agent.LastWeekInMinor, agent.LastWeekOutMinor
+        agent.WeekInMinor, agent.WeekOutMinor, agent.LastWeekInMinor, agent.LastWeekOutMinor,
+        agent.WageIndexReference, agent.LastWeekDisposableIncomeMinor, agent.LastWeekRealIncomeMinor,
+        agent.LastWeekWorkDays, agent.LastWeekIncomeTick,
+        agent.LastWeekIncomeConstrained, agent.LastWeekOperatingProfitMinor,
+        net_wealth_minor = SocietyLabor.IsResident(agent) ? (long?)SocietyMetrics.NetWealth(world, agent) : null
     };
 
     private static object NationState(Nation nation) => new
@@ -176,7 +183,10 @@ public static class RunAudit
         nation.ProducedUnits, nation.LostUnits, nation.SalesTaxCollectedMinor, nation.ProfitTaxCollectedMinor,
         nation.DoctorVisits, nation.PublicDoctorVisits, nation.DividendsPaidMinor, nation.UnemploymentPaidMinor,
         nation.BusinessesStarted, nation.BusinessesClosed, nation.DepositInsurancePaidMinor,
-        nation.BankFailures, nation.DefaultedLoans
+        nation.BankFailures, nation.DefaultedLoans,
+        nation.EmployedResidents, nation.LaborForce, nation.Nonparticipants, nation.JoblessResidents,
+        nation.GiniDisposableIncome, nation.GiniNetWealth, nation.EssentialsBasketMinor, nation.MedianRealDisposableIncomeMinor,
+        labor_and_distribution = SocietyMetrics.View(nation)
     };
 
     // Exactly one row per agent per simulated day. Call at the day's boundary, after late results.
@@ -203,6 +213,8 @@ public static class RunAudit
                     escrow_accounts = society.Cargo.Where(cargo => world.Agents[cargo.BuyerId].CountryId == nation.Id)
                         .Select(cargo => new { account_id = cargo.Id, balance_minor = cargo.EscrowMinor }).ToArray(),
                     residents = residents.Length, nation.Unemployed, nation.Approval,
+                    nation.EmployedResidents, nation.LaborForce, nation.Nonparticipants, nation.JoblessResidents,
+                    nation.GiniDisposableIncome, nation.GiniNetWealth, nation.EssentialsBasketMinor, nation.MedianRealDisposableIncomeMinor,
                     students = residents.Count(SocietyLabor.IsStudent), graduates = residents.Count(agent => agent.Graduated),
                     job_seekers = residents.Count(agent => agent.SeekingUntilTick >= world.Tick),
                     hungry_residents = residents.Count(agent => agent.Hungry), too_sick_residents = residents.Count(SocietyEconomy.TooSick),

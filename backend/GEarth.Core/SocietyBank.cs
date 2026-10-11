@@ -2,7 +2,7 @@ namespace GEarth.Core;
 
 // One commercial bank per country, a firm in the "bank" sector run by its owner (state-owned in planned
 // economies). Each week residents' savings and private firms' cash above a buffer are swept into deposits that
-// earn interest, and those deposits fund business, startup and student loans repaid in weekly installments. Only a fraction of
+// earn interest. Loans create matching deposits, constrained by equity and settlement reserves. Only a fraction of
 // deposits is kept as reserves, so when many depositors withdraw at once the bank runs short; the
 // government's deposit insurance (set by government type) then pays the insured part and takes over that
 // claim on the bank. The owner sets rates and a lending standard; the bank applies them to each request.
@@ -11,6 +11,8 @@ public static class SocietyBank
     public const string Sector = "bank";
     public const bool Paused = false; // recorded in run metadata (banking_paused) so analytics can tell runs apart
     public const int ReserveRatioPct = 10;
+    public const int CapitalRatioPct = 10; // simplified risk weight: every loan has weight one
+    public const string AccountingVersion = "deposit_creation_v1";
     public const int OwnerStakePct = 15; // of the bank's opening cash; the rest is the owner's deposit
     public const int CashBufferWeeks = 2; // residents keep two weeks of their pay as cash, firms two weeks of payroll
     public const int LoanWeeks = 26;
@@ -33,9 +35,57 @@ public static class SocietyBank
 
     public static long Savings(Agent resident) => resident.CashMinor + resident.DepositMinor;
 
-    // What a resident can spend now: cash plus the part of their deposit the bank's reserves can pay.
+    // Domestic payments transfer deposit claims without withdrawing bank reserves.
     public static long Liquid(World world, Agent resident) =>
+        resident.CashMinor + resident.DepositMinor;
+
+    public static long CashAvailable(World world, Agent resident) =>
         resident.CashMinor + Math.Min(resident.DepositMinor, BankOf(world, resident.CountryId).CashMinor);
+
+    public static long PaymentCapacity(World world, Agent payer, Agent recipient) => payer.CashMinor
+        + (payer.CountryId == recipient.CountryId ? payer.DepositMinor
+            : Math.Min(payer.DepositMinor, BankOf(world, payer.CountryId).CashMinor));
+
+    // Deposit payments settle within one bank, or move reserves between country banks. A payment to the
+    // bank itself extinguishes that liability (loan repayment/fees), rather than giving the bank a deposit.
+    public static void TransferDeposit(World world, Agent payer, Agent recipient, long amount, string kind)
+    {
+        if (amount == 0)
+            return;
+        if (amount < 0 || amount > payer.DepositMinor || amount > PaymentCapacity(world, payer, recipient) - payer.CashMinor)
+            throw new InvalidOperationException("Unfunded deposit transfer");
+        var source = BankOf(world, payer.CountryId);
+        var destination = BankOf(world, recipient.CountryId);
+        payer.DepositMinor -= amount;
+        if (source != destination)
+            SocietyEconomy.Transfer(world, source, destination, amount, "reserve_settlement");
+        if (recipient != destination)
+            recipient.DepositMinor += amount;
+        Ledger(world, source, payer, recipient, amount, kind);
+    }
+
+    private static void Ledger(World world, Agent bank, Agent? from, Agent? to, long amount, string kind)
+    {
+        var payload = new
+        {
+            bank_id = bank.Id, from = from?.Id, to = to?.Id, amount_minor = amount, kind,
+            reserves_minor = bank.CashMinor, deposits_minor = Deposits(world, bank.CountryId),
+            loans_minor = LoansOutstanding(world, bank), equity_minor = Equity(world, bank)
+        };
+        RunAudit.Append(world, "bank_ledger", payload);
+        world.Emit("bank_ledger", "rule", new[] { bank.Id, from?.Id, to?.Id }.OfType<string>().Distinct().ToArray(), payload);
+    }
+
+    private static void Issue(World world, Agent bank, Agent borrower, Credit loan, long amount)
+    {
+        borrower.DepositMinor += amount;
+        loan.DepositCreated = true;
+        world.Society!.CreditCreatedMinor += amount;
+        Ledger(world, bank, null, borrower, amount, "loan_deposit_created");
+    }
+
+    public static long BroadMoney(World world) => world.Agents.Values.Where(agent => !IsBank(agent)).Sum(agent => agent.CashMinor)
+        + world.Agents.Values.Sum(agent => agent.DepositMinor) + world.Society!.Cargo.Sum(cargo => cargo.EscrowMinor);
 
     public static long Deposits(World world, string country) =>
         world.Agents.Values.Where(agent => agent.CountryId == country).Sum(agent => agent.DepositMinor);
@@ -70,6 +120,8 @@ public static class SocietyBank
 
     public static void Deposit(World world, Agent depositor, long amount)
     {
+        if (amount < 0 || amount > depositor.CashMinor)
+            throw new InvalidOperationException("A cash deposit requires cash");
         SocietyEconomy.Transfer(world, depositor, BankOf(world, depositor.CountryId), amount, "deposit");
         depositor.DepositMinor += amount;
     }
@@ -103,7 +155,7 @@ public static class SocietyBank
         return paid + covered;
     }
 
-    // Tops up a resident's cash from their deposit before a payment (a debit-card purchase).
+    // Withdraw cash for cash-only settlement, including imports into shipment escrow.
     public static void Draw(World world, Agent resident, long amount)
     {
         if (resident.CashMinor < amount && resident.DepositMinor > 0)
@@ -157,6 +209,8 @@ public static class SocietyBank
         {
             var interest = (long)Math.Round(depositor.DepositMinor * bank.DepositRatePct / (100.0 * WeeksPerYear));
             depositor.DepositMinor += interest;
+            if (SocietyLabor.IsResident(depositor))
+                depositor.WeekDisposableIncomeMinor += interest;
             society.PeriodCostMinor[bank.Id] = society.PeriodCostMinor.GetValueOrDefault(bank.Id) + interest;
         }
         var equity = Equity(world, bank);
@@ -232,9 +286,7 @@ public static class SocietyBank
             return;
         var principal = Math.Min(loan.PrincipalLeftMinor, loan.WeeklyPrincipalMinor);
         var due = principal + loan.WeeklyInterestMinor;
-        if (borrower.Role != "business")
-            Draw(world, borrower, due);
-        if (borrower.CashMinor < due)
+        if (PaymentCapacity(world, borrower, bank) < due)
         {
             if (++loan.MissedPayments >= MissedPaymentsToDefault)
             {
@@ -247,6 +299,11 @@ public static class SocietyBank
         }
         SocietyEconomy.Transfer(world, borrower, bank, due, loan.Kind == "business" ? "loan_repayment" : $"{loan.Kind}_repayment");
         loan.PrincipalLeftMinor -= principal;
+        if (loan.DepositCreated && IsBank(bank))
+        {
+            society.CreditRetiredMinor += principal;
+            Ledger(world, bank, borrower, null, principal, "loan_principal_retired");
+        }
         loan.MissedPayments = 0;
         society.PeriodRevenueMinor[bank.Id] = society.PeriodRevenueMinor.GetValueOrDefault(bank.Id) + loan.WeeklyInterestMinor;
         society.PeriodCostMinor[borrower.Id] = society.PeriodCostMinor.GetValueOrDefault(borrower.Id) + loan.WeeklyInterestMinor;
@@ -261,25 +318,30 @@ public static class SocietyBank
         foreach (var loan in world.Society!.Credit.Where(credit => credit.BorrowerId == firm.Id && credit.Status == "active").ToArray())
         {
             var bank = world.Agents[loan.BankId];
-            var paid = Math.Min(firm.CashMinor, loan.PrincipalLeftMinor);
+            var paid = Math.Min(PaymentCapacity(world, firm, bank), loan.PrincipalLeftMinor);
             SocietyEconomy.Transfer(world, firm, bank, paid, "loan_recovery");
             loan.PrincipalLeftMinor -= paid;
             if (loan.PrincipalLeftMinor > 0 && firm.OwnerId is { } ownerId && world.Agents[ownerId] is { } owner)
             {
-                Draw(world, owner, loan.PrincipalLeftMinor);
-                var guaranteed = Math.Min(owner.CashMinor, loan.PrincipalLeftMinor);
+                var guaranteed = Math.Min(PaymentCapacity(world, owner, bank), loan.PrincipalLeftMinor);
                 SocietyEconomy.Transfer(world, owner, bank, guaranteed, "loan_guarantee");
                 loan.PrincipalLeftMinor -= guaranteed;
                 paid += guaranteed;
                 if (loan.PrincipalLeftMinor > 0)
                 {
                     var debt = Open(world, bank, owner, loan.PrincipalLeftMinor, "owner_debt", loan.RatePct);
+                    debt.DepositCreated = loan.DepositCreated;
                     world.Emit("owner_debt", "rule", [debt.Id, owner.Id, bank.Id], new
                     {
                         firm = firm.Id, amount_minor = debt.PrincipalMinor, weekly_payment_minor = debt.WeeklyPrincipalMinor + debt.WeeklyInterestMinor
                     });
                     loan.PrincipalLeftMinor = 0; // moved to the owner's debt, not lost
                 }
+            }
+            if (loan.DepositCreated && IsBank(bank) && paid > 0)
+            {
+                world.Society.CreditRetiredMinor += paid;
+                Ledger(world, bank, firm, null, paid, "loan_principal_retired");
             }
             Settle(world, nation, bank, loan, paid);
         }
@@ -298,17 +360,23 @@ public static class SocietyBank
         return credit;
     }
 
-    // Whether the bank can fund a loan of this size now: no unpaid withdrawals, a banker free and reserves kept.
+    // A loan adds both an asset and a deposit liability; capital backs risk and reserves cover settlement.
+    public static long LendingRoom(World world, Agent bank) => Math.Max(0, Math.Min(
+        Equity(world, bank) * 100 / CapitalRatioPct - LoansOutstanding(world, bank),
+        bank.CashMinor * 100 / ReserveRatioPct - Deposits(world, bank.CountryId)));
+
     public static bool CanLend(World world, Agent bank, long amount) =>
-        bank.UnmetWithdrawalsMinor == 0 && Loans(world, bank, "active").Count() < LoanCapacity(world, bank)
-        && bank.CashMinor - amount >= RequiredReserves(world, bank);
+        amount > 0 && bank.UnmetWithdrawalsMinor == 0 && Loans(world, bank, "active").Count() < LoanCapacity(world, bank)
+        && amount <= LendingRoom(world, bank);
 
     // A student loan for tuition, decided on the spot (the government guarantees it) and repaid after the course.
     public static Credit StudentLoan(World world, Agent student, long amount)
     {
         var bank = BankOf(world, student.CountryId);
+        if (!CanLend(world, bank, amount))
+            throw new InvalidOperationException("Student loan no longer affordable for bank");
         var loan = Open(world, bank, student, amount, "student", bank.LoanRatePct);
-        SocietyEconomy.Transfer(world, bank, student, amount, "student_loan");
+        Issue(world, bank, student, loan, amount);
         world.Emit("loan_funded", "rule", [loan.Id, bank.Id, student.Id], new
         {
             loan.PrincipalMinor, loan.RatePct, loan.Kind, weekly_payment_minor = loan.WeeklyPrincipalMinor + loan.WeeklyInterestMinor,
@@ -321,10 +389,15 @@ public static class SocietyBank
     private static void Guarantee(World world, Nation nation, Agent bank, Credit loan)
     {
         var government = world.Agents[nation.Id + "_government"];
-        if (government.CashMinor < loan.PrincipalLeftMinor)
+        if (SocietyBank.Liquid(world, government) < loan.PrincipalLeftMinor)
             return;
         SocietyEconomy.Transfer(world, government, bank, loan.PrincipalLeftMinor, "student_loan_guarantee");
         loan.BankId = government.Id;
+        if (loan.DepositCreated)
+        {
+            world.Society!.CreditRetiredMinor += loan.PrincipalLeftMinor;
+            Ledger(world, bank, government, null, loan.PrincipalLeftMinor, "loan_principal_retired");
+        }
         loan.MissedPayments = 0;
         world.Emit("loan_guaranteed", "rule", [loan.Id, loan.BorrowerId, government.Id], new { paid_minor = loan.PrincipalLeftMinor });
     }
@@ -335,7 +408,7 @@ public static class SocietyBank
     {
         var bank = BankOf(world, nation.Id);
         var government = world.Agents[nation.Id + "_government"];
-        var amount = Math.Min(wanted, bank.CashMinor - RequiredReserves(world, bank));
+        var amount = Math.Min(wanted, LendingRoom(world, bank));
         if (amount <= 0 || bank.UnmetWithdrawalsMinor > 0)
             return 0;
         if (world.Society!.Credit.FirstOrDefault(credit => credit.Kind == "treasury" && credit.BorrowerId == government.Id && credit.Status == "active") is { } loan)
@@ -346,7 +419,7 @@ public static class SocietyBank
         }
         else
             loan = Open(world, bank, government, amount, "treasury", bank.LoanRatePct);
-        SocietyEconomy.Transfer(world, bank, government, amount, "treasury_loan");
+        Issue(world, bank, government, loan, amount);
         world.Emit("treasury_borrowed", "rule", [loan.Id, government.Id, bank.Id], new
         {
             amount_minor = amount, owed_minor = loan.PrincipalLeftMinor, weekly_payment_minor = loan.WeeklyPrincipalMinor + loan.WeeklyInterestMinor
@@ -381,10 +454,11 @@ public static class SocietyBank
         var revenue = world.Society!.PeriodRevenueMinor.GetValueOrDefault(borrower.Id);
         var reason = shortOfReserves ? "the bank could not meet withdrawals"
             : Loans(world, bank, "active").Count() >= LoanCapacity(world, bank) ? "no banker free to service another loan"
-            : bank.CashMinor - request.PrincipalMinor < RequiredReserves(world, bank) ? "reserves are needed for deposits"
+            : Equity(world, bank) * 100 < (LoansOutstanding(world, bank) + request.PrincipalMinor) * CapitalRatioPct ? "capital is needed for loan risk"
+            : request.PrincipalMinor > LendingRoom(world, bank) ? "reserves are needed for deposits"
             : request.Sector is { } sector
                 ? !SocietyLabor.CanStart(world, borrower, sector, request.PrincipalMinor)
-                  || borrower.CashMinor + request.PrincipalMinor + Math.Min(borrower.DepositMinor, bank.CashMinor - request.PrincipalMinor)
+                  || Liquid(world, borrower) + request.PrincipalMinor
                      < SocietyLabor.StartupCost(sector)
                     ? "the founder no longer qualifies" : null
             : borrower.Role != "business" ? "the business closed"
@@ -400,7 +474,7 @@ public static class SocietyBank
         (request.WeeklyPrincipalMinor, request.WeeklyInterestMinor) = (principal, interest);
         request.PrincipalLeftMinor = request.PrincipalMinor;
         request.Status = "active";
-        SocietyEconomy.Transfer(world, bank, borrower, request.PrincipalMinor, "loan");
+        Issue(world, bank, borrower, request, request.PrincipalMinor);
         if (request.Sector is { } opening) // the new firm, not the founder, owes the loan (limited liability)
             request.BorrowerId = SocietyLabor.Start(world, borrower, opening, request.LaunchPriceMinor, request.RequestEventId).Id;
         world.Emit("loan_funded", "rule", [request.Id, bank.Id, request.BorrowerId], new
@@ -433,6 +507,8 @@ public static class SocietyBank
             required_reserves_minor = manager ? RequiredReserves(world, bank) : (long?)null,
             loans_outstanding_minor = manager ? LoansOutstanding(world, bank) : (long?)null,
             equity_minor = manager ? Equity(world, bank) : (long?)null,
+            accounting = AccountingVersion, capital_ratio_pct = CapitalRatioPct,
+            lending_room_minor = manager ? LendingRoom(world, bank) : (long?)null,
             lending_standard = manager ? bank.LendingStandard : null,
             loans_active = manager ? Loans(world, bank, "active").Count() : (int?)null,
             loans_requested = manager ? Loans(world, bank, "requested").Count() : (int?)null,

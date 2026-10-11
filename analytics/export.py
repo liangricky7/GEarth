@@ -16,7 +16,7 @@ FORMAT = "gearth.run-export.v1"
 TERMINAL = {"completed", "stopped", "failed"}
 MAX_ROW_BYTES = 2 * 1024 * 1024
 DEFAULT_CHUNK_BYTES = 64 * 1024 * 1024
-KINDS = {"opening_balance", "agent_day", "nation_day", "transaction", "decision_request", "decision_result", "action_effect", "event", "run_metadata"}
+KINDS = {"opening_balance", "agent_day", "nation_day", "transaction", "bank_ledger", "decision_request", "decision_result", "action_effect", "event", "run_metadata"}
 
 
 def canonical(value):

@@ -12,7 +12,7 @@ Group members can open the website and unlock controls using the shared team pas
 
 See the [design](gearth-design.md) for the full specification, current limitations, decisions and their reasons. Existing deployments require the [GEarth cutover](docs/gearth/24-gearth-rename.md) to preserve saved data.
 
-The full-year calibration test passes in the current rename verification. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
+The full-year calibration test covers the economic loop; no sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Banks create deposits when lending, subject to simplified capital and reserve constraints. Ore, fuel, industrial inputs and freight costs constrain production in both market and planned economies. See the [post-bank follow-up](docs/gearth/post-bank-followup.md) for the model protocol, economic fixes and validation limits. Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
 
 ## Run locally
 

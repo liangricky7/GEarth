@@ -259,6 +259,10 @@ public sealed class ResourcesTests
         var world = Create();
         var nation = world.Society!.Nations["aster"];
         nation.QolParts = new() { ["needs"] = 1, ["health"] = 1, ["comfort"] = 1, ["security"] = 1 };
+        nation.Endowment["ore"] = 2; // entry needs a profitable margin, even when stock is empty
+        var idle = world.InCountry("aster").First(agent => agent.Role == "citizen");
+        idle.EmployerId = null;
+        idle.Occupation = "miner";
         WithdrawSupply(world, "ore", "aster");
         Assert.True(SocietyLabor.HasGap(world, nation, "mine"));
         Assert.False(nation.QolParts.ContainsKey(SocietyLabor.QolPartOf("mine")));
@@ -394,8 +398,9 @@ public sealed class ResourcesTests
         var quantity = candidate.Params["quantity"]!.GetValue<int>();
         var seller = world.Agents[sellerId];
         var path = SocietyTrade.Path(world, seller.LocationId, buyer.LocationId, "cheapest")!;
-        Assert.Equal(SocietyResources.ShippingCost(world, buyer, path, quantity) / (double)quantity,
-            offer["shipping_minor"]!.GetValue<double>());
+        var total = SocietyResources.ShippingCost(world, buyer, path, quantity);
+        Assert.Equal((long)Math.Ceiling(total / (double)quantity), offer["shipping_minor"]!.GetValue<long>());
+        Assert.Equal(total, offer["shipping_total_minor"]!.GetValue<long>());
         Assert.Equal(quantity, offer["quoted_quantity"]!.GetValue<int>());
     }
 

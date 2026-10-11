@@ -92,6 +92,22 @@ class PublicServicesReportTests(unittest.TestCase):
         export_run("http://localhost", self.metadata["run_id"], self.root / "export", fetch=fake_fetch(self.metadata, self.records))
         return build_report(self.root / "export" / "manifest.json")
 
+    def test_bank_ledger_is_retained_without_entering_cash_reconciliation(self):
+        for movement, amount in (("loan_deposit_created", 1000), ("wage", 100)):
+            self.records.append({"run_id": self.metadata["run_id"], "sequence": len(self.records) + 1,
+                "tick": 1, "revision": 2, "kind": "bank_ledger", "payload": {
+                    "bank_id": "bank", "from": "b", "to": "a", "kind": movement, "amount_minor": amount,
+                    "reserves_minor": 50, "deposits_minor": 1000, "loans_minor": 1000, "equity_minor": 50}})
+        self.metadata["through_sequence"] = len(self.records)
+        table, row = typed_record(self.records[-1])
+        self.assertEqual(table, "bank_ledger")
+        self.assertEqual(row["amount_minor"], 100)
+        report = self.report()
+        self.assertEqual(report["summary"]["transfer_minor"], 25)
+        self.assertEqual(report["banking"]["ledger_record_count"], 2)
+        self.assertEqual({item["kind"]: item["amount_minor"] for item in report["public_services"]["transfers_by_kind"]}["wage"], 100)
+        self.assertEqual(next(row["status"] for row in report["checks"] if row["name"] == "cash_plus_escrow_conservation"), "pass")
+
     def bounded_decision(self):
         request, result = self.records[4]["payload"], self.records[5]["payload"]
         request["menu_parameter_contract"] = "fixed_or_bounded_integer.v1"

@@ -125,7 +125,7 @@ public sealed class PublicServicesAuditTests
         Assert.Equal(SocietyBank.Paused, metadata["banking_paused"]!.GetValue<bool>()); // the engine records its own flag
         Assert.Equal("v1", metadata["features"]!["public_services"]!.GetValue<string>());
         Assert.Equal(SocietyLabor.CourseDays, metadata["economy_configuration"]!["school"]!["course_days"]!.GetValue<int>());
-        Assert.Equal("claim_on_bank_cash_not_additional_money", metadata["economy_configuration"]!["accounting"]!["deposit_minor"]!.GetValue<string>());
+        Assert.Contains("broad_money_is_not_conserved", metadata["economy_configuration"]!["accounting"]!["deposit_minor"]!.GetValue<string>());
         var opening = world.PendingAudit.Where(row => row.Kind == "opening_balance").ToArray();
         Assert.Equal(world.InitialCashMinor, opening.Sum(row => row.Payload["balance_minor"]!.GetValue<long>()));
         Assert.Equal(123, opening.Single(row => row.Payload["account_id"]!.GetValue<string>() == person.Id).Payload["agent"]!["deposit_minor"]!.GetValue<long>());

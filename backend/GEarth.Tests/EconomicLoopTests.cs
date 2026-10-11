@@ -29,7 +29,9 @@ public sealed class EconomicLoopTests
             Assert.True(producers > minimumProducerRatio && producers < 3, $"{nation.Id} government+business cash ratio {producers:F2}");
             // Fixed state prices now leave more savings with households as industrial input costs
             // draw down public capital; resource delivery and resident health are checked separately.
-            var maximumHouseholdRatio = SocietyLabor.IsPlanned(nation) ? 4 : 3;
+            // Banks-on resources move more opening public capital to households at fixed state prices;
+            // this is a cash-distribution bound, not a productivity target. Health, food and jobs stay bounded.
+            var maximumHouseholdRatio = SocietyLabor.IsPlanned(nation) ? 6.5 : 3;
             Assert.True(households > 0.3 && households < maximumHouseholdRatio, $"{nation.Id} household cash ratio {households:F2}");
             var residents = world.Agents.Values.Where(agent => agent.CountryId == nation.Id && SocietyLabor.IsResident(agent)).ToArray();
             Assert.True(residents.Average(resident => resident.Health) > 70, $"{nation.Id} health");

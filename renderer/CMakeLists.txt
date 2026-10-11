@@ -14,7 +14,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 find_package(Vulkan REQUIRED)
 find_program(GLSL_VALIDATOR glslangValidator HINTS "$ENV{VULKAN_SDK}/Bin" REQUIRED)
 add_subdirectory(third_party)
-add_executable(renderer src/main.cpp src/vk_engine.cpp src/globe.cpp src/procedural_world.cpp src/replay.cpp src/event_replay.cpp src/pipeline_replay.cpp src/ao_bake.cpp src/vk_engine_bootstrap.cpp
+add_executable(renderer src/main.cpp src/vk_engine.cpp src/globe.cpp src/procedural_world.cpp src/replay.cpp src/event_replay.cpp src/pipeline_replay.cpp src/town.cpp src/ao_bake.cpp src/vk_engine_bootstrap.cpp
     src/vk_engine_resources.cpp src/vk_engine_materials.cpp src/vk_loader.cpp
     src/vk_initializers.cpp src/vk_descriptors.cpp src/vk_pipelines.cpp src/vk_images.cpp)
 target_include_directories(renderer PRIVATE src)

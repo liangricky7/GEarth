@@ -7,6 +7,7 @@
 #include <future>
 #include "event_replay.h"
 #include "pipeline_replay.h"
+#include "town.h"
 #include <SDL.h>
 #include <filesystem>
 
@@ -50,7 +51,7 @@ struct MeshNode : Node {
 class VulkanEngine {
 public:
     ~VulkanEngine();
-    enum class OceanView { Plane, Ship };
+    enum class OceanView { Plane, Ship, Meadow };
     // ocean = start over open water in that view instead of on the globe.
     // planeModel / shipModel = glTF cockpit and ship carried with the plane and ship cameras.
     void init(const std::optional<std::filesystem::path>& model, bool smoke, const std::optional<std::filesystem::path>& replay = {},
@@ -99,7 +100,7 @@ private:
     AllocatedImage _drawImage, _depthImage, _tonemapImage, _finalImage, _shadowImage, _bloomImage;
     VkSampler _shadowSampler{}, _postSampler{}, _bloomSampler{}; DescriptorAllocatorGrowable _descriptors;
     VkDescriptorSetLayout _postLayout{}; VkDescriptorSet _tonemapSet{}, _fxaaSet{};
-    MaterialPipeline _shadowPipeline, _tonemapPipeline, _fxaaPipeline, _spacePipeline, _skyPipeline, _waterPipeline;
+    MaterialPipeline _shadowPipeline, _tonemapPipeline, _fxaaPipeline, _spacePipeline, _skyPipeline, _waterPipeline, _terrainPipeline, _grassPipeline;
     void update_ocean(); void draw_ocean(VkCommandBuffer cmd);
     std::shared_ptr<LoadedGLTF> _model;
     GPUMeshBuffers _sphere, _ground; uint32_t _sphereIndices{}, _groundIndices{};
@@ -129,7 +130,14 @@ private:
     bool _night{};
     bool _vehicleShadows{true}; // ocean views: sun shadows inside the cockpit/ship, separate from the globe setting
     bool _showPanels{true}; // H toggles the control panels (HUD, captions and labels stay) for clean recordings
-    enum class Scene { Globe, Ocean };
+    enum class Scene { Globe, Ocean, Ground };
+    // Ground: a country's market square (Inspect). _transition runs 0-1.5 s through the dive and fade; the scene swaps at .9 s.
+    Town _town; int _townCountry{-1}; float _transition{-1}, _townYaw{.6f}, _townDistance{24};
+    GPUMeshBuffers _townMesh; MaterialInstance _townMaterial;
+    void update_ground(); void enter_ground();
+    // Country info panel, opened by a country button or a click on the globe; agent totals are cached per frame revision.
+    int _selectedCountry{-1}; int64_t _countryInfoRevision{-1}; CountryAgents _countryInfo;
+    glm::vec2 _clickStart{};
     Scene _scene{Scene::Globe};
     float _oceanSeconds{};
     OceanPushConstants _oceanPush;
@@ -153,7 +161,9 @@ private:
     void load_vehicle(int index);
     // The planet map is generated on a worker thread while Vulkan starts up.
     std::future<ProceduralWorld> _worldFuture;
-    Vehicle* active_vehicle() { return &_vehicles[_oceanView == OceanView::Ship]; }
+    Vehicle* active_vehicle() { return _oceanView == OceanView::Meadow ? nullptr : &_vehicles[_oceanView == OceanView::Ship]; }
+    // Meadow view: wind strength (0-1.5), gustiness (0-1), wind heading and sun elevation in degrees.
+    float _windStrength{.8f}, _gustiness{.85f}, _windHeading{200}, _meadowSunHeight{11};
     // Plane and ship captions name a real replay shipment on an air or sea route when one exists.
     std::string _planeCaption{"GEarth cargo view. Camera and ocean motion are illustrative."};
     std::string _shipCaption{"GEarth cargo view. Camera and ocean motion are illustrative."};

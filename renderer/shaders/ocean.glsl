@@ -4,6 +4,7 @@ layout(push_constant) uniform OceanConstants {
     vec4 params;   // x = time in seconds, y/z = camera x/z (centre of the water grid), w = camera height.
                    // Geometry is camera-relative (camera at the origin); only wave phases use absolute x/z.
     vec4 viewport; // xy = framebuffer size in pixels
+    vec4 wind;     // meadow only: xy = wind direction * strength, z = gustiness, w = radians per pixel
 } ocean;
 
 // Sky that follows the sun's height: warm golden-hour haze when it is low, clear blue when it is high. Linear HDR.

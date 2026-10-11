@@ -237,6 +237,17 @@ def main():
     header, pixels = (args.output/'ship.ppm').read_bytes().split(b'\n255\n', 1)
     assert len(set(pixels[::3001])) > 50, 'Ship view must render varied sky and water, not a cleared frame'
     run('plane',['--smoke','--frames','12','--scene','plane'])
+    run('meadow',['--smoke','--frames','12','--scene','meadow','--capture',args.output/'meadow.ppm'])
+    run('meadow-later',['--smoke','--frames','24','--scene','meadow','--capture',args.output/'meadow-later.ppm'])
+    def ground_pixels(name):
+        # Lower two fifths, right of the control panel: the field.
+        header, pixels = (args.output/(name+'.ppm')).read_bytes().split(b'\n255\n', 1)
+        width, height = map(int, header.splitlines()[1].split())
+        return b''.join(pixels[(y*width+width//3)*3:(y+1)*width*3] for y in range(height*3//5, height))
+    field = ground_pixels('meadow')
+    assert sum(field[1::3]) > sum(field[0::3]) and sum(field[1::3]) > 1.5*sum(field[2::3]), 'The meadow field must render green grass'
+    assert len(set(field[::3001])) > 50, 'The meadow must render varied blades, not a flat fill'
+    assert difference(field, ground_pixels('meadow-later')) > 1, 'The meadow walk and wind must change the field over time'
     log = run('ship-vehicle',['--smoke','--frames','12','--scene','ship','--ship-model',good,'--plane-model',good,'--capture',args.output/'ship-vehicle.ppm'])
     assert log.count('Vehicle model loaded') == 1 and 'no-such' not in log, 'Only the starting (ship) view loads its model; the plane model waits for first use'
     run('missing-vehicle',['--scene','ship','--ship-model',args.output/'no-such.glb'],1)

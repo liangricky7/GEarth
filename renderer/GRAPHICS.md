@@ -33,6 +33,20 @@ GLB/glTF with PNG/JPEG or BC7 DDS materials, alpha masks, blending, emissive map
 and metallic/roughness or specular/glossiness materials. Skinning, animation,
 sparse geometry, Draco/KTX2 and other material extensions remain unsupported.
 
+## Meadow
+
+```powershell
+renderer/build/Release/renderer.exe --scene meadow
+```
+
+A slow golden-hour walk through endless procedural grassland: rolling hills,
+about a million wind-bent grass blades in three distance bands, patches of
+poppies, cornflowers, daisies and buttercups, and drifting clouds whose shadows
+cross the field. Gust fronts roll over the grass as visible bands. Nothing is
+loaded from disk; terrain, blades, flowers and clouds are generated on the GPU
+each frame. Right mouse looks around and R recenters, as in the ship view; the
+lighting panel adds wind, gust, wind heading and sun height sliders.
+
 ## Bistro environment
 
 From the repository root, fetch the pinned Niagara Bistro assets once, then open

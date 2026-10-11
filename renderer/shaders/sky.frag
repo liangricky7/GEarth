@@ -1,7 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "scene_data.glsl"
-#include "ocean.glsl"
+#include "meadow.glsl"
 layout(location = 0) out vec4 outColor;
 void main() {
     // Rebuild this pixel's view ray from the inverse view-projection.
@@ -11,5 +11,6 @@ void main() {
     vec3 sun = normalize(scene.sunlightDirection.xyz);
     // Below the horizon (past the end of the water grid) continue the sea's distance haze, not the sky.
     if (dir.y < 0.0) dir = normalize(vec3(dir.x, .02, dir.z));
-    outColor = vec4(sky_color(dir, sun) + (dir.y > .019 ? sun_disc(dir, sun) : vec3(0.0)), 1.0);
+    vec3 color = sky_color(dir, sun) + (dir.y > .019 ? sun_disc(dir, sun) : vec3(0.0));
+    outColor = vec4(sky_clouds(color, dir, sun, ocean.params.yz, ocean.params.w), 1.0);
 }

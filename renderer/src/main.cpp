@@ -33,8 +33,9 @@ int main(int argc, char** argv) {
                 std::string_view scene = argv[++i];
                 if (scene == "plane") ocean = VulkanEngine::OceanView::Plane;
                 else if (scene == "ship") ocean = VulkanEngine::OceanView::Ship;
+                else if (scene == "meadow") ocean = VulkanEngine::OceanView::Meadow;
                 else if (scene == "globe") ocean.reset();
-                else throw std::runtime_error("--scene must be globe, plane or ship");
+                else throw std::runtime_error("--scene must be globe, plane, ship or meadow");
             }
             else if (arg == "--frames" && i + 1 < argc) {
                 std::string_view number = argv[++i];
@@ -42,7 +43,7 @@ int main(int argc, char** argv) {
                 if (parsed.ec != std::errc{} || parsed.ptr != number.data() + number.size() || frames < 1)
                     throw std::runtime_error("--frames requires a positive integer");
             } else if (arg != "--smoke") {
-                throw std::runtime_error("Usage: renderer [--stream DIRECTORY | --replay run.replay | --events run.events.json | --mesh model.glb | --environment scene.gltf] [--smoke] [--frames N] [--capture image.ppm] [--scene globe|plane|ship] [--plane-model cockpit.gltf] [--ship-model ship.gltf] [--self-test | --check-stream DIRECTORY --tick DAY]");
+                throw std::runtime_error("Usage: renderer [--stream DIRECTORY | --replay run.replay | --events run.events.json | --mesh model.glb | --environment scene.gltf] [--smoke] [--frames N] [--capture image.ppm] [--scene globe|plane|ship|meadow] [--plane-model cockpit.gltf] [--ship-model ship.gltf] [--self-test | --check-stream DIRECTORY --tick DAY]");
             }
         }
         if (stream && (mesh || replay || events || ocean || planeModel || shipModel)) throw std::runtime_error("--stream requires the globe without other replay/model options");
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
         if (stream && std::filesystem::is_regular_file(*stream)) recording=std::async(std::launch::async,
             [path=*stream] { return PipelineReplay::load(path,generate_world(64,32)); });
         VulkanEngine engine;
-        if (ocean && mesh) throw std::runtime_error("Plane and ship views cannot be combined with --mesh");
+        if (ocean && mesh) throw std::runtime_error("Plane, ship and meadow views cannot be combined with --mesh");
         engine.init(mesh, smoke, replay, ocean, planeModel, shipModel, events, environment);
         if (stream) engine.load_stream(*stream,recording.valid() ? std::optional(recording.get()) : std::nullopt);
         engine.run(frames, capture);

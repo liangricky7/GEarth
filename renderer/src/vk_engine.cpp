@@ -91,6 +91,25 @@ glm::vec3 sea_displacement(glm::vec2 xz, float time) {
     float v = glm::dot(glm::vec2(-.006f, .013f), xz) - time * .15f;
     return p * (1.2f + .48f * std::sin(u) * std::sin(v));
 }
+// Meadow ground height at xz with full detail (mirrors meadow_terrain in meadow.glsl, footprint 0).
+float meadow_height(glm::vec2 xz) {
+    auto hash = [](int x, int y) {
+        uint32_t h = uint32_t(x) * 0x9e3779b9u ^ uint32_t(y) * 0x85ebca6bu;
+        h ^= h >> 16; h *= 0x7feb352du; h ^= h >> 15; h *= 0x846ca68bu; h ^= h >> 16;
+        return float(h >> 8) * (1.f / 16777216.f);
+    };
+    float height = 0, amp = 22, freq = 1 / 620.f;
+    for (int i = 0; i < 5; ++i) {
+        glm::vec2 p = xz * freq + glm::vec2(37.1f, 11.7f) * float(i), cell = glm::floor(p), f = p - cell, u = f * f * (3.f - 2.f * f);
+        int x = int(cell.x), y = int(cell.y);
+        float n = glm::mix(glm::mix(hash(x, y), hash(x + 1, y), u.x), glm::mix(hash(x, y + 1), hash(x + 1, y + 1), u.x), u.y);
+        height += (n - .5f) * 2 * amp;
+        amp *= .45f; freq *= 2.07f;
+    }
+    return height;
+}
+// Meadow grass bands drawn by grass.vert (keep in sync): cell spacing (m), outer radius (m), vertices per blade.
+constexpr struct { float spacing, outer; uint32_t verts; } GrassBands[4] = {{.042f, 14, 15}, {.1f, 40, 9}, {.24f, 90, 3}, {.35f, 35, 75}};
 }
 
 void VulkanEngine::self_test() {
@@ -121,7 +140,7 @@ void VulkanEngine::self_test() {
         VulkanEngine vehicle;
         vehicle._swapchainExtent = {1280,800};
         vehicle._oceanSeconds = 23;
-        for (auto view : {OceanView::Plane, OceanView::Ship}) {
+        for (auto view : {OceanView::Plane, OceanView::Ship, OceanView::Meadow}) {
             vehicle._oceanView = view;
             vehicle._headAngles = {};
             vehicle.update_ocean();
@@ -135,6 +154,16 @@ void VulkanEngine::self_test() {
             vehicle.update_ocean();
             check(vehicle._sceneData.viewproj == straight.viewproj, "Recenter must restore the original vehicle view");
         }
+        // The meadow walk keeps the eye at standing height over the hills for the whole loop.
+        for (float seconds = 0; seconds < 1800; seconds += 7.3f) {
+            vehicle._oceanSeconds = seconds;
+            vehicle.update_ocean();
+            const auto& eye = vehicle._oceanPush.params;
+            float clearance = eye.w - meadow_height({eye.y, eye.z});
+            check(clearance > 1.2f && clearance < 2.1f, "Meadow eye must stay at standing height above the ground");
+        }
+        check(meadow_height({123.4f, -56.7f}) == meadow_height({123.4f, -56.7f}) &&
+            meadow_height({0, 0}) != meadow_height({300, 0}), "Meadow terrain must be deterministic and vary");
         vehicle._replay.emplace();
         vehicle._replay->days.push_back({});
         vehicle._replay->days[0].tick = 365;
@@ -230,6 +259,7 @@ void VulkanEngine::self_test() {
     replay_self_test();
     event_replay_self_test();
     pipeline_replay_self_test();
+    town_self_test();
     ao_bake_self_test();
     auto projection=glm::perspective(glm::radians(45.f),1.6f,100.f,.05f);
     glm::vec4 direction(.2f,.1f,-1.f,1);
@@ -367,7 +397,7 @@ void VulkanEngine::init(const std::optional<std::filesystem::path>& model, bool 
         if (!path && !model && !smoke && !events && std::filesystem::is_regular_file(fallback)) path = fallback;
         _vehiclePaths[i] = path;
     }
-    if (_scene == Scene::Ocean) load_vehicle(_oceanView == OceanView::Ship);
+    if (_scene == Scene::Ocean && _oceanView != OceanView::Meadow) load_vehicle(_oceanView == OceanView::Ship);
     init_imgui();
     if (events) load_events(*events);
 }
@@ -499,15 +529,21 @@ void VulkanEngine::init_pipelines() {
     auto skyFrag = shaders.load(shader_path("sky.frag.spv"));
     auto waterVert = shaders.load(shader_path("water.vert.spv"));
     auto waterFrag = shaders.load(shader_path("water.frag.spv"));
-    for (bool water : {false,true}) {
-        auto& pipeline = water ? _waterPipeline : _skyPipeline;
+    // Meadow view: the same sky, a terrain grid like the water's, and grass blades generated in grass.vert.
+    auto terrainVert = shaders.load(shader_path("terrain.vert.spv")), terrainFrag = shaders.load(shader_path("terrain.frag.spv"));
+    auto grassVert = shaders.load(shader_path("grass.vert.spv")), grassFrag = shaders.load(shader_path("grass.frag.spv"));
+    std::pair<MaterialPipeline*, std::pair<VkShaderModule, VkShaderModule>> passes[] = {{&_skyPipeline, {fullscreen, skyFrag}},
+        {&_waterPipeline, {waterVert, waterFrag}}, {&_terrainPipeline, {terrainVert, terrainFrag}}, {&_grassPipeline, {grassVert, grassFrag}}};
+    for (auto& [target, stages] : passes) {
+        auto& pipeline = *target;
+        bool depth = target != &_skyPipeline; // everything but the fullscreen sky is real geometry
         VK_CHECK(vkCreatePipelineLayout(_device,&layout,nullptr,&pipeline.layout));
         builder.clear(); builder._pipelineLayout=pipeline.layout;
-        if (water) builder.set_shaders(waterVert,waterFrag); else builder.set_shaders(fullscreen,skyFrag);
+        builder.set_shaders(stages.first,stages.second);
         builder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST); builder.set_polygon_mode(VK_POLYGON_MODE_FILL);
         builder.set_cull_mode(VK_CULL_MODE_NONE,VK_FRONT_FACE_COUNTER_CLOCKWISE); builder.set_multisampling_none();
         builder.disable_blending();
-        if (water) builder.enable_depthtest(true,VK_COMPARE_OP_GREATER_OR_EQUAL); else builder.disable_depthtest();
+        if (depth) builder.enable_depthtest(true,VK_COMPARE_OP_GREATER_OR_EQUAL); else builder.disable_depthtest();
         builder.set_color_attachment_format(colorFormat); builder.set_depth_format(depthFormat);
         pipeline.pipeline=builder.build_pipeline(_device);
         check(pipeline.pipeline!=VK_NULL_HANDLE,"Ocean pipeline failed");
@@ -522,17 +558,18 @@ void VulkanEngine::init_scene(const std::optional<std::filesystem::path>& model)
         Vertex v; v.position = p; v.normal = {0,1,0}; vertices.push_back(v);
     }
     _groundIndices = uint32_t(indices.size()); _ground = uploadMesh(indices, vertices);
-    _defaultMaterialBuffer = create_buffer(2 * sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    _defaultMaterialBuffer = create_buffer(3 * sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     auto* data = static_cast<GLTFMetallic_Roughness::MaterialConstants*>(_defaultMaterialBuffer.info.pMappedData);
-    data[0] = {}; data[1] = {};
+    data[0] = {}; data[1] = {}; data[2] = {};
     data[0].colorFactors = {.06f,.32f,.6f,1}; data[0].metal_rough_factors = {0,.3f,0,0};
     data[1].colorFactors = {.35f,.38f,.42f,1}; data[1].metal_rough_factors = {0,.85f,0,0};
-    for (int i = 0; i < 2; ++i) {
+    data[2].colorFactors = {1,1,1,1}; data[2].metal_rough_factors = {0,.8f,0,0};
+    for (int i = 0; i < 3; ++i) {
         GLTFMetallic_Roughness::MaterialResources r;
         r.colorImage = r.metalRoughImage = _whiteImage; r.normalImage = _flatNormalImage;
         r.colorSampler = r.metalRoughSampler = r.normalSampler = _defaultSamplerLinear;
         r.dataBuffer = _defaultMaterialBuffer.buffer; r.dataBufferOffset = i * sizeof(*data);
-        (i == 0 ? _sphereMaterial : _groundMaterial) = metalRoughMaterial.write_material(_device, MaterialPass::MainColor, r, _descriptors);
+        (i == 0 ? _sphereMaterial : i == 1 ? _groundMaterial : _townMaterial) = metalRoughMaterial.write_material(_device, MaterialPass::MainColor, r, _descriptors);
     }
     VK_CHECK(vmaFlushAllocation(_allocator,_defaultMaterialBuffer.allocation,0,VK_WHOLE_SIZE));
     _globe=!model.has_value();
@@ -772,6 +809,20 @@ void VulkanEngine::update_ocean() {
         forward = glm::normalize(glm::vec3(8*std::cos(t*.02f), (_vehicles[0].model ? -.06f : -.17f)*Speed, Speed));
         up = rotated({0,1,0}, .1f*std::sin(t*.05f), forward);
         fov = 55;
+    } else if (_oceanView == OceanView::Meadow) {
+        // Walk through the meadow at 1.5 m/s along a lazily winding path. The eye follows the ground averaged over
+        // the last and next few metres, so small rises don't jolt the view; a slight bob reads as walking.
+        t = std::fmod(_oceanSeconds, 1800.f);
+        auto path = [](float s) { return glm::vec2(40*std::sin(s*.011f) + 12*std::sin(s*.037f), 1.5f*s); };
+        glm::vec2 at = path(t), ahead = path(t+2), behind = path(t-2);
+        float ground = 0;
+        for (float s : {-2.f, -1.f, 0.f, 1.f, 2.f}) ground += meadow_height(path(t+s)) / 5;
+        glm::vec2 heading = glm::normalize(ahead - behind);
+        float slope = (meadow_height(ahead) - meadow_height(behind)) / glm::length(ahead - behind);
+        eye = {at.x, ground + 1.55f + .025f*std::sin(t*5.6f), at.y};
+        forward = glm::normalize(glm::vec3(heading.x, slope*.35f, heading.y));
+        up = {0, 1, 0};
+        fov = 70;
     } else {
         // Cargo ship: at the bow, 59.25 m ahead of the hull centre and 9.75 m above its waterline. Motion follows the
         // sea height under a 120 m by 18 m hull, so the ship moves with the waves the viewer sees.
@@ -801,10 +852,16 @@ void VulkanEngine::update_ocean() {
         vehicle->model->Draw(frame*glm::translate(glm::mat4(1),vehicle->offset)*glm::rotate(glm::mat4(1),glm::radians(vehicle->yaw),glm::vec3(0,1,0))
             *glm::scale(glm::mat4(1),glm::vec3(vehicle->scale)), _drawContext);
     }
-    const glm::vec2 restingLook = _oceanView == OceanView::Ship ? glm::vec2(0, -.10f) : glm::vec2(0, -.08f);
+    const glm::vec2 restingLook = _oceanView == OceanView::Meadow ? glm::vec2(0, -.06f) : _oceanView == OceanView::Ship ? glm::vec2(0, -.10f) : glm::vec2(0, -.08f);
     _sceneData.viewproj = projection*head_view(forward, up, _headAngles + restingLook);
     // Low sun ahead reveals the swell through a path of reflected light in both vehicle views.
-    glm::vec3 light = glm::normalize(glm::vec3(.3f, .1f, 1.f));
+    // ~15 degrees up: low enough for a long glitter path, high enough that the sea reflects blue sky, not violet haze.
+    glm::vec3 light = glm::normalize(glm::vec3(.3f, .28f, 1.f));
+    // Meadow: golden-hour sun ahead and to the right of the walk, so the grass ahead glows backlit.
+    if (_oceanView == OceanView::Meadow) {
+        float elevation = glm::radians(_meadowSunHeight), azimuth = glm::radians(35.f);
+        light = {std::sin(azimuth)*std::cos(elevation), std::sin(elevation), std::cos(azimuth)*std::cos(elevation)};
+    }
     _sceneData.cameraPosition = glm::vec4(0, 0, 0, 1); _sceneData.sunlightDirection = glm::vec4(light, 0);
     // Ambient and shadows only reach the carried vehicle (the sea and sky shade themselves): sky-blue ambient scaled by
     // each vertex's baked sky visibility, and a sun shadow map fitted around the cockpit or ship.
@@ -818,17 +875,31 @@ void VulkanEngine::update_ocean() {
     auto lightProjection = glm::ortho(-reach, reach, -reach, reach, .1f, reach * 6.f); lightProjection[1][1] *= -1;
     _sceneData.sunViewProjection = lightProjection * glm::lookAt(light * reach * 3.f, glm::vec3(0), lightUp);
     _sceneData.shadowSettings = {_vehicleShadows ? 1.f : 0.f, 1.f/ShadowResolution, .0004f, reach * .002f};
+    float windHeading = glm::radians(_windHeading);
     _oceanPush = {glm::inverse(_sceneData.viewproj), {t, eye.x, eye.z, eye.y}, {width, height, 0, 0}};
+    if (_oceanView == OceanView::Meadow)
+        _oceanPush.wind = {std::sin(windHeading)*_windStrength, std::cos(windHeading)*_windStrength, _gustiness, 2*std::tan(glm::radians(fov)/2)/height};
     // The sky's sun already blooms; a screen-space glare would shine through the cockpit or cargo.
     _sunGlare = {};
 }
 void VulkanEngine::draw_ocean(VkCommandBuffer cmd) {
     VkDescriptorSet scene = _frames[_frameNumber%FRAME_OVERLAP].sceneDescriptor;
-    for (auto* pipeline : {&_skyPipeline, &_waterPipeline}) {
+    bool meadow = _oceanView == OceanView::Meadow;
+    for (auto* pipeline : {&_skyPipeline, meadow ? &_terrainPipeline : &_waterPipeline}) {
         vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline->pipeline);
         vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline->layout,0,1,&scene,0,nullptr);
         vkCmdPushConstants(cmd,pipeline->layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(_oceanPush),&_oceanPush);
-        vkCmdDraw(cmd,pipeline == &_skyPipeline ? 3 : 290*360*6,1,0,0); // water.vert: RINGS*SEGMENTS*6
+        vkCmdDraw(cmd,pipeline == &_skyPipeline ? 3 : 290*360*6,1,0,0); // water.vert / terrain.vert: RINGS*SEGMENTS*6
+    }
+    if (!meadow) return;
+    // Grass: one draw per band, nearest first so dense near blades fill depth before far ones; band = first instance.
+    // The last band is wildflowers.
+    vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_grassPipeline.pipeline);
+    vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_grassPipeline.layout,0,1,&scene,0,nullptr);
+    vkCmdPushConstants(cmd,_grassPipeline.layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(_oceanPush),&_oceanPush);
+    for (uint32_t band = 0; band < 4; ++band) {
+        uint32_t side = 2 * uint32_t(std::ceil(GrassBands[band].outer / GrassBands[band].spacing));
+        vkCmdDraw(cmd,side*side*GrassBands[band].verts,1,0,band);
     }
 }
 void VulkanEngine::load_vehicle(int index) {
@@ -841,9 +912,47 @@ void VulkanEngine::load_vehicle(int index) {
     if (path->parent_path().filename() == "free_plane_cockpit") { vehicle.offset = {-1.041f, -1.422f, 1.174f}; vehicle.scale = .0254f; vehicle.yaw = 0; }
     fmt::print("Vehicle model loaded: {}\n", path->string());
 }
+void VulkanEngine::enter_ground() {
+    if (!_townMesh.indexBuffer.buffer) {
+        std::vector<Vertex> vertices; std::vector<uint32_t> indices;
+        town_geometry(_world,vertices,indices); _townMesh=uploadMesh(indices,vertices);
+    }
+    _town={};
+    if (_pipeline) {
+        size_t f=_pipeline->frame_index(_pipeline->time);
+        _town=town_from_snapshot(_pipeline->frames[f].snapshot,f ? std::string_view(_pipeline->frames[f-1].snapshot) : std::string_view(),
+            _world.countries[_townCountry].id,24);
+    }
+    if (_town.people.empty()) _town=demo_town(16);
+    _scene=Scene::Ground; _townYaw=.6f; _townDistance=24;
+}
+void VulkanEngine::update_ground() {
+    _town.draw(_townCountry,[&](int color,const glm::mat4& matrix) {
+        RenderObject object; object.indexCount=36; object.firstIndex=uint32_t(color*36); object.indexBuffer=_townMesh.indexBuffer.buffer;
+        object.vertexBufferAddress=_townMesh.vertexBufferAddress; object.material=&_townMaterial; object.transform=matrix;
+        _drawContext.OpaqueSurfaces.push_back(object);
+    });
+    // Tilted top-down camera: steep enough to take in the square, shallow enough to see legs move.
+    float pitch=glm::radians(52.f);
+    glm::vec3 target(0,.8f,0), eye=target+_townDistance*glm::vec3(std::cos(pitch)*std::sin(_townYaw),std::sin(pitch),std::cos(pitch)*std::cos(_townYaw));
+    auto projection=glm::perspective(glm::radians(40.f),float(_swapchainExtent.width)/_swapchainExtent.height,2000.f,.1f);
+    projection[1][1]*=-1;
+    _sceneData.viewproj=projection*glm::lookAt(eye,target,glm::vec3(0,1,0));
+    glm::vec3 light=glm::normalize(glm::vec3(.5f,.8f,.35f));
+    _sceneData.cameraPosition=glm::vec4(eye,1); _sceneData.sunlightDirection=glm::vec4(light,0);
+    _sceneData.sunlightColor=glm::vec4(_sunIntensity); _sceneData.ambientColor=glm::vec4(glm::vec3(.85f,.92f,1.05f)*.35f,0);
+    _sceneData.moonLight={}; _sceneData.nightSettings={}; _sceneData.lightInfo={};
+    auto lightProjection=glm::ortho(-32.f,32.f,-32.f,32.f,.1f,120.f); lightProjection[1][1]*=-1;
+    _sceneData.sunViewProjection=lightProjection*glm::lookAt(light*60.f,glm::vec3(0),glm::vec3(0,1,0));
+    _sceneData.shadowSettings={1.f,1.f/ShadowResolution,.0006f,.02f};
+    _oceanPush.inverseViewProj=glm::inverse(_sceneData.viewproj);
+    _oceanPush.viewport={float(_swapchainExtent.width),float(_swapchainExtent.height),0,0}; _oceanPush.wind={};
+    _sunGlare={};
+}
 void VulkanEngine::update_scene() {
     _drawContext.OpaqueSurfaces.clear(); _drawContext.TransparentSurfaces.clear();
     if (_scene == Scene::Ocean) { update_ocean(); return; }
+    if (_scene == Scene::Ground) { update_ground(); return; }
     auto append = [&](GPUMeshBuffers& mesh, uint32_t count, MaterialInstance& material) {
         RenderObject object; object.indexCount = count; object.indexBuffer = mesh.indexBuffer.buffer;
         object.vertexBufferAddress = mesh.vertexBufferAddress; object.material = &material;
@@ -885,7 +994,7 @@ void VulkanEngine::update_scene() {
         auto projection=glm::ortho(-35.f,35.f,-35.f,35.f,.1f,220.f); projection[1][1]*=-1;
         _sceneData.sunViewProjection=projection*glm::lookAt(center+light*110.f,center,up);
         _oceanPush.inverseViewProj=glm::inverse(_sceneData.viewproj);
-        _oceanPush.viewport={float(_swapchainExtent.width),float(_swapchainExtent.height),0,0};
+        _oceanPush.viewport={float(_swapchainExtent.width),float(_swapchainExtent.height),0,0}; _oceanPush.wind={};
     }
     _sceneData.cameraPosition = glm::vec4(eye,1); _sceneData.sunlightDirection = glm::vec4(light,0);
     float sun = _sunIntensity;
@@ -934,7 +1043,7 @@ void VulkanEngine::draw_shadow(VkCommandBuffer cmd) {
     depth.clearValue.depthStencil.depth = 1;
     auto rendering = vkinit::rendering_info({ShadowResolution,ShadowResolution},nullptr,&depth);
     vkCmdBeginRendering(cmd,&rendering); set_viewport(cmd,{ShadowResolution,ShadowResolution});
-    if (_shadows) {
+    if (_shadows || _scene == Scene::Ground) {
         vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_shadowPipeline.pipeline);
         for (const auto& object : _drawContext.OpaqueSurfaces) {
             if (_environment && !surface_visible(_sceneData.sunViewProjection*object.transform,object.bounds)) continue;
@@ -958,7 +1067,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     auto rendering = vkinit::rendering_info(_swapchainExtent,&color,&depth);
     vkCmdBeginRendering(cmd,&rendering); set_viewport(cmd,_swapchainExtent);
     if (_scene == Scene::Ocean) draw_ocean(cmd);
-    else if (_environment) {
+    else if (_environment || _scene == Scene::Ground) {
         vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_skyPipeline.pipeline);
         vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_skyPipeline.layout,0,1,&_frames[_frameNumber%FRAME_OVERLAP].sceneDescriptor,0,nullptr);
         vkCmdPushConstants(cmd,_skyPipeline.layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(_oceanPush),&_oceanPush);
@@ -1002,7 +1111,9 @@ void VulkanEngine::draw_post(VkCommandBuffer cmd, bool fxaa) {
     vkCmdBeginRendering(cmd,&rendering); set_viewport(cmd,_swapchainExtent);
     vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline.pipeline);
     vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline.layout,0,1,&set,0,nullptr);
-    glm::vec4 push[] = {{_exposure,0,0,_bloom},_sunGlare};
+    // Inspect / back transition: blow the exposure out to white around the scene swap at .9 s.
+    float flash = _transition < 0 ? 0.f : _transition < .9f ? glm::smoothstep(.3f,.9f,_transition) : 1-glm::smoothstep(.9f,1.5f,_transition);
+    glm::vec4 push[] = {{_exposure*std::exp(7*flash),0,0,_bloom},_sunGlare};
     if (fxaa) {
         push[0] = {1.f/_swapchainExtent.width,1.f/_swapchainExtent.height,.125f,.5f};
         push[1] = {1.f-.5f/_swapchainExtent.width,1.f-.5f/_swapchainExtent.height,0,0};
@@ -1119,12 +1230,18 @@ void VulkanEngine::frame_ui() {
         }
         if (_scene == Scene::Ocean) {
             int view = int(_oceanView);
-            ImGui::RadioButton("Plane",&view,0); ImGui::SameLine(); ImGui::RadioButton("Ship",&view,1);
+            ImGui::RadioButton("Plane",&view,0); ImGui::SameLine(); ImGui::RadioButton("Ship",&view,1); ImGui::SameLine(); ImGui::RadioButton("Meadow",&view,2);
             if (view != int(_oceanView)) { set_mouse_look(false); _headAngles = {}; }
             _oceanView = OceanView(view);
             ImGui::TextWrapped("Hold right mouse to look around; release for controls. R resets the view.");
             if (ImGui::Button("Reset view (R)")) _headAngles = {};
             ImGui::Checkbox("Play",&_playing);
+            if (_oceanView == OceanView::Meadow) {
+                ImGui::SliderFloat("Wind",&_windStrength,0.f,1.5f);
+                ImGui::SliderFloat("Gusts",&_gustiness,0.f,1.f);
+                ImGui::SliderFloat("Wind heading",&_windHeading,0.f,360.f,"%.0f deg");
+                ImGui::SliderFloat("Sun height",&_meadowSunHeight,2.f,60.f,"%.0f deg");
+            }
             if (Vehicle* vehicle = active_vehicle(); vehicle && vehicle->model) {
                 ImGui::DragFloat3("Model offset",&vehicle->offset.x,.05f,-300.f,300.f);
                 ImGui::SliderFloat("Model scale",&vehicle->scale,.001f,100.f,"%.3f",ImGuiSliderFlags_Logarithmic);
@@ -1207,6 +1324,33 @@ void VulkanEngine::frame_ui() {
         if (_oceanView == OceanView::Plane) caption("ILLUSTRATIVE VIEW  |  cargo plane  |  " + _planeCaption);
         if (_oceanView == OceanView::Ship) caption("ILLUSTRATIVE VIEW  |  cargo ship  |  " + _shipCaption);
     }
+    if (_scene == Scene::Ground) {
+        const char* name=_pipeline ? _pipeline->names[_townCountry].c_str() : _world.countries[_townCountry].name;
+        if (_showPanels) {
+            ImGui::SetNextWindowPos(ImVec2(18,18),ImGuiCond_Always);
+            ImGui::Begin("Market square",nullptr,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::Text("%s: %zu people",name,_town.people.size());
+            ImGui::TextUnformatted(_town.recorded ? "Recorded agents; lines are their latest trades." : "DEMO people (no recording loaded).");
+            ImGui::TextUnformatted("ILLUSTRATIVE: positions and walking are invented.");
+            ImGui::TextUnformatted("Drag to turn, wheel to zoom.");
+            if (ImGui::Button("Back to globe",ImVec2(-1,0)) && _transition<0) _transition=0;
+            ImGui::End();
+        }
+        // Speech bubbles: partners take turns every two seconds of their conversation.
+        auto* draw=ImGui::GetForegroundDrawList();
+        ImVec2 display=ImGui::GetIO().DisplaySize;
+        for (size_t i=0;i<_town.people.size();++i) {
+            const auto& person=_town.people[i];
+            if (person.talk<=0 || int(person.talk/2)%2!=(int(i)<person.partner ? 1 : 0)) continue;
+            glm::vec4 clip=_sceneData.viewproj*glm::vec4(person.position.x,2.f,person.position.y,1);
+            if (clip.w<=0) continue;
+            ImVec2 tip((clip.x/clip.w*.5f+.5f)*display.x,(clip.y/clip.w*.5f+.5f)*display.y), size=ImGui::CalcTextSize(person.line.c_str());
+            ImVec2 low(tip.x-size.x*.5f-8,tip.y-size.y-18), high(tip.x+size.x*.5f+8,tip.y-8);
+            draw->AddRectFilled(low,high,IM_COL32(255,255,255,235),6);
+            draw->AddTriangleFilled(ImVec2(tip.x-6,high.y),ImVec2(tip.x+6,high.y),tip,IM_COL32(255,255,255,235));
+            draw->AddText(ImVec2(low.x+8,low.y+5),IM_COL32(25,25,25,255),person.line.c_str());
+        }
+    }
     if (_globe && _scene == Scene::Globe) {
         ImGui::SetNextWindowPos(ImVec2(18,18),ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(260,330),ImGuiCond_Always);
@@ -1214,14 +1358,58 @@ void VulkanEngine::frame_ui() {
             ImGui::Begin("Countries",nullptr,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize);
             ImGui::TextUnformatted("10 fictional countries");
             for (const auto& country : _world.countries) {
+                int index=int(&country-_world.countries.data());
+                ImGui::PushID(index);
                 ImGui::PushStyleColor(ImGuiCol_Button,ImVec4(country.color.r*.5f,country.color.g*.5f,country.color.b*.5f,1));
-                const char* name=_pipeline ? _pipeline->names[&country-_world.countries.data()].c_str() : country.name;
-                if (ImGui::Button(name,ImVec2(-1,0))) {
+                const char* name=_pipeline ? _pipeline->names[index].c_str() : country.name;
+                if (ImGui::Button(name,ImVec2(-70,0))) {
                     _yaw=std::atan2(country.center.x,country.center.z); _pitch=std::asin(country.center.y);
+                    _selectedCountry=index; _countryInfoRevision=-1;
                 }
-                ImGui::PopStyleColor();
+                ImGui::PopStyleColor(); ImGui::SameLine();
+                if (ImGui::Button("Inspect",ImVec2(-1,0)) && _transition<0) {
+                    _yaw=std::atan2(country.center.x,country.center.z); _pitch=std::asin(country.center.y);
+                    _townCountry=index; _transition=0;
+                }
+                ImGui::PopID();
             }
             ImGui::End();
+        }
+        if (_showPanels && _selectedCountry>=0) {
+            int c=_selectedCountry;
+            const auto& country=_world.countries[c];
+            ImVec2 display=ImGui::GetIO().DisplaySize;
+            ImGui::SetNextWindowPos(ImVec2(display.x*.5f,display.y-18),ImGuiCond_Always,ImVec2(.5f,1));
+            bool open=true;
+            ImGui::Begin("Country",&open,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::TextColored(ImVec4(country.color.r,country.color.g,country.color.b,1),"%s",_pipeline ? _pipeline->names[c].c_str() : country.name);
+            ImGui::SameLine(); ImGui::TextDisabled(country.hasPort ? "| sea port" : "| no sea port");
+            const Replay::Nation* nation=_pipeline ? &_pipeline->frames[_pipeline->frame_index(_pipeline->time)].nations[c]
+                : _replay ? &_replay->days[size_t(replay_time())].nations[c] : nullptr;
+            if (nation) {
+                ImGui::Text("Population %d | jobless %.0f%% | approval %.0f%%",nation->residents,
+                    100.f*nation->unemployed/std::max(1,nation->residents),100.f*nation->approval);
+                if (nation->wars) ImGui::Text("Inequality (Gini) %.2f | at war with %d",nation->gini,nation->wars);
+                else ImGui::Text("Inequality (Gini) %.2f | at peace",nation->gini);
+            } else ImGui::TextDisabled("DEMO globe: load a recording for this country's statistics.");
+            if (_pipeline) {
+                const auto& frame=_pipeline->frames[_pipeline->frame_index(_pipeline->time)];
+                if (_countryInfoRevision!=frame.revision) { _countryInfo=country_agents(frame.snapshot,country.id); _countryInfoRevision=frame.revision; }
+                const auto& info=_countryInfo;
+                ImGui::Text("Day %d: %d agents, %d hungry (%.0f%%)",frame.tick,info.people,info.hungry,100.f*info.hungry/std::max(1,info.people));
+                ImGui::Text("Average health %.0f/100 | wellbeing %.0f/100 | cash %.2f WLD",info.health,info.wellbeing,
+                    info.cashMinor/100.0/std::max(1,info.people));
+                std::string jobs;
+                for (size_t i=0;i<std::min<size_t>(4,info.roles.size());++i)
+                    jobs+=fmt::format("{}{} {}",i ? ", " : "Most common: ",info.roles[i].first,info.roles[i].second);
+                if (!jobs.empty()) ImGui::TextUnformatted(jobs.c_str());
+            }
+            if (ImGui::Button("Inspect market square",ImVec2(-1,0)) && _transition<0) {
+                _yaw=std::atan2(country.center.x,country.center.z); _pitch=std::asin(country.center.y);
+                _townCountry=c; _transition=0;
+            }
+            ImGui::End();
+            if (!open) _selectedCountry=-1;
         }
         glm::vec3 eye=_target+_distance*glm::vec3(std::cos(_pitch)*std::sin(_yaw),std::sin(_pitch),std::cos(_pitch)*std::cos(_yaw));
         glm::mat4 projection=glm::perspective(glm::radians(45.f),float(_swapchainExtent.width)/_swapchainExtent.height,100.f,.05f);
@@ -1268,6 +1456,16 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
         }
         if (_pipeline && _scene==Scene::Globe) _pipeline->advance(elapsed);
         if (_eventReplay && _scene==Scene::Globe) _eventReplay->advance(elapsed);
+        if (_playing && _scene==Scene::Ground) _town.update(elapsed);
+        if (_transition>=0) {
+            // Inspect dives at the country while the exposure flashes white; back fades out of the square. Swap at .9 s.
+            float before=_transition; _transition+=elapsed;
+            if (_scene==Scene::Globe && _transition<.9f) _distance=glm::mix(_distance,1.07f,1-std::exp(-elapsed*5));
+            if (before<.9f && _transition>=.9f) {
+                if (_scene==Scene::Ground) { _scene=Scene::Globe; _distance=2.2f; } else enter_ground();
+            }
+            if (_transition>=1.5f) _transition=-1;
+        }
         if (_playing && _scene == Scene::Ocean) _oceanSeconds+=elapsed;
         else if (_playing) _demoSeconds+=elapsed*_trafficSpeed;
         if (_smoke && _frameNumber >= 4 && !resizedDown) {
@@ -1305,11 +1503,32 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
                     set_mouse_look(true);
                 if (event.type == SDL_MOUSEMOTION && _mouseLook)
                     turn_head(_headAngles, {event.motion.xrel, event.motion.yrel});
+            } else if (_scene == Scene::Ground) {
+                if (!ImGui::GetIO().WantCaptureMouse && event.type == SDL_MOUSEMOTION && (event.motion.state & SDL_BUTTON_LMASK))
+                    _townYaw-=event.motion.xrel*.005f;
+                if (!ImGui::GetIO().WantCaptureMouse && event.type == SDL_MOUSEWHEEL)
+                    _townDistance=std::clamp(_townDistance*std::exp(-event.wheel.y*.1f),8.f,45.f);
             } else if (!ImGui::GetIO().WantCaptureMouse) {
                 if (event.type == SDL_MOUSEMOTION && (event.motion.state & SDL_BUTTON_LMASK)) {
                     _yaw-=event.motion.xrel*.005f; _pitch=std::clamp(_pitch+event.motion.yrel*.005f,-1.45f,1.45f);
                 }
                 if (event.type == SDL_MOUSEWHEEL) _distance=std::clamp(_distance*std::exp(-event.wheel.y*.1f),1.3f,20.f);
+                // A click (not a drag) on the globe selects the country under the cursor; sea or space clears it.
+                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) _clickStart={event.button.x,event.button.y};
+                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && _globe && _scene == Scene::Globe
+                    && glm::length(glm::vec2(event.button.x,event.button.y)-_clickStart)<5) {
+                    int windowWidth,windowHeight; SDL_GetWindowSize(_window,&windowWidth,&windowHeight);
+                    glm::vec2 ndc(event.button.x/float(windowWidth)*2-1,event.button.y/float(windowHeight)*2-1);
+                    glm::mat4 unproject=glm::inverse(_sceneData.viewproj);
+                    glm::vec4 nearPoint=unproject*glm::vec4(ndc,1,1), farPoint=unproject*glm::vec4(ndc,.5f,1);
+                    glm::vec3 origin=glm::vec3(nearPoint)/nearPoint.w, ray=glm::normalize(glm::vec3(farPoint)/farPoint.w-origin);
+                    float b=glm::dot(origin,ray), discriminant=b*b-glm::dot(origin,origin)+1;
+                    _selectedCountry=-1; _countryInfoRevision=-1;
+                    if (discriminant>=0) {
+                        glm::vec3 hit=glm::normalize(origin+ray*(-b-std::sqrt(discriminant)));
+                        if (world_height(hit)>.035f) _selectedCountry=world_country(_world,hit);
+                    }
+                }
             }
         }
         int width,height; SDL_Vulkan_GetDrawableSize(_window,&width,&height);
@@ -1323,7 +1542,7 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
         if (width==0 || height==0 || (SDL_GetWindowFlags(_window)&SDL_WINDOW_MINIMIZED)) { SDL_Delay(20); continue; }
         if (_resize) resize_swapchain();
         // Switching to the plane or ship view loads its model on first use (a one-off pause of about a second).
-        if (_scene == Scene::Ocean) load_vehicle(_oceanView == OceanView::Ship);
+        if (_scene == Scene::Ocean && _oceanView != OceanView::Meadow) load_vehicle(_oceanView == OceanView::Ship);
         frame_ui(); draw();
     }
     set_mouse_look(false);
@@ -1357,7 +1576,7 @@ void VulkanEngine::cleanup() {
         vkDeviceWaitIdle(_device);
         if (_imguiInitialized) { ImGui_ImplVulkan_Shutdown(); ImGui_ImplSDL2_Shutdown(); ImGui::DestroyContext(); _imguiInitialized=false; }
         _model.reset(); for (auto& vehicle : _vehicles) vehicle.model.reset();
-        for (auto* mesh : {&_sphere,&_ground,&_planeMesh,&_shipMesh,&_portMesh}) { destroy_buffer(mesh->indexBuffer); destroy_buffer(mesh->vertexBuffer); }
+        for (auto* mesh : {&_sphere,&_ground,&_planeMesh,&_shipMesh,&_portMesh,&_townMesh}) { destroy_buffer(mesh->indexBuffer); destroy_buffer(mesh->vertexBuffer); }
         for (auto& arc : _routeArcs) { destroy_buffer(arc.mesh.indexBuffer); destroy_buffer(arc.mesh.vertexBuffer); }
         destroy_buffer(_defaultMaterialBuffer);
         destroy_buffer(_globeMaterialBuffer);
@@ -1369,7 +1588,7 @@ void VulkanEngine::cleanup() {
             if (frame._swapchainSemaphore) vkDestroySemaphore(_device,frame._swapchainSemaphore,nullptr);
         }
         metalRoughMaterial.clear_resources(_device);
-        for (auto* pipeline : {&_shadowPipeline,&_tonemapPipeline,&_fxaaPipeline,&_spacePipeline,&_skyPipeline,&_waterPipeline}) {
+        for (auto* pipeline : {&_shadowPipeline,&_tonemapPipeline,&_fxaaPipeline,&_spacePipeline,&_skyPipeline,&_waterPipeline,&_terrainPipeline,&_grassPipeline}) {
             vkDestroyPipeline(_device,pipeline->pipeline,nullptr); vkDestroyPipelineLayout(_device,pipeline->layout,nullptr);
         }
         vkDestroyDescriptorSetLayout(_device,_gpuSceneDataDescriptorLayout,nullptr); vkDestroyDescriptorSetLayout(_device,_postLayout,nullptr);

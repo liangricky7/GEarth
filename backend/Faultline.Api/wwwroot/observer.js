@@ -285,7 +285,7 @@ async function showProfile() {
       profile.append(
         textNode(
           "p",
-          `Accepted model turns: ${data.agent.model_decisions} · decision age ${Math.round(age)}s at checkpoint`,
+          `Accepted model turns: ${data.agent.model_decisions} · decision age at checkpoint ${Math.round(age)}s`,
         ),
       );
     }
@@ -469,16 +469,17 @@ async function refresh() {
     element("failures").textContent =
       `${snapshot.metrics.fallback_decision_count} / ${snapshot.metrics.rejected_decision_count}`;
     element("mode").textContent =
-      `${snapshot.run.mode} · ${snapshot.run.status.toUpperCase()}`;
+      `${snapshot.run.status !== "running" || runId !== runs.current_run_id ? "SAVED · " : ""}${snapshot.run.mode} · ${snapshot.run.status.toUpperCase()}`;
+    const paused = health.run_id === runId && health.status === "paused";
     element("connection").textContent =
-      health.status === "paused" ? "Paused" : `Connected · ${health.storage}`;
+      paused ? "Paused" : `Connected · ${health.storage}`;
     element("updated").textContent =
       `Last commit ${new Date(snapshot.updated_at).toLocaleTimeString()}`;
     const plan = snapshot.shipments[0]?.plan;
     element("route-plan").textContent = plan
       ? `${plan.objective} plan · ${plan.travel_ticks} travel ticks · ${(plan.cost_minor / 100).toFixed(2)} WLD`
       : "No active medicine route plan.";
-    element("message").textContent = health.error ?? "";
+    element("message").textContent = paused ? health.error ?? "" : "";
     drawMap(snapshot);
     showEvents(snapshot);
     showWorld(snapshot);

@@ -305,8 +305,13 @@ public static class SocietyActions
             if (relation.ProposedBy is not null && relation.ProposedBy != nation.Id
                 && world.Tick + Governments.Get(nation.GovernmentId).PolicyDelay <= relation.ProposalExpiresTick)
             {
-                options.Add(Make("respond_agreement", new { country_id = countryId, accept = true, effect = SocietyGovernmentDecisions.ResponseEffect(world, nation, relation, true) }));
-                options.Add(Make("respond_agreement", new { country_id = countryId, accept = false, effect = SocietyGovernmentDecisions.ResponseEffect(world, nation, relation, false) }));
+                foreach (var accept in new[] { true, false })
+                    options.Add(Make("respond_agreement", new
+                    {
+                        country_id = countryId, accept, proposal_kind = relation.ProposalKind,
+                        proposal_terms = relation.ProposalTerms, proposal_expires_tick = relation.ProposalExpiresTick,
+                        effect = SocietyGovernmentDecisions.ResponseEffect(world, nation, relation, accept)
+                    }));
             }
             else if (relation.ProposedBy is null)
             {

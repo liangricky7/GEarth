@@ -9,8 +9,9 @@ The contest function, military project types, missile targeting and relations sh
 military eligibility, exhaustion state, government observations and political transitions need work before
 integration. Repair systems, tribute caps, truces and endowment floors are model choices, not all proven defects.
 
-This is a review and a set of proposed decisions. No implementation has been restored or changed, and no
-decision below has been added to `next-steps.md` as approved.
+This is the historical review and debate record. Its original baseline and evidence below are preserved.
+The subsequent implementation and current validation are recorded in [phase-3-war.md](phase-3-war.md);
+the narrowed decisions are now recorded in [next-steps.md](next-steps.md#phase-3-war-unrest-relations).
 
 ## Evidence and limits
 

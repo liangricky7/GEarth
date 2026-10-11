@@ -11,7 +11,7 @@ public static class SocietyFactory
         ("aster", "Aster", 40, -105), ("beryl", "Beryl", -18, -58),
         ("cinder", "Cinder", 50, 15), ("dune", "Capybarlos", 25, 42),
         ("ember", "Ember", -27, 135), ("fjord", "Fjord", 64, -22),
-        ("grove", "Grove", 3, 23), ("haven", "Haven", 25, 110),
+        ("grove", "Dyland", 3, 23), ("haven", "Haven", 25, 110),
         ("ionia", "Ionia", 8, 80), ("jade", "Jade", 35, 140)
     ];
     public static readonly string[] Goods = ["food", "energy", "tools", "medicine"];

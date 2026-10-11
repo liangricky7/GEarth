@@ -6,6 +6,8 @@ namespace GEarth.Core;
 public static class SocietyActions
 {
     public const int MaxTaxBasisPoints = 6000;
+    public const int BudgetTurnDays = 28; // income tax changes only at a budget turn every four weeks
+    public const int MaxTaxStepPoints = 5; // whole percentage points a budget can move income tax
 
     public static Candidate[] Available(World world, Agent agent)
     {
@@ -24,16 +26,20 @@ public static class SocietyActions
                 if (agent.Health < 70 && SocietyEconomy.OpenClinic(world, world.Society!.Nations[agent.CountryId]) is { } clinic
                     && agent.CashMinor >= clinic.PriceMinor)
                     options.Add(Make("visit_doctor", new { }));
-                if (!SocietyBank.Paused && (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank))
-                    options.Add(Make("bank_savings", new { keep_in_bank = !agent.KeepsSavingsInBank }));
+                if (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank)
+                    options.Add(Make("bank_savings", agent.KeepsSavingsInBank
+                        ? new { keep_in_bank = false, effect = "withdraw all your savings now and stop depositing" }
+                        : new { keep_in_bank = true, effect = "deposit your savings above two weeks of pay again" }));
                 if (agent.Role == "entrepreneur")
                 {
                     OwnerOptions(world, agent, options);
                     break;
                 }
-                // School is full time: an employee who enrolls leaves their job.
-                if (SocietySchool.CanEnroll(world, agent))
-                    options.Add(Make("enroll_school", new { leaves_job = agent.EmployerId is not null }));
+                // Full time (an employee leaves their job) or, for an employee, part time; a student loan covers
+                // tuition the student cannot pay. Each option shows what it costs and when it pays back.
+                foreach (var partTime in agent.EmployerId is null ? [false] : new[] { false, true })
+                    if (SocietySchool.Offer(world, agent, partTime) is { } offer)
+                        options.Add(Make("enroll_school", offer));
                 if (agent.EmployerId is { } job && world.Agents[job].Role == "business" && agent.SeekingUntilTick < world.Tick)
                     options.Add(Make("seek_better_job", new { }));
                 // Founders who cannot pay in full can ask the bank for the rest beyond the down payment.
@@ -44,7 +50,7 @@ public static class SocietyActions
                     var loan = SocietyBank.StartupLoan(world, agent, cost);
                     if (SocietyLabor.CanStart(world, agent, sector))
                         options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch }));
-                    else if (!SocietyBank.Paused && SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
+                    else if (SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
                         options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch, loan_minor = loan }));
                 }
                 if (agent.CashMinor >= 100)
@@ -73,7 +79,19 @@ public static class SocietyActions
         }
         if (agent.Role is not ("government" or "defunct" or "planner") && SocietyLabor.DecidesForItself(agent))
             SocietyPayments.AddOptions(world, agent, options);
-        return options.ToArray();
+        return Shuffle(world, agent, options);
+    }
+
+    // The menu is shown in a seeded order per agent and day, so no option wins by always being listed first.
+    private static Candidate[] Shuffle(World world, Agent agent, List<Candidate> options)
+    {
+        var shuffled = options.ToArray();
+        for (var index = shuffled.Length - 1; index > 0; index--)
+        {
+            var pick = (int)(SocietyFactory.Sample(world.Seed, $"{agent.Id}:{world.Tick}:{index}", "menu") * (index + 1)) % (index + 1);
+            (shuffled[index], shuffled[pick]) = (shuffled[pick], shuffled[index]);
+        }
+        return shuffled;
     }
 
     // A free numeric parameter: the model picks any integer in [min, max]; rule decisions use the default.
@@ -100,8 +118,6 @@ public static class SocietyActions
             return;
         if (SocietyBank.IsBank(firm))
         {
-            if (SocietyBank.Paused)
-                return;
             BankOptions(firm, options);
             foreach (var change in new[] { -1, 1 }.Where(change => firm.TargetHeadcount + change >= 0))
                 options.Add(Make("set_headcount", new { business_id = id, change }));
@@ -110,8 +126,10 @@ public static class SocietyActions
             return;
         }
         LoanOptions(world, firm, options);
-        if (SocietyLabor.SectorOf(firm.Specialty!).BasePrice > 0)
-            foreach (var change in new[] { -10, 10 })
+        // A change that the price limits (half to three times the base price) would undo is not offered.
+        var spec = SocietyLabor.SectorOf(firm.Specialty!);
+        if (spec.BasePrice > 0 && spec.Id != "school")
+            foreach (var change in new[] { -10, 10 }.Where(change => SocietyLabor.ClampPrice(spec, firm.PriceMinor * (100 + change) / 100) != firm.PriceMinor))
                 options.Add(Make("set_price", new { business_id = id, change_pct = change }));
         foreach (var change in new[] { -10, 10 })
             options.Add(Make("set_wage", new { business_id = id, change_pct = change }));
@@ -140,7 +158,7 @@ public static class SocietyActions
     // A firm with no loan open can borrow four or eight weeks of its payroll (or its owner's pay) over 26 weeks.
     private static void LoanOptions(World world, Agent firm, List<Candidate> options)
     {
-        if (SocietyBank.Paused || SocietyBank.LoanOf(world, firm.Id) is not null)
+        if (SocietyBank.LoanOf(world, firm.Id) is not null)
             return;
         var bank = SocietyBank.BankOf(world, firm.CountryId);
         var weekly = Math.Max(SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor),
@@ -185,7 +203,7 @@ public static class SocietyActions
             foreach (var price in new[] { basePrice * 8 / 10, basePrice, basePrice * 12 / 10 }.Where(price => price != agent.PriceMinor))
                 options.Add(Make("set_price", new { price_minor = price }));
         ImportOptions(world, agent, options);
-        if (SocietyBank.IsBank(agent) && !SocietyBank.Paused) // state firms draw on the treasury, not loans; the state bank sets rates
+        if (SocietyBank.IsBank(agent)) // state firms draw on the treasury, not loans; the state bank sets rates
             BankOptions(agent, options);
     }
 
@@ -195,9 +213,15 @@ public static class SocietyActions
         var nation = society.Nations[agent.CountryId];
         if (society.Policies.Any(policy => policy.CountryId == nation.Id) || !SocietyDiplomacy.HasAuthority(world, nation))
             return;
-        // Income tax moves a little at a time (a quarter, half or whole point), as real tax changes do.
-        foreach (var step in new[] { -100, -50, -25, 25, 50, 100 }.Where(step => nation.TaxBasisPoints + step is >= 0 and <= MaxTaxBasisPoints))
-            options.Add(Make("adjust_tax", new { change_basis_points = step }));
+        // Income tax is set at a budget turn every four weeks, as a new whole-percent rate near the current one.
+        if (world.Tick - nation.TaxChangedTick >= BudgetTurnDays)
+        {
+            var now = (int)Math.Round(nation.TaxBasisPoints / 100.0);
+            options.Add(new("adjust_tax", new JsonObject
+            {
+                ["income_tax_percent"] = Range(Math.Max(0, now - MaxTaxStepPoints), Math.Min(MaxTaxBasisPoints / 100, now + MaxTaxStepPoints), now)
+            }));
+        }
         foreach (var benefit in new[] { 0, 300, 600 }.Where(benefit => benefit != nation.UnemploymentBenefitMinor))
             options.Add(Make("set_unemployment_benefit", new { amount_minor = benefit }));
         foreach (var welfare in new[] { 0, 100, 200 }.Where(welfare => welfare != nation.WelfareMinor))

@@ -174,7 +174,7 @@ public sealed class AnalyticsReportTests
         RunAudit.Enable(captured);
         store.Records = [captured.PendingAudit[0] with { Revision = 1 }];
         var exported = Wire.Node(await service.ExportMetadata(world.Id, default));
-        Assert.True(exported["banking_paused"]!.GetValue<bool>());
+        Assert.Equal(SocietyBank.Paused, exported["banking_paused"]!.GetValue<bool>());
         Assert.Equal("v1", exported["features"]!["public_services"]!.GetValue<string>());
         var report = Report(world);
         report["public_services"] = PublicServicesSection(store.Records[0].Payload);
@@ -192,11 +192,11 @@ public sealed class AnalyticsReportTests
         await service.Publish(report, Manifest(), default);
         Assert.Same(report, store.Report);
         // Even an internally consistent forged manifest cannot override the captured banking pause.
-        report["public_services"]!["metadata"]!["banking_paused"] = false;
-        manifestNode["run"]!["banking_paused"] = false;
+        report["public_services"]!["metadata"]!["banking_paused"] = !SocietyBank.Paused;
+        manifestNode["run"]!["banking_paused"] = !SocietyBank.Paused;
         Assert.Equal(409, (await Assert.ThrowsAsync<AnalyticsException>(() => service.Publish(report, Manifest(), default))).StatusCode);
         report.Remove("public_services");
-        manifestNode["run"]!["banking_paused"] = true;
+        manifestNode["run"]!["banking_paused"] = SocietyBank.Paused;
         Assert.Equal(400, (await Assert.ThrowsAsync<AnalyticsException>(() => service.Publish(report, Manifest(), default))).StatusCode);
     }
 

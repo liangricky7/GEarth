@@ -325,6 +325,15 @@ def test_failure_logs_safe_validation_code_without_private_response(caplog):
     assert "private" not in caplog.records[-1].message
 
 
+def test_citizens_sample_with_some_randomness_and_institutions_do_not():
+    citizen = make_job()
+    citizen.observation = {"world_stage": 2, "self": {"role": "citizen"}}
+    government = make_job()
+    government.observation = {"world_stage": 2, "self": {"role": "government"}}
+    assert worker.build_prompt(citizen)["temperature"] == worker.CITIZEN_TEMPERATURE == 0.5
+    assert worker.build_prompt(government)["temperature"] == 0
+
+
 def test_free_numbers_fill_ranged_fields_within_bounds():
     job = make_job()
     job.observation = {"world_stage": 2}

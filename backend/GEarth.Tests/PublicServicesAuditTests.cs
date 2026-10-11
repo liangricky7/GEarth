@@ -121,7 +121,7 @@ public sealed class PublicServicesAuditTests
         RunAudit.Enable(world, new { fixture = true, banking_paused = false });
         var metadata = world.PendingAudit[0].Payload;
         Assert.True(metadata["fixture"]!.GetValue<bool>());
-        Assert.True(metadata["banking_paused"]!.GetValue<bool>());
+        Assert.Equal(SocietyBank.Paused, metadata["banking_paused"]!.GetValue<bool>()); // the engine records its own flag
         Assert.Equal("v1", metadata["features"]!["public_services"]!.GetValue<string>());
         Assert.Equal(SocietyLabor.CourseDays, metadata["economy_configuration"]!["school"]!["course_days"]!.GetValue<int>());
         Assert.Equal("claim_on_bank_cash_not_additional_money", metadata["economy_configuration"]!["accounting"]!["deposit_minor"]!.GetValue<string>());

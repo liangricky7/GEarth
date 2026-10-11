@@ -69,6 +69,17 @@ public sealed class Agent
     public int StudentUntilTick { get; set; } = -1;
     public string? SchoolId { get; set; }
     public bool Graduated { get; set; }
+    // A part-time student keeps their job at half hours and half pay for a course twice as long.
+    public bool PartTimeStudent { get; set; }
+    // Public and state-firm wages the employer could not pay, owed to the worker; two weeks unpaid is a strike.
+    public long ArrearsMinor { get; set; }
+    public int ArrearsWeeks { get; set; }
+    // Owners: the last price change and the units sold the week before it, so its effect shows.
+    public int PriceChangeTick { get; set; } = -1;
+    public int PriceChangePct { get; set; }
+    public int UnitsBeforePriceChange { get; set; }
+    // Deposit insurance already paid to this depositor (the limit is per depositor).
+    public long InsuredMinor { get; set; }
     // Looking for a better job: until this tick any higher offer pulls the worker, not only 10% more.
     public int SeekingUntilTick { get; set; } = -1;
     // Banking: residents' savings deposited at their country's bank (the government's deposit is the

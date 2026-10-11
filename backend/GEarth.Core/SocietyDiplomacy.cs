@@ -81,8 +81,8 @@ public static class SocietyDiplomacy
         switch (policy.ActionType)
         {
             case "adjust_tax":
-                nation.TaxBasisPoints = Math.Clamp(nation.TaxBasisPoints + parameters["change_basis_points"]!.GetValue<int>(),
-                    0, SocietyActions.MaxTaxBasisPoints);
+                nation.TaxBasisPoints = Math.Clamp(parameters["income_tax_percent"]!.GetValue<int>() * 100, 0, SocietyActions.MaxTaxBasisPoints);
+                nation.TaxChangedTick = world.Tick;
                 return true;
             case "subsidize_startup":
                 return nation.NeededSince.ContainsKey(parameters["sector"]!.GetValue<string>())
@@ -175,7 +175,7 @@ public static class SocietyDiplomacy
                 var opponent = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
                 if (government.CashMinor < 5000 || opponent.Tension < 60 || opponent.AtWar)
                     return false;
-                SocietyEconomy.Transfer(world, government, world.Agents[nation.Id + "_bank"], 5000, "war_declaration");
+                SocietyEconomy.PaySoldiers(world, nation, government, 5000);
                 opponent.AtWar = true;
                 opponent.TradeAgreement = false;
                 opponent.Tension = 100;

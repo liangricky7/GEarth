@@ -147,6 +147,8 @@ def decision_group(job: DecisionJob) -> str:
     return "citizen" if role.lower() in {"citizen", "resident"} else "institution"
 
 
+CITIZEN_TEMPERATURE = 0.5
+
 WORLD_INSTRUCTIONS = (
     "You are one autonomous resident or institution in a fictional world. "
     "Choose an available action using your role, goals, personality, memories and public conditions. "
@@ -223,7 +225,9 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
                     ),
                 },
             ],
-            "temperature": 0,
+            # Citizens with near-identical views must not all act in the same week (for example, a whole
+            # country withdrawing its savings at once), so their choices get some randomness.
+            "temperature": CITIZEN_TEMPERATURE if decision_group(job) == "citizen" else 0,
             "max_tokens": 512,
             **model_request_settings(model),
             "response_format": {"type": "json_object"},

@@ -30,10 +30,12 @@ public static class SocietyEconomy
     // to 100% when healthy, and drops 99% after a missed meal until the next one.
     public static double Capacity(Agent citizen) => (0.25 + 0.75 * citizen.Health / 100.0) * (citizen.Hungry ? HungerOutputFactor : 1);
 
-    // The week's pay for days actually worked (sick days are unpaid), less food already taken as pay in kind.
+    // The week's pay for days actually worked (sick days are unpaid; a part-time student earns half), less food
+    // already taken as pay in kind.
     public static long EarnedWage(Agent worker, long salary)
     {
-        var earned = salary * (SocietyLabor.DaysPerWeek - Math.Min(SocietyLabor.DaysPerWeek, worker.SickDays)) / SocietyLabor.DaysPerWeek;
+        var earned = salary * (SocietyLabor.DaysPerWeek - Math.Min(SocietyLabor.DaysPerWeek, worker.SickDays)) / SocietyLabor.DaysPerWeek
+            / (worker.PartTimeStudent && SocietyLabor.IsStudent(worker) ? 2 : 1);
         var inKind = Math.Min(earned, worker.InKindMinor);
         worker.InKindMinor -= inKind;
         return earned - inKind;
@@ -199,6 +201,9 @@ public static class SocietyEconomy
             // Daily activity (visits, purchases) counts toward the week, so deltas run from last week's totals.
             long Since(string key, long total) => total - nation.WeekStartTotals.GetValueOrDefault(key);
 
+            // A planned state short of a week's spending borrows from its state bank before wages go unpaid.
+            if (SocietyLabor.IsPlanned(nation) && government.CashMinor < government.LastWeekOutMinor)
+                SocietyBank.BorrowForTreasury(world, nation, government.LastWeekOutMinor - government.CashMinor);
             // The state owns every firm in a planned economy, and the school everywhere: it takes surplus above four
             // weeks of payroll and covers shortfalls. The state bank is left alone: its cash is depositors' reserves.
             foreach (var firm in agents.Where(agent => agent.Role == "business" && !SocietyBank.IsBank(agent) && agent.OwnerId is null
@@ -211,8 +216,7 @@ public static class SocietyEconomy
                         Transfer(world, government, firm, Math.Min(government.CashMinor, payroll - firm.CashMinor), "state_subsidy");
                 }
 
-            if (!SocietyBank.Paused)
-                SocietyBank.Week(world, nation);
+            SocietyBank.Week(world, nation);
             SocietyLabor.Week(world, nation, government, residents);
             PublicPayroll(world, nation, government, residents.Where(resident => resident.EmployerId == government.Id).ToArray());
 
@@ -261,8 +265,7 @@ public static class SocietyEconomy
                     resident.SupportsLeadership = true;
                 resident.LastWeekWellbeing = resident.Wellbeing;
             }
-            if (!SocietyBank.Paused)
-                SocietyBank.Sweep(world, nation, residents);
+            SocietyBank.Sweep(world, nation, residents);
 
             var tensions = society.Relations.Values.Where(relation => relation.AtWar
                 && (relation.First == nation.Id || relation.Second == nation.Id)).ToArray();
@@ -425,7 +428,13 @@ public static class SocietyEconomy
             if (share > 0)
                 units = (int)Math.Min(units, government.CashMinor / share);
             if (units <= 0)
+            {
+                // A household that could not afford this seller's price but could pay one a fifth lower is a sale
+                // lost to price (someone with almost no money is not won back by a cheaper price).
+                if (household && buyer.CashMinor < own && buyer.CashMinor * 5 >= own * 4)
+                    world.Society.TurnedAwayThisWeek[seller.Id] = world.Society.TurnedAwayThisWeek.GetValueOrDefault(seller.Id) + 1;
                 continue;
+            }
             Sell(world, buyer, seller, units * own, household, units);
             if (share > 0)
             {
@@ -513,15 +522,27 @@ public static class SocietyEconomy
         return true;
     }
 
-    // Public salaries (soldiers, the planner) come from the government's pay scale, not effort; when the
-    // treasury falls short, everyone is paid the same fraction.
-    private static void PublicPayroll(World world, Nation nation, Agent government, Agent[] staff)
+    // Public salaries (soldiers, the planner) come from the government's pay scale, not effort.
+    private static void PublicPayroll(World world, Nation nation, Agent government, Agent[] staff) =>
+        PayOwed(world, nation, government, government, staff.Where(worker => worker.WorkEffort > 0) // strikers forfeit the week's pay
+            .Select(worker => (worker, SocietyLabor.OnArrearsStrike(worker) ? 0 : EarnedWage(worker, worker.SalaryMinor))).ToList());
+
+    // A public or state employer pays this week's wages and any arrears; when short, everyone gets the same
+    // fraction and the rest is owed. Two weeks owed and the worker strikes until paid.
+    public static long PayOwed(World world, Nation nation, Agent government, Agent employer, List<(Agent Worker, long Wage)> dues)
     {
-        var working = staff.Where(worker => worker.WorkEffort > 0).ToArray(); // strikers forfeit the week's pay
-        var bill = working.Sum(worker => worker.SalaryMinor);
-        var share = bill == 0 ? 1 : Math.Min(1, government.CashMinor / (double)bill);
-        foreach (var worker in working)
-            PayWage(world, nation, government, government, worker, EarnedWage(worker, (long)(worker.SalaryMinor * share)));
+        var bill = dues.Sum(due => due.Worker.ArrearsMinor + due.Wage);
+        var share = bill == 0 ? 1 : Math.Min(1, employer.CashMinor / (double)bill);
+        var paid = 0L;
+        foreach (var (worker, wage) in dues)
+        {
+            var owed = worker.ArrearsMinor + wage;
+            var pay = (long)(owed * share);
+            paid += PayWage(world, nation, government, employer, worker, pay);
+            worker.ArrearsMinor = owed - pay;
+            worker.ArrearsWeeks = worker.ArrearsMinor > 0 ? worker.ArrearsWeeks + 1 : 0;
+        }
+        return paid;
     }
 
     public static long PayWage(World world, Nation nation, Agent government, Agent employer, Agent worker, long wage)
@@ -584,10 +605,21 @@ public static class SocietyEconomy
         world.Society!.ProducedGoods[good] += quantity;
     }
 
+    // War spending goes to the soldiers who fight it, shared equally; with no soldiers it stays in the treasury.
+    public static void PaySoldiers(World world, Nation nation, Agent government, long amount)
+    {
+        var soldiers = world.InCountry(nation.Id).Where(person => person.EmployerId == government.Id && person.Occupation == "soldier")
+            .OrderBy(person => person.Id).ToArray();
+        amount = Math.Min(amount, government.CashMinor);
+        if (soldiers.Length == 0 || amount <= 0)
+            return;
+        for (var index = 0; index < soldiers.Length; index++)
+            PayWage(world, nation, government, government, soldiers[index], amount / soldiers.Length + (index < amount % soldiers.Length ? 1 : 0));
+    }
+
     private static void ConflictCosts(World world, Nation nation, Agent government, Agent[] businesses, int conflicts)
     {
-        var bank = world.Agents[nation.Id + "_bank"];
-        Transfer(world, government, bank, Math.Min(government.CashMinor, 1000L * conflicts), "war_upkeep");
+        PaySoldiers(world, nation, government, 1000L * conflicts);
         foreach (var business in businesses.Where(business => SocietyLabor.SectorOf(business.Specialty!).Good is not null))
         {
             var good = business.Specialty!;
@@ -639,8 +671,11 @@ public static class SocietyEconomy
             throw new InvalidOperationException("Unfunded transfer");
         from.CashMinor -= amount;
         to.CashMinor += amount;
-        from.WeekOutMinor += amount;
-        to.WeekInMinor += amount;
+        if (kind is not ("deposit" or "withdrawal")) // moving one's own savings is neither income nor spending
+        {
+            from.WeekOutMinor += amount;
+            to.WeekInMinor += amount;
+        }
         RecordFlow(world, from.Id, to.Id, amount, kind);
     }
 

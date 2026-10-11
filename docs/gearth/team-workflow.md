@@ -1,4 +1,4 @@
-# Dia Rockets — Trello and GitHub workflow
+# GEarth — Trello and GitHub workflow
 
 [Trello task board](https://trello.com/b/b0cLTB64/diarockets-kanban) · [GitHub repository](https://github.com/liangricky7/GEarth)
 
@@ -25,6 +25,8 @@ Read the latest branch head before updating it. Preserve unrelated changes. A br
 
 The expanded-world implementation and the subsequent scheduling, compute, observer, metrics, banking and analytics branches are integrated into `main`. Start new tasks from the latest main revision. Original pull requests and commits retain the development history.
 For new work that requires a future unmerged branch, record it as the dependency/base and target the PR at that branch. After the dependency reaches main, update the task branch and retarget the PR to main. Avoid merging copies of the same existing work twice.
+
+After integration, delete completed remote task branches once their tips are ancestors of `main`, their exact heads belong to merged pull requests, or their remaining patches are verified equivalents of commits in `main`. Check for open pull requests and newly pushed commits first. Preserve branches with unique work. Historical commits and merged pull requests remain the source of record; old branch names are not a list of pending features.
 
 ## Status meanings
 

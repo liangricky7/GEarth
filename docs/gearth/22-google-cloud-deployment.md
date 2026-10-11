@@ -9,7 +9,7 @@ The worker balances each decision group by active requests divided by configured
 ## Current deployment
 
 - Project: `project-73e10704-566a-4d04-886` (My First Project).
-- Instance: `gearth-sim`, zone `us-central1-a`, Ubuntu 24.04, `e2-medium`, 40 GB persistent boot disk.
+- Existing instance: `faultline-sim`, zone `us-central1-a`, Ubuntu 24.04, `e2-medium`, 40 GB persistent boot disk. The application was renamed to GEarth; the Compute Engine instance retains its original resource name.
 - Team website: https://8-34-212-187.sslip.io/, served by Nginx over HTTPS. The reserved IP's HTTP address redirects here. The inference worker and engine listen on loopback; public observation is read-only, and Start/Stop/Reset require the team password.
 - The VM joins Jayden's existing Tailscale network. Spark A is reached at `hackathon@100.70.23.23` using the existing pinned SSH host keys.
 - One managed SSH connection forwards Spark A's model ports 8000/8001. Spark B is reached directly over Tailscale through Ken's existing relay at `100.119.198.81:18002/18004`. All four catalogs must pass before the service starts. The observer IP is reserved as `gearth-observer-ip` so it survives VM stop/start.
@@ -34,15 +34,16 @@ From the local checkout, after Google Cloud CLI authentication:
 
 ```bash
 .venv/bin/python ops/gcp/deploy.py \
-  --project project-73e10704-566a-4d04-886
+  --project project-73e10704-566a-4d04-886 \
+  --instance faultline-sim
 ```
 
-The deployer packages tracked source as it currently exists plus deployment files. It excludes credentials, runtime data, build outputs, and unrelated untracked documents. It records both the Git commit and a hash of the exact packaged source, including local tracked edits. Review the working tree before deploying. Private Neon and Spark credentials are filtered from `.env.local` and copied separately via encrypted SCP. The original local config stays unchanged, and the old share supervisor is not configured on the VM.
+The deployer packages tracked source as it currently exists plus deployment files. It excludes credentials, runtime data, build outputs, and unrelated untracked documents. It records both the Git commit and a hash of the exact packaged source, including local tracked edits. To deploy GitHub `main`, fetch it and use a clean checkout at that revision; a dirty laptop checkout can package unpublished changes. Review the working tree before deploying. Private Neon and Spark credentials are filtered from `.env.local` and copied separately via encrypted SCP. The original local config stays unchanged, and the old share supervisor is not configured on the VM.
 
 The installer builds a separate release before switching `/opt/gearth/current`. Persistent state lives outside releases at `/var/lib/gearth`, and logs at `/var/log/gearth`. A deployment stops the previous service gracefully and does not auto-start a new live run: verify all four model catalogs, then start it explicitly. Prefer deployments between completed experiments; engine updates cannot hot-swap into an active world.
 
 ```bash
-gcloud compute ssh gearth-sim --project=project-73e10704-566a-4d04-886 \
+gcloud compute ssh faultline-sim --project=project-73e10704-566a-4d04-886 \
   --zone=us-central1-a \
   --command='sudo systemctl start gearth.service'
 ```
@@ -77,7 +78,7 @@ sudo systemctl stop gearth.service
 sudo systemctl start gearth.service
 ```
 
-The systemd service starts after a VM reboot, checks Spark readiness, and retries service failures. Tailscale must remain authenticated. Its device key lifetime is separate from Google Cloud's credit expiry. SSH uses existing host-key verification; it never disables certificate or host verification.
+The base systemd unit supports boot startup and retries, but the deployed manual-run override disables both. Explicit Start checks Spark readiness and launches one experiment; inspect the installed drop-ins with `systemctl cat gearth.service` before changing that behavior. Tailscale must remain authenticated. Its device key lifetime is separate from Google Cloud's credit expiry. SSH uses existing host-key verification; it never disables certificate or host verification.
 
 Develop features locally while this release collects data. Use a separate Neon branch/database for development when testing persistence changes. Deploy a reviewed new release for a new experiment batch; do not change the collection schema underneath an active old release.
 

@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-11",
+  "repository": "https://github.com/liangricky7/GEarth",
+  "base_main": "2f2eb7074ca75f71ccf0d98c76dfaaddc5c81c81",
+  "scope": "Remove completed remote branch refs; preserve source history and unique work.",
+  "removed_remote_branches": [
+    {
+      "branch": "codex/weekly-renderer-export",
+      "sha": "111244183feed53aab01758411b38ff207a0532b",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "feat/analytics-public-services",
+      "sha": "92cad372d31d5cda81f581bb3975e76ff7fbe4b2",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "feat/gearth-renderer",
+      "sha": "050bbfc801c33396d92756e24b085269a00f24bc",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "feat/run-data-explorer",
+      "sha": "cb2e808b9705ea3e988bf80e7f8058aa6b2e6fd6",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "graphicsteam",
+      "sha": "5acf1a82ae12538b0391d97e90354478ebb93712",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "labor-market-potential-bank",
+      "sha": "6e633d9cbf90c31688d79ddb2210b753d407928c",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "ricky/banks-on",
+      "sha": "221360db872fcf1846e223f2677a355816adeb68",
+      "verification": "ancestor of main"
+    },
+    {
+      "branch": "feat/weekly-analytics-saves",
+      "sha": "c7fc49dd3e764f3c6d72a306902f8d7e5e3888bf",
+      "verification": "stable patch ID 7b5ca9d06b2dc717a5d0e06bc92053124a676b0f matches a1a04bc in main"
+    },
+    {
+      "branch": "refactor/gearth-rename",
+      "sha": "4fdb78c0c271c9c27683acc8788089790d9af7ff",
+      "verification": "PR #23 merged this exact head; merge commit 1bf363031b4ebe2b6c7842dc9503a4dfce2704e6 is in main"
+    }
+  ],
+  "deletion": "Atomic Git push with an explicit expected-SHA lease for every branch.",
+  "recovery": {
+    "local_archive_prefix": "refs/archive/github-cleanup-20261011/",
+    "note": "Archive refs live in the original local Git repository, shared by its worktrees.",
+    "command": "git push origin refs/archive/github-cleanup-20261011/BRANCH:refs/heads/BRANCH"
+  },
+  "retained_branches": [
+    {
+      "branch": "main",
+      "reason": "shared integrated source"
+    },
+    {
+      "branch": "feat/rewind-scenario-ui",
+      "reason": "open PR #30"
+    },
+    {
+      "branch": "updates/observer-and-project-notes",
+      "reason": "contains patch 090bfca not equivalent to a commit in main; left for review"
+    }
+  ],
+  "vm": {
+    "deployment_canceled": true,
+    "activated_new_release": false,
+    "source_commit": "5ee17d4185951313025053c7558762371e02ee3d",
+    "run_id": "world_20261011_142654_6edd51",
+    "status": "Existing simulation remained active after deployment cancellation."
+  }
+}

@@ -4,9 +4,11 @@ An observable AI society for KnightHacks 2026: ten fictional countries, five ins
 
 ## Current state
 
-Main combines the daily labor-market economy, entrepreneurs, quality of life, clinics, public services, trade and diplomacy with shared Spark/AMD routing, seeded endowments, bounded scheduling, observer consistency and automatic run reports. One tick is one day; payroll runs every seven ticks. Institutions and entrepreneurs decide weekly, and citizens rotate over eight weeks. Weekly decisions finish before payroll.
+Main combines the daily labor-market economy, entrepreneurs, quality of life, clinics, public services, infrastructure, trade, diplomacy and war with shared Spark/AMD routing, seeded endowments, bounded scheduling, observer consistency and automatic run reports. It also includes timeline experiments, weekly analytics saves, the saved-data explorer and the Vulkan renderer. One tick is one day; payroll runs every seven ticks. Institutions and entrepreneurs decide weekly, and citizens rotate over eight weeks. Weekly decisions finish before payroll.
 
-The [shared cloud simulation](https://8-34-212-187.sslip.io/) runs continuously and saves worlds to Neon. Both Sparks provide Qwen3-8B institution decisions and Qwen3-4B resident decisions; AMD supplements residents with Qwen3-4B. All five providers have completed live requests. The configured worker pool has 128 slots (16/16/32/32 on the Sparks plus 32 on AMD). The [AMD batch optimization](docs/gearth/25-amd-batch-optimization.md) uses a 90% average utilization target and passed 192/192 public requests at 2.77 valid citizen choices/second; slots are admission limits, not throughput. Brief dashboard readings can still exceed 95%. The preserved running world's engine admission and provider labels retain their startup values until the next run. The Google Cloud VM runs the world engine, so the owner's laptop can close.
+The [shared cloud simulation](https://8-34-212-187.sslip.io/) saves worlds to Neon. The VM uses manual runs: Start launches one experiment, and completed runs remain available for inspection. Both Sparks provide Qwen3-8B institution decisions and Qwen3-4B resident decisions; AMD supplements residents with Qwen3-4B. All five providers have completed live requests. The configured worker pool has 128 slots (16/16/32/32 on the Sparks plus 32 on AMD). The [AMD batch optimization](docs/gearth/25-amd-batch-optimization.md) uses a 90% average utilization target and passed 192/192 public requests at 2.77 valid citizen choices/second; slots are admission limits, not throughput. Brief dashboard readings can still exceed 95%. The preserved running world's engine admission and provider labels retain their startup values until the next run. The Google Cloud VM runs the world engine, so the owner's laptop can close.
+
+GitHub `main` and the deployed VM release are separate: a push does not update an active simulation. Follow the [deployment runbook](docs/gearth/22-google-cloud-deployment.md) to build, verify and activate a release. The [timeline experiment guide](docs/gearth/26-timeline-experiments.md), [saved-data explorer guide](docs/gearth/26-run-data-explorer.md) and [renderer guide](renderer/README.md) describe their individual setup requirements.
 
 Group members can open the website and unlock controls using the shared team password provided privately by the owner. Stop finishes in-flight decisions, saves and pauses the current world; Start resumes it. Reset saves the current run and starts a fresh world, retaining history. Everyone shares the same world, and closing a browser does not stop it. See the [cloud runbook](docs/gearth/22-google-cloud-deployment.md) for operation and access details.
 
@@ -66,11 +68,13 @@ dotnet test GEarth.sln
 .venv/bin/python -m pytest agents ops/test_amd_model_server.py ops/test_amd_batch_server.py ops/test_compute_config.py ops/test_spark_qwen.py -q
 npm ci
 npm run test:observer
+npm run test:data
+npm run test:renderer
 .venv/bin/python docs/gearth/validate_design.py
 .venv/bin/python ops/check_scheduler_integration.py
 ```
 
-Earlier consolidation results, including the previous calibration failure, remain in [historical integration evidence](docs/gearth/evidence/main-integration.json). Current rename checks passed 156 C# and 231 Python tests; see [rename verification](docs/gearth/evidence/gearth-rename-20261011.json). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures. Browser visual layout remains unverified.
+Earlier consolidation results, including the previous calibration failure, remain in [historical integration evidence](docs/gearth/evidence/main-integration.json). The rename-time checks passed 156 C# and 231 Python tests; see [rename verification](docs/gearth/evidence/gearth-rename-20261011.json). These are historical results, not counts for the current tree. Later feature checks are recorded in [complete data-capture evidence](docs/gearth/evidence/complete-data-capture-pilot-20261011.json), [timeline experiment evidence](docs/gearth/evidence/timeline-experiments-20261011.json) and [renderer validation](renderer/VALIDATION.md). The lifecycle test uses synthetic inference, not a GPU benchmark. The reference validator checks historical Stage 1 documents and fixtures.
 
 For observer changes, `node ops/check_observer.cjs` checks desktop/mobile rendering, saved-run switching with delayed responses, agent filters and pagination using API fixtures and installed Chrome or Edge. Screenshots are saved under ignored `artifacts/local/`.
 

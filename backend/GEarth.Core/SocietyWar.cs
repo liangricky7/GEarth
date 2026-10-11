@@ -29,7 +29,7 @@ public static class SocietyWar
         ["market_democracy"] = 0.2, ["social_democracy"] = 0.15
     };
 
-    public static readonly string Note = "Relations run -100..100, rise with deliveries and gifts, and drift toward zero weekly outside war. Relations at -60 close the direct route; other open routes can still carry trade. After a refused or expired diplomatic offer, relations at -20 permit conflict: 5000 upfront and 1000 per war week paid to soldiers. Rule governments also require a blocked raw-material need, superior strength and a readiness draw; LIVE governments choose freely. Strength is fit non-striking soldiers plus 3 per missile. Each weekly contest awards the winner 10% of the loser's weekly taxes and ore/fuel stock, and wounds 25% of fit losing soldiers; normal treatment restores health. Two weeks without fit soldiers forces surrender even with missiles. Peace offers demand none, 25% of the other treasury, or 25% of one productive raw-material endowment; surrender imposes a raw-material cession. Military construction uses the state contractor, a 50% advance and reserved outstanding commitments. Missiles consume one stockpile unit to strike, removing 50 condition from a cost-weighted completed project; a funded turret blocks 30% at full condition. Ordinary funded upkeep restores damaged condition. Recruit/discharge changes two soldiers at table pay. Gifts use treasury cash or treasury-owned/purchased raw goods; gain is capped at 15 and can round to zero. War lowers security and support. Weekly checks of quality of life below 40 for 28 days call early elections in democracies or, with fewer than 5% recently paid non-striking soldiers, a revolution in autocracies. Revolutions preserve ownership compatibility; planned-to-market transitions are explicitly deferred. ";
+    public static readonly string Note = "Relations run -100..100, rise with deliveries and gifts, and drift toward zero weekly outside war. Relations at -60 close the direct route; other open routes can still carry trade. After a refused or expired diplomatic offer, relations at -20 permit conflict: 5000 upfront and 1000 per war week paid to soldiers. Rule governments also require a blocked raw-material need, superior strength and a readiness draw; LIVE governments choose freely. Strength is fit non-striking soldiers plus 3 per missile. Each weekly contest awards the winner 10% of the loser's weekly taxes and ore/fuel stock, and wounds 25% of fit losing soldiers; normal treatment restores health. Two weeks without fit soldiers forces surrender even with missiles. Peace offers demand none, 25% of the other treasury, or 25% of one productive raw-material endowment; surrender imposes a raw-material cession. Military construction uses the state contractor, a 50% advance and reserved outstanding commitments. Missiles consume one stockpile unit to strike, removing 50 condition from a cost-weighted completed project; a funded turret blocks 30% at full condition. Ordinary funded upkeep prevents wear; accumulated damage requires queued repairs. Recruit/discharge changes two soldiers at table pay. Gifts use treasury cash or treasury-owned/purchased raw goods; gain is capped at 15 and can round to zero. War lowers security and support. Weekly checks of quality of life below 40 for 28 days call early elections in democracies or, with fewer than 5% recently paid non-striking soldiers, a revolution in autocracies. Revolutions preserve ownership compatibility; planned-to-market transitions are explicitly deferred. ";
 
     public static Agent[] Soldiers(World world, Nation nation) => world.InCountry(nation.Id)
         .Where(person => person.EmployerId == nation.Id + "_government" && person.Occupation == "soldier").ToArray();
@@ -148,6 +148,7 @@ public static class SocietyWar
     public static void EndWar(World world, Relationship war, Nation winner, Nation loser, string terms, string reason)
     {
         if (!PeaceTerms.Contains(terms)) throw new ArgumentException("Unsupported peace terms.", nameof(terms));
+        if (!war.AtWar) return;
         var paid = 0L;
         if (terms == "reparations")
         {
@@ -164,6 +165,7 @@ public static class SocietyWar
         }
         war.AtWar = false;
         war.Aggressor = null;
+        SocietyDiplomacy.ClearOffer(war);
         foreach (var nation in new[] { winner, loser })
             if (!RelationsOf(world, nation.Id).Any(relation => relation.AtWar))
                 nation.NoFitSoldierWeeks = 0;
@@ -271,8 +273,18 @@ public static class SocietyWar
     }
 
     public sealed record ResourceBlock(string BuyerId, string Good, int Needed, int Available, int Incoming,
-        ResourceHolder[] HeldBy);
-    public sealed record ResourceHolder(string CountryId, string SellerId, int Exportable, string? BlockedBy, double? LandedUnitCost);
+        long LiquidMinor, long CashAvailableMinor, DomesticResourceOffer[] DomesticOffers, int DomesticAffordable,
+        long DomesticCostMinor, ResourceHolder[] HeldBy)
+    {
+        public int Gap => Needed - Available - Incoming;
+        public bool CannotBuyAny => DomesticAffordable == 0 && HeldBy.All(holder => holder.BlockedBy is not null);
+    }
+    public sealed record DomesticResourceOffer(string SellerId, int Stock, int UnitPriceMinor);
+    public sealed record ResourceHolder(string CountryId, string SellerId, int Exportable, string? BlockedBy,
+        double? LandedUnitCost, int Affordable, long FullGapEscrowMinor, long? FullGapFundingMinor)
+    {
+        public int QuoteQuantity => 1;
+    }
 
     // Use actual raw-input consumers, their inventories, inbound cargo and executable seller quotes.
     // National aggregate stocks include other firms' private inputs and cannot establish a buyer's access.
@@ -293,10 +305,19 @@ public static class SocietyWar
                 && cargo.Status == "in_transit").Sum(cargo => cargo.Quantity);
             var gap = needed - available - incoming;
             if (gap <= 0) continue;
-            // One affordable domestic unit is a real buying opportunity; this view identifies blocked access,
-            // not a promise that the entire next week's forecast can be filled in one order.
-            if (SocietyEconomy.Offers(world, nation, input.Good).Any(offer => offer.Seller != buyer
-                && SocietyBank.Liquid(world, buyer) >= offer.PriceMinor)) continue;
+            var liquid = SocietyBank.Liquid(world, buyer);
+            var cash = SocietyBank.CashAvailable(world, buyer);
+            var domestic = SocietyEconomy.Offers(world, nation, input.Good).Where(offer => offer.Seller != buyer)
+                .Select(offer => new DomesticResourceOffer(offer.Seller.Id, offer.Seller.Inventory[input.Good], offer.PriceMinor)).ToArray();
+            var affordable = 0;
+            long domesticCost = 0;
+            foreach (var offer in domestic)
+            {
+                var units = (int)Math.Min(Math.Min(gap - affordable, offer.Stock),
+                    (liquid - domesticCost) / Math.Max(1, offer.UnitPriceMinor));
+                affordable += units;
+                domesticCost += (long)units * offer.UnitPriceMinor;
+            }
             var holders = world.Agents.Values.Where(seller => seller.Role == "business" && seller.CountryId != nation.Id
                     && SocietyLabor.SectorOf(seller.Specialty!).Good == input.Good
                     && SocietyTrade.ExportableStock(world, seller, input.Good) > 0)
@@ -304,6 +325,7 @@ public static class SocietyWar
                 {
                     var path = SocietyTrade.Path(world, seller.LocationId, buyer.LocationId, "cheapest");
                     var price = SocietyTrade.Price(world, buyer, seller, 1);
+                    var fullPrice = SocietyTrade.Price(world, buyer, seller, gap);
                     string? reason = Relation(world, nation.Id, seller.CountryId).AtWar ? "war"
                         : path is null ? "closed_route"
                         : SocietyBank.CashAvailable(world, buyer) < price.AtWorld ? "cash_escrow"
@@ -312,15 +334,18 @@ public static class SocietyWar
                         : world.Society.Cargo.Count(cargo => cargo.BuyerId == buyer.Id && cargo.Good == input.Good && cargo.Status == "in_transit") >= 2
                             ? "shipment_limit" : null;
                     return new ResourceHolder(seller.CountryId, seller.Id, SocietyTrade.ExportableStock(world, seller, input.Good),
-                        reason, path is null ? null : Math.Round(SocietyResources.LandedUnitCost(world, buyer, seller, path, 1), 2));
+                        reason, path is null ? null : Math.Round(SocietyResources.LandedUnitCost(world, buyer, seller, path, 1), 2),
+                        reason is null ? SocietyTrade.Affordable(world, buyer, seller, input.Good, gap) : 0,
+                        fullPrice.AtWorld, path is null ? null : Math.Max(fullPrice.Paid, fullPrice.AtWorld)
+                            + SocietyResources.ShippingCost(world, buyer, path, gap) + SocietyTrade.Tariff(world, buyer, seller, fullPrice.Paid));
                 }).ToArray();
-            needs.Add(new(buyer.Id, input.Good, needed, available, incoming, holders));
+            needs.Add(new(buyer.Id, input.Good, needed, available, incoming, liquid, cash, domestic, affordable, domesticCost, holders));
         }
         return needs.ToArray();
     }
 
     public static (string Good, (string CountryId, string Reason)[] HeldBy)[] Blocked(World world, Nation nation) =>
-        ResourceNeeds(world, nation).Where(need => need.HeldBy.Length > 0 && need.HeldBy.All(holder => holder.BlockedBy is not null))
+        ResourceNeeds(world, nation).Where(need => need.HeldBy.Length > 0 && need.CannotBuyAny)
             .Select(need => (need.Good, need.HeldBy.Select(holder => (holder.CountryId, holder.BlockedBy!)).Distinct().ToArray())).ToArray();
 
     // Rule default: trade first. Without a model, war is offered only when the target holds a good the country
@@ -369,7 +394,7 @@ public static class SocietyWar
         if (nation.Missiles > 0)
             foreach (var enemy in atWar)
                 options.Add(SocietyActions.Make("launch_missile", new { country_id = enemy,
-                    effect = $"Consumes one missile (-3 strength); {100 - (int)Math.Round(100 * PhaseContracts.Boost(world.Society!.Nations[enemy], "missile_defense"))}% chance to hit. Subtracts 50 condition from one completed project, chosen by build cost; normal funded upkeep can restore it." }));
+                    effect = $"Consumes one missile (-3 strength); {100 - (int)Math.Round(100 * PhaseContracts.Boost(world.Society!.Nations[enemy], "missile_defense"))}% chance to hit. Subtracts 50 condition from one completed project, chosen by build cost; queued repairs restore accumulated damage." }));
         if (RelationsOf(world, nation.Id).Where(relation => !relation.AtWar).OrderBy(relation => relation.Score).ThenBy(relation => relation.Id)
                 .FirstOrDefault() is { } coldest && SocietyBank.Liquid(world, government) >= 20000)
         {
@@ -515,6 +540,7 @@ public static class SocietyWar
         var soldiers = Soldiers(world, nation);
         var strength = Strength(world, nation);
         var residents = world.InCountry(nation.Id).Where(SocietyLabor.IsResident).ToArray();
+        var needs = ResourceNeeds(world, nation);
         return new
         {
             strength, soldiers = soldiers.Length, soldiers_fit = soldiers.Count(Fit), soldiers_paid = soldiers.Count(soldier => Paid(world, soldier)),
@@ -548,8 +574,9 @@ public static class SocietyWar
                 unrest_since_tick = nation.UnrestSinceTick >= 0 ? nation.UnrestSinceTick : (int?)null,
                 unrest_comes_to_a_head_tick = nation.UnrestSinceTick >= 0 ? nation.UnrestSinceTick + UnrestDays : (int?)null
             },
-            raw_material_needs = ResourceNeeds(world, nation),
-            needs_but_cannot_buy = ResourceNeeds(world, nation).Where(need => need.HeldBy.All(holder => holder.BlockedBy is not null)).ToArray()
+            raw_material_quote_basis = "Forecast gap is next week's staffed input need less inventory and incoming cargo. Domestic affordable quantity uses cheapest offers in order. Each foreign affordable quantity is an independent alternative using the same current funds, capped at the gap and exportable stock; do not add alternatives together. Landed unit quotes use quantity one; full-gap funding includes escrow, freight, currency and tariff but does not guarantee stock or delivery within the week.",
+            raw_material_needs = needs,
+            needs_but_cannot_buy = needs.Where(need => need.CannotBuyAny).ToArray()
         };
     }
 }

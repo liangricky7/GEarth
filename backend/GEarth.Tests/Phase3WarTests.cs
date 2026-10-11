@@ -269,6 +269,84 @@ public sealed class Phase3WarTests
         SocietyEconomy.AssertConservation(world);
     }
 
+    private static void EnactPolicy(World world, string country, string action, object parameters)
+    {
+        var policy = Policy(action, parameters);
+        policy.CountryId = country;
+        policy.EffectiveTick = world.Tick;
+        world.Society!.Policies.Add(policy);
+        SocietyDiplomacy.ProcessPolicies(world);
+    }
+
+    [Theory]
+    [InlineData("reparations")]
+    [InlineData("cede_ore")]
+    public void SettlementClearsPendingOffersAndCannotChargeTwice(string terms)
+    {
+        var world = NewWorld(true);
+        var relation = War(world, "aster", "beryl");
+        EnactPolicy(world, "beryl", "offer_peace", new { country_id = "aster", terms });
+        Assert.Equal("beryl", relation.ProposedBy);
+        var response = Assert.Single(SocietyActions.Available(world, world.Agents["aster_government"]),
+            option => option.ActionType == "respond_agreement" && (string?)option.Params["country_id"] == "beryl"
+                && option.Params["accept"]!.GetValue<bool>());
+        Assert.Contains("25%", (string?)response.Params["effect"]);
+        var winner = world.Society!.Nations["beryl"];
+        var loser = world.Society.Nations["aster"];
+        SocietyWar.EndWar(world, relation, winner, loser, terms, "surrender");
+        var cash = world.Agents["aster_government"].CashMinor;
+        var endowment = loser.Endowment["ore"];
+        Assert.Null(relation.ProposedBy);
+        Assert.Null(relation.ProposalKind);
+        Assert.Null(relation.ProposalTerms);
+
+        EnactPolicy(world, "aster", response.ActionType, response.Params);
+        SocietyWar.EndWar(world, relation, winner, loser, terms, "stale_settlement");
+        Assert.Equal(cash, world.Agents["aster_government"].CashMinor);
+        Assert.Equal(endowment, loser.Endowment["ore"]);
+        Assert.Single(world.Events, item => item.EventType == "war_ended");
+        Assert.Contains(world.Events, item => item.EventType == "policy_blocked"
+            && (string?)item.Payload["action"] == "respond_agreement");
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void DelayedPeaceResponseCannotAcceptAReplacementOffer()
+    {
+        var world = NewWorld(true);
+        var relation = War(world, "aster", "beryl");
+        EnactPolicy(world, "beryl", "offer_peace", new { country_id = "aster", terms = "none" });
+        var response = Assert.Single(SocietyActions.Available(world, world.Agents["aster_government"]),
+            option => option.ActionType == "respond_agreement" && (string?)option.Params["country_id"] == "beryl"
+                && option.Params["accept"]!.GetValue<bool>());
+        EnactPolicy(world, "aster", "respond_agreement", new { country_id = "beryl", accept = false });
+        EnactPolicy(world, "beryl", "offer_peace", new { country_id = "aster", terms = "reparations" });
+        var cash = world.Agents["aster_government"].CashMinor;
+        EnactPolicy(world, "aster", response.ActionType, response.Params);
+        Assert.True(relation.AtWar);
+        Assert.Equal(cash, world.Agents["aster_government"].CashMinor);
+        Assert.Equal("reparations", relation.ProposalTerms);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void WarDeclarationCancelsTradeOffersAndBlocksTheirStaleResponse()
+    {
+        var world = NewWorld(true);
+        var relation = SocietyDiplomacy.Relation(world, "aster", "beryl");
+        relation.Score = -100;
+        relation.DiplomacyFailedTick = 0;
+        EnactPolicy(world, "beryl", "propose_agreement", new { country_id = "aster" });
+        Assert.Equal("trade", relation.ProposalKind);
+        EnactPolicy(world, "aster", "declare_conflict", new { country_id = "beryl" });
+        Assert.True(relation.AtWar);
+        Assert.Null(relation.ProposedBy);
+        EnactPolicy(world, "aster", "respond_agreement", new { country_id = "beryl", accept = true });
+        Assert.False(relation.TradeAgreement);
+        Assert.Equal(-100, relation.Score);
+        SocietyEconomy.AssertConservation(world);
+    }
+
     [Theory]
     [InlineData(0, 40)]
     [InlineData(60, -20)]
@@ -326,6 +404,10 @@ public sealed class Phase3WarTests
         var previous = nation.GovernmentId;
         var owners = world.InCountry(country).Where(person => person.Role == "business")
             .ToDictionary(firm => firm.Id, firm => firm.OwnerId);
+        var pending = Policy("set_welfare", new { amount_minor = 100 });
+        pending.CountryId = country;
+        pending.EffectiveTick = 100;
+        world.Society.Policies.Add(pending);
         foreach (var person in world.InCountry(country).Where(SocietyLabor.IsResident))
             person.Wellbeing = 0;
         SocietyWar.Day(world);
@@ -336,16 +418,126 @@ public sealed class Phase3WarTests
         Assert.All(world.InCountry(country).Where(person => person.Role == "business"), firm => Assert.Equal(owners[firm.Id], firm.OwnerId));
         if (planned)
         {
+            Assert.Contains(pending, world.Society.Policies);
             Assert.Equal(previous, nation.GovernmentId);
             Assert.Contains(world.Events, item => item.EventType == "revolution_deferred");
         }
         else
         {
+            Assert.DoesNotContain(pending, world.Society.Policies);
+            Assert.Contains(world.Events, item => item.EventType == "policy_blocked"
+                && (string?)item.Payload["reason"] == "LEADERSHIP_CHANGED");
             Assert.NotEqual(previous, nation.GovernmentId);
             Assert.DoesNotContain(world.InCountry(country), person => person.Role == "planner");
             Assert.Contains(world.Events, item => item.EventType == "government_changed"
                 && (string?)item.Payload["reason"] == "revolution");
         }
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Theory]
+    [InlineData(0.9, false)]
+    [InlineData(0.2, true)]
+    public void UnrestCallsAnElectionButApprovalStillDecidesItsOutcome(double approval, bool replaced)
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        foreach (var resident in world.InCountry(nation.Id).Where(SocietyLabor.IsResident)) resident.Wellbeing = 0;
+        SocietyWar.Day(world);
+        world.Tick = 28;
+        SocietyWar.Day(world);
+        Assert.Equal(29, nation.NextElectionTick);
+        nation.Approval = approval;
+        world.Tick = 29;
+        SocietyDiplomacy.Advance(world);
+        var election = Assert.Single(world.Events, item => item.EventType == "election_result" && item.EntityIds.Contains(nation.Id));
+        Assert.Equal(replaced, election.Payload["replaced"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void LegacyWorldCheckpointDoesNotPayTributeOnHistoricalTaxes()
+    {
+        var original = NewWorld();
+        War(original, "aster", "beryl");
+        original.Tick = 7;
+        original.Society!.Nations["aster"].TaxesCollectedMinor = 1_000_000;
+        original.Society.Nations["beryl"].TaxesCollectedMinor = 2_000_000;
+        var legacy = Wire.Node(original);
+        foreach (var entry in legacy["society"]!["relations"]!.AsObject())
+        {
+            var relation = entry.Value!.AsObject();
+            relation["tension"] = Math.Clamp(40 - relation["score"]!.GetValue<int>(), 0, 100);
+            relation.Remove("score");
+        }
+        foreach (var entry in legacy["society"]!["nations"]!.AsObject())
+        {
+            entry.Value!.AsObject().Remove("war_accounting_initialized");
+            entry.Value.AsObject().Remove("tax_mark_minor");
+        }
+        var world = legacy.Deserialize<World>(Wire.Json)!;
+        SocietyWar.Day(world);
+        var contest = Assert.Single(world.Events, item => item.EventType == "war_week");
+        Assert.Equal(0, contest.Payload["tribute_minor"]!.GetValue<long>());
+        foreach (var nation in world.Society!.Nations.Values) nation.TaxesCollectedMinor += 1000;
+        world.Tick = 14;
+        SocietyWar.Day(world);
+        Assert.Equal(100, world.Events.Last(item => item.EventType == "war_week").Payload["tribute_minor"]!.GetValue<long>());
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void TreasuryOwnedGiftLeavesPrivateInputsAloneAndCanHaveZeroRelationGain()
+    {
+        var world = NewWorld();
+        var giver = world.Agents["aster_government"];
+        var receiver = world.Agents["beryl_government"];
+        var supplier = world.Agents["aster_mine"];
+        supplier.Inventory["ore"] -= 10;
+        giver.Inventory["ore"] += 10;
+        var privateStocks = world.InCountry("aster").Where(agent => agent.Role == "business")
+            .ToDictionary(agent => agent.Id, agent => agent.Inventory["ore"]);
+        receiver.LastWeekOutMinor = 1_000_000;
+        var cash = giver.CashMinor;
+        Assert.True(SocietyWar.Enact(world, world.Society!.Nations["aster"],
+            Policy("send_gift", new { country_id = "beryl", kind = "ore", amount = 10 })));
+        Assert.Equal(cash, giver.CashMinor);
+        Assert.Equal(0, giver.Inventory["ore"]);
+        Assert.All(privateStocks, item => Assert.Equal(item.Value, world.Agents[item.Key].Inventory["ore"]));
+        Assert.Equal(0, Assert.Single(world.Events, item => item.EventType == "gift_sent").Payload["relation_gain"]!.GetValue<int>());
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void MissileLaunchConsumesStockTurretsInterceptAndUpkeepDoesNotEraseDamage()
+    {
+        var world = NewWorld();
+        var attacker = world.Society!.Nations["aster"];
+        var target = world.Society.Nations["beryl"];
+        War(world, attacker.Id, target.Id);
+        var turret = new Project { Id = "test_turret", Type = "turret", Complete = true, CostMinor = 40000, PaidMinor = 40000 };
+        target.Infrastructure.Add(turret);
+        var policy = Policy("launch_missile", new { country_id = target.Id });
+        policy.Id = Enumerable.Range(0, 100).Select(index => $"missile_{index}")
+            .First(key => SocietyFactory.Sample(world.Seed, key, "missile_hit") < 0.30);
+        attacker.Missiles = 2;
+        Assert.True(SocietyWar.Enact(world, attacker, policy));
+        Assert.Equal(1, attacker.Missiles);
+        Assert.Equal(100, turret.Condition);
+        Assert.False(world.Events.Last(item => item.EventType == "missile_strike").Payload["hit"]!.GetValue<bool>());
+        policy.Id = Enumerable.Range(0, 100).Select(index => $"missile_{index}")
+            .First(key => SocietyFactory.Sample(world.Seed, key, "missile_hit") >= 0.30);
+        Assert.True(SocietyWar.Enact(world, attacker, policy));
+        Assert.Equal(0, attacker.Missiles);
+        Assert.Equal(50, turret.Condition);
+        Assert.Equal(0.15, PhaseContracts.Boost(target, "missile_defense"), 6);
+        Assert.False(SocietyWar.Enact(world, attacker, policy));
+        var builder = world.InCountry(target.Id).First(person => person.Role == "citizen" && person.EmployerId is null);
+        SocietyLabor.Hire(world, world.Agents["beryl_construction"], builder, "builder");
+        builder.Health = 100;
+        builder.WorkEffort = 1;
+        world.Tick = 7;
+        SocietyInfrastructure.Day(world);
+        Assert.Equal(50, turret.Condition); // approved e1efff repair rules: upkeep prevents wear, repairs restore damage
         SocietyEconomy.AssertConservation(world);
     }
 }

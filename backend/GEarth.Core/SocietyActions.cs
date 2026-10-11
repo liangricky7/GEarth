@@ -273,7 +273,7 @@ public static class SocietyActions
         Lever("set_sales_tax", "sales_tax_basis_points", nation.SalesTaxBasisPoints, 200, 1000, level =>
             $"sales tax {nation.SalesTaxBasisPoints / 100.0:0.#}% -> {level / 100.0:0.#}%: {Weekly(essentials * (level - nation.SalesTaxBasisPoints) / 10000, "in tax on food and energy alone")}, raising shop prices");
         Lever("fund_services", "amount_minor", nation.ServiceBudgetPerResidentMinor, 50, 150, level =>
-            $"services {nation.ServiceBudgetPerResidentMinor} -> {level} a resident: {Weekly((long)people.Length * (level - nation.ServiceBudgetPerResidentMinor), "paid to clinics")}; health part of quality of life now {nation.QolParts.GetValueOrDefault("health"):0.00}");
+            SocietyGovernmentDecisions.ClinicEffect(world, nation, people.Length, level));
         if (SocietyBank.Liquid(world, agent) >= 1500 && nation.Productivity < 2 && SocietyLabor.Firms(world, nation.Id, "tools").Any())
             options.Add(Make("invest", new { amount_minor = 1500 }));
         SocietyInfrastructure.AddOptions(world, nation, agent, options);
@@ -302,10 +302,16 @@ public static class SocietyActions
         foreach (var relation in relationships)
         {
             var countryId = relation.First == nation.Id ? relation.Second : relation.First;
-            if (relation.ProposedBy is not null && relation.ProposedBy != nation.Id)
+            if (relation.ProposedBy is not null && relation.ProposedBy != nation.Id
+                && world.Tick + Governments.Get(nation.GovernmentId).PolicyDelay <= relation.ProposalExpiresTick)
             {
-                options.Add(Make("respond_agreement", new { country_id = countryId, accept = true }));
-                options.Add(Make("respond_agreement", new { country_id = countryId, accept = false }));
+                foreach (var accept in new[] { true, false })
+                    options.Add(Make("respond_agreement", new
+                    {
+                        country_id = countryId, accept, proposal_kind = relation.ProposalKind,
+                        proposal_terms = relation.ProposalTerms, proposal_expires_tick = relation.ProposalExpiresTick,
+                        effect = SocietyGovernmentDecisions.ResponseEffect(world, nation, relation, accept)
+                    }));
             }
             else if (relation.ProposedBy is null)
             {

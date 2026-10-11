@@ -10,6 +10,14 @@ public static class SocietyDiplomacy
     public static Relationship Relation(World world, string first, string second) =>
         world.Society!.Relations[PairId(first, second)];
 
+    public static void ClearOffer(Relationship relationship)
+    {
+        relationship.ProposedBy = null;
+        relationship.ProposalKind = null;
+        relationship.ProposalTerms = null;
+        relationship.ProposalExpiresTick = 0;
+    }
+
     public static bool BorderPermits(World world, Route route)
     {
         var from = route.From.Replace("_city", "", StringComparison.Ordinal);
@@ -127,7 +135,7 @@ public static class SocietyDiplomacy
                 nation.SalesTaxBasisPoints = parameters["sales_tax_basis_points"]!.GetValue<int>();
                 return true;
             case "fund_services":
-                nation.ServiceBudgetPerResidentMinor = parameters["amount_minor"]!.GetValue<int>();
+                SocietyGovernmentDecisions.ChangeClinicFunding(world, nation, parameters["amount_minor"]!.GetValue<int>());
                 return true;
             case "pay":
                 return SocietyPayments.Pay(world, government, parameters, policy.CauseId);
@@ -172,7 +180,17 @@ public static class SocietyDiplomacy
             case "respond_agreement":
                 var relationship = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
                 if (relationship.ProposedBy is null || relationship.ProposedBy == nation.Id
-                    || relationship.ProposalExpiresTick < world.Tick)
+                    || relationship.ProposalExpiresTick < world.Tick
+                    || (relationship.ProposalKind == "peace"
+                        ? !relationship.AtWar || !SocietyWar.PeaceTerms.Contains(relationship.ProposalTerms ?? "none")
+                        : relationship.ProposalKind != "trade" || relationship.AtWar))
+                    return false;
+                // A delayed response may only accept the terms the decision maker actually saw.
+                if (parameters.ContainsKey("proposal_expires_tick")
+                    && (parameters["proposal_expires_tick"]!.GetValue<int>() != relationship.ProposalExpiresTick
+                        || (string?)parameters["proposal_kind"] != relationship.ProposalKind
+                        || (string?)parameters["proposal_terms"] != relationship.ProposalTerms))
+
                     return false;
                 if (parameters["accept"]!.GetValue<bool>())
                 {
@@ -188,9 +206,7 @@ public static class SocietyDiplomacy
                     relationship.Score = Math.Max(-100, relationship.Score - 5);
                     relationship.DiplomacyFailedTick = world.Tick;
                 }
-                relationship.ProposedBy = null;
-                relationship.ProposalKind = null;
-                relationship.ProposalTerms = null;
+                ClearOffer(relationship);
                 world.Emit("diplomatic_response", "rule", [relationship.Id], new
                 {
                     accept = parameters["accept"]!.GetValue<bool>(), relationship.AtWar,
@@ -206,6 +222,7 @@ public static class SocietyDiplomacy
                 opponent.TradeAgreement = false;
                 opponent.Score = -100;
                 opponent.Aggressor = nation.Id;
+                ClearOffer(opponent);
                 SocietyWar.Condemn(world, nation, world.Society!.Nations[parameters["country_id"]!.GetValue<string>()], 10);
                 world.Emit("conflict_started", "rule", [opponent.Id, nation.Id], new
                 {
@@ -232,10 +249,10 @@ public static class SocietyDiplomacy
         foreach (var relation in world.Society!.Relations.Values.Where(relation => relation.ProposedBy is not null
             && relation.ProposalExpiresTick < world.Tick))
         {
+            world.Emit("diplomatic_offer_expired", "rule", [relation.Id], new
+            { relation.ProposedBy, relation.ProposalKind, relation.ProposalTerms, relation.ProposalExpiresTick });
             relation.DiplomacyFailedTick = world.Tick;
-            relation.ProposedBy = null;
-            relation.ProposalKind = null;
-            relation.ProposalTerms = null;
+            ClearOffer(relation);
         }
         foreach (var nation in world.Society.Nations.Values)
         {

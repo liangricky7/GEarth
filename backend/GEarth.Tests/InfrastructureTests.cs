@@ -205,7 +205,7 @@ public sealed class InfrastructureTests
         Staff(world, 1);
         world.Society.PeriodRevenueMinor.Clear();
         Days(world, 7);
-        Assert.Equal(100, project.Condition);
+        Assert.Equal(46, project.Condition); // routine upkeep prevents further wear; repair is separate
         Assert.Equal(310, world.Society.PeriodRevenueMinor["aster_construction"]);
     }
 

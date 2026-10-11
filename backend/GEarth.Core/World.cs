@@ -75,6 +75,9 @@ public sealed class Agent
     // Health and hunger: days too sick to work this week (unpaid), whether the last meal was missed (output
     // falls 99% until the next one) and food taken from a farm employer, owed back from the next wage.
     public int SickDays { get; set; }
+    public int NutritionDebtDays { get; set; }
+    public double ProductionRemainder { get; set; }
+    public int FoodSpoilageRemainder { get; set; }
     public bool Hungry { get; set; }
     public int NeedsMet { get; set; } = 2;
     public bool HungryThisWeek { get; set; }

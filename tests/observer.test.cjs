@@ -145,6 +145,42 @@ test("policy strings and action objects render together; optional parameters are
   assert.match(view.element("run-notes").textContent, /Observations for first/);
 });
 
+test("war outcomes, gifts and unrest render as safe text with old and new relations", async (t) => {
+  const run = fixture("war");
+  const events = [
+    ["war_week", { winner: "aster", loser: "beryl", tribute_minor: 1200, tribute_goods: { ore: 4, fuel: 2 }, wounded: 3 }],
+    ["war_ended", { winner: "aster", loser: "beryl", terms: "cede_ore", reason: "surrender" }],
+    ["gift_sent", { kind: "ore", amount: 10, relation_gain: 0, score: -12 }],
+    ["missile_strike", { attacker: "aster", target: "beryl", hit: true, damaged: "roads", condition: 50 }],
+    ["revolution_deferred", { reason: '<img src=x onerror="alert(1)">' }],
+    ["early_election_called", { next_election_tick: 43 }],
+    ["diplomatic_tension", { tension: 70, reason: "historical" }],
+    ["diplomatic_tension", { score: -30, reason: "current" }],
+    ["conflict_costs", { conflicts: 1, funded_upkeep_minor: 1000 }],
+    ["conflict_costs", { conflicts: 1, lost_units: 9 }],
+  ];
+  run.events = events.map(([event_type, payload], index) => ({
+    event_type, payload, tick: index + 1, seq: run.snapshot.seq - events.length + index + 1,
+    entity_ids: event_type === "diplomatic_tension" ? ["aster:beryl"] : ["aster", "beryl"], source: "rule",
+  }));
+  run.snapshot.relationships = [
+    { first: "aster", second: "beryl", at_war: true, score: -95 },
+    { first: "aster", second: "cinder", trade_agreement: true, tension: 60 },
+  ];
+  const view = observer({ war: run });
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("connection").textContent.startsWith("Connected"));
+  const shown = view.element("events").textContent;
+  for (const expected of [/wins the weekly contest/, /Tribute 12.00 WLD and 4 ore, 2 fuel; 3 soldiers wounded/,
+    /War ends.*cede ore/, /sends 10 ore/, /Relations \+0, now -12/, /roads condition falls to 50/,
+    /Revolution deferred/, /early election on day 43/, /Tension.*rises to 70/, /Relations.*fall to -30/,
+    /Soldiers receive 10.00 WLD/, /9 units of goods lost/]) assert.match(shown, expected);
+  assert.match(shown, /<img src=x/);
+  assert.equal(view.element("events").querySelector("img"), null);
+  assert.match(view.element("relations").textContent, /relations -95/);
+  assert.match(view.element("relations").textContent, /relations -20/);
+});
+
 test("feed drops noise, writes sentences and groups same-day repeats", async (t) => {
   const run = fixture("feed");
   const seq = run.snapshot.seq;

@@ -12,7 +12,8 @@ public static class SocietyEconomy
     public const int HealthDecayDays = 4; // health falls 1 point every this many days
     public const int SickBelow = 30; // below this, too sick to work (and unpaid)
     public const double DailyIllnessChance = 0.01;
-    public const double HungerOutputFactor = 0.01; // someone who missed their last meal produces 99% less
+    public const double HungerOutputFactor = 0.01; // prolonged starvation, without killing/replacing agents
+    public const int StarvationDays = 21; // calibration: cumulative missed meals, recovered two per fed day
 
     // Quality of life (stored as Wellbeing, 0-100) is scored from outcomes, each with diminishing returns:
     // needs met today, health, discretionary goods and services bought last week, security (a job or
@@ -27,8 +28,26 @@ public static class SocietyEconomy
     public static bool TooSick(Agent person) => person.Health < SickBelow;
 
     // Sick people still do some work (until too sick to work at all); output scales from 25% at zero health
-    // to 100% when healthy, and drops 99% after a missed meal until the next one.
-    public static double Capacity(Agent citizen) => (0.25 + 0.75 * citizen.Health / 100.0) * (citizen.Hungry ? HungerOutputFactor : 1);
+    // to 100% when healthy. Nutrition deteriorates gradually to near-incapacitation.
+    public static double Capacity(Agent citizen) => (0.25 + 0.75 * citizen.Health / 100.0) * NutritionFactor(citizen);
+
+    public static double NutritionFactor(Agent person) => Math.Max(HungerOutputFactor,
+        1 - 0.99 * Math.Max(person.NutritionDebtDays, person.Hungry ? 1 : 0) / StarvationDays);
+
+    public static void RecordMeal(Agent person, bool fed) => person.NutritionDebtDays =
+        Math.Clamp(person.NutritionDebtDays + (fed ? -2 : 1), 0, StarvationDays);
+
+    // One integer calculation per existing weekly agent pass; no inventory-age records or model calls.
+    public static void SpoilFood(World world, Agent holder)
+    {
+        var stock = holder.Inventory.GetValueOrDefault("food");
+        var numerator = (long)stock + holder.FoodSpoilageRemainder; // 1% of stored food per week
+        var lost = (int)(numerator / 100);
+        holder.FoodSpoilageRemainder = stock == 0 ? 0 : (int)(numerator % 100);
+        holder.Inventory["food"] = stock - lost;
+        world.Society!.LostGoods["food"] += lost;
+        world.Society.Nations[holder.CountryId].LostUnits += lost;
+    }
 
     // The week's pay for days actually worked (sick days are unpaid; a part-time student earns half), less food
     // already taken as pay in kind.
@@ -103,6 +122,7 @@ public static class SocietyEconomy
             foreach (var clinic in firms.Where(firm => firm.Specialty == "clinic"))
             {
                 var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek * (1 + PhaseContracts.Boost(nation, "clinic_capacity"))), 1);
+                nation.ClinicCapacityThisWeek += capacity;
                 society.VisitsServedToday[clinic.Id] = -capacity; // counts up to zero as visits are served
                 AcquireInput(world, clinic, "medicine", Math.Max(0, capacity * 2 - clinic.Inventory["medicine"]));
             }
@@ -153,6 +173,7 @@ public static class SocietyEconomy
                     && !Visit(world, nation, resident, resident, true)
                     && !(TooSick(resident) && Visit(world, nation, resident, null, false)))
                     TakeMedicine(world, resident);
+                if (resident.Health < resident.HealthThreshold) nation.UntreatedPatientDaysThisWeek++;
                 if (TooSick(resident))
                     resident.SickDays++;
                 var met = 0;
@@ -166,7 +187,10 @@ public static class SocietyEconomy
                         nation.FulfilledNeedsLastCycle++;
                         met++;
                         if (good == "food")
+                        {
                             resident.Hungry = false;
+                            RecordMeal(resident, true);
+                        }
                     }
                     else
                     {
@@ -175,6 +199,7 @@ public static class SocietyEconomy
                         if (good == "food")
                         {
                             resident.Hungry = resident.HungryThisWeek = true;
+                            RecordMeal(resident, false);
                             resident.PricedOutThisWeek |= foodOnShelves;
                         }
                     }
@@ -203,6 +228,7 @@ public static class SocietyEconomy
         foreach (var nation in society.Nations.Values)
         {
             var agents = byCountry[nation.Id];
+            foreach (var holder in agents) SpoilFood(world, holder);
             var residents = agents.Where(SocietyLabor.IsResident).ToArray();
             var government = world.Agents[nation.Id + "_government"];
             // Daily activity (visits, purchases) counts toward the week, so deltas run from last week's totals.
@@ -281,6 +307,7 @@ public static class SocietyEconomy
             if (tensions.Length > 0)
                 ConflictCosts(world, nation, government, agents.Where(agent => agent.Role == "business").ToArray(), tensions.Length);
 
+            SocietyGovernmentDecisions.CloseClinicWeek(world, nation);
             nation.UnmetNeeds += nation.UnmetNeedsLastCycle;
             world.UnmetNeeds += nation.UnmetNeedsLastCycle;
             world.Emit("economy_cycle", "rule", [nation.Id], new
@@ -664,8 +691,12 @@ public static class SocietyEconomy
         if (sector.Good is not { } good)
             return;
         // Health drives output; wellbeing (morale) has a milder effect.
-        var potential = (int)(workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker) * worker.Weights.Productivity)
-            * sector.DailyOutput * OutputMultiplier(world, nation, good));
+        var exactPotential = workers.Sum(worker => SocietyLabor.DayEffort(world, worker) * (0.75 + 0.25 * worker.Wellbeing / 100.0) * Capacity(worker) * worker.Weights.Productivity)
+            * sector.DailyOutput * OutputMultiplier(world, nation, good);
+        // Preserve sub-unit effort in near-incapacitated crews without changing normal batch rounding.
+        var carried = exactPotential < 1 ? exactPotential + producer.ProductionRemainder : exactPotential;
+        var potential = (int)carried;
+        producer.ProductionRemainder = exactPotential < 1 ? carried - potential : 0;
         // Firms plan output toward two weeks of their own recent sales, below the three-week glut line; a
         // planned economy's state firms make their share of the plan's quota instead, whatever is selling.
         var stockLimit = Math.Max(residents / 4, 2 * producer.LastWeekUnitsSold);

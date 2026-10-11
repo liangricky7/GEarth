@@ -183,9 +183,15 @@ public static class SocietyFactory
                 firm.CashMinor = Math.Max(10000, staff.Sum(worker => worker.SalaryMinor) * 4);
                 if (SocietyBank.IsBank(firm))
                 {
-                    // The bank opens with its owner's capital (the state's in planned economies) and no
-                    // deposits; it hires bankers as its loan book grows.
+                    // The bank opens with its owner's capital (the state's in planned economies) and hires bankers
+                    // as its loan book grows. A private owner stakes a realistic share of their wealth (equity of
+                    // about a tenth of the deposits a bank grows to) and keeps the rest as their own savings in it.
                     firm.CashMinor = firm.InvestedMinor = Math.Max(20000, citizensPerCountry * 4000L);
+                    if (firm.OwnerId is { } bankOwner)
+                    {
+                        firm.InvestedMinor = firm.CashMinor * SocietyBank.OwnerStakePct / 100;
+                        world.Agents[bankOwner].DepositMinor += firm.CashMinor - firm.InvestedMinor;
+                    }
                     (firm.DepositRatePct, firm.LoanRatePct, firm.LendingStandard) = (3, 10, "normal");
                     firm.Goal = "Take deposits and lend them to viable businesses and founders while keeping enough reserves for withdrawals.";
                 }

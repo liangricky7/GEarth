@@ -51,6 +51,8 @@ public sealed class Nation
     public double FoodMultiplier { get; set; } = 1;
     public double EnergyMultiplier { get; set; } = 1;
     public double Productivity { get; set; } = 1;
+    // A week of food and energy at average shelf prices when pay was last indexed (0: not yet measured).
+    public double LivingCostAtReview { get; set; }
     // Government levers added for famine, failed sectors and schooling.
     public int FoodSubsidyPct { get; set; }
     public long FoodSubsidyPaidMinor { get; set; }
@@ -112,6 +114,8 @@ public sealed class Relationship
     public string? ProposedBy { get; set; }
     public string? ProposalKind { get; set; }
     public int ProposalExpiresTick { get; set; }
+    // When an offer between the two last expired or was refused (-1: never); conflict is offered only after that.
+    public int DiplomacyFailedTick { get; set; } = -1;
     public long DeliveredUnits { get; set; }
     public long DeliveredValueMinor { get; set; }
 }

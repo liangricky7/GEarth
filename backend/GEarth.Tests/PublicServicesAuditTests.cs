@@ -101,6 +101,7 @@ public sealed class PublicServicesAuditTests
     {
         var world = NewWorld();
         var person = Employee(world);
+        var ownerSavings = SocietyBank.Deposits(world, "aster"); // the bank owner's own deposit
         SocietyBank.Deposit(world, person, 123);
         person.Hungry = person.HungryThisWeek = person.PricedOutThisWeek = true;
         person.NeedsMet = 1;
@@ -146,7 +147,7 @@ public sealed class PublicServicesAuditTests
         Assert.Equal(100, country["tuition_subsidy_pct"]!.GetValue<int>());
         Assert.True(country["student_stipend"]!.GetValue<bool>());
         Assert.Equal(200, country["hiring_bonus_minor"]!.GetValue<int>());
-        Assert.Equal(123, country["bank_deposits_minor"]!.GetValue<long>());
+        Assert.Equal(ownerSavings + 123, country["bank_deposits_minor"]!.GetValue<long>());
         Assert.Equal(9.5, country["output_lost_to_hunger_pct"]!.GetValue<double>());
         var planned = world.PendingAudit.Single(row => row.Kind == "nation_day" && row.Payload["nation_id"]!.GetValue<string>() == "cinder").Payload;
         Assert.True(JsonNode.DeepEquals(Wire.Node(world.Society.Nations["cinder"].Plan), planned["plan"]));

@@ -55,11 +55,12 @@ public sealed class BankTests
         var resident = Resident(world, "aster");
         var bank = world.Agents["aster_bank"];
         var bankBefore = bank.CashMinor;
+        var depositsBefore = SocietyBank.Deposits(world, "aster"); // the bank owner's own savings
 
         var deposit = Deposit(world, resident, 20000);
 
         Assert.Equal((long)(2 * SocietyEconomy.WeeklyPay(resident)), resident.CashMinor);
-        Assert.Equal(bankBefore + SocietyBank.Deposits(world, "aster"), bank.CashMinor); // firms bank their spare cash too
+        Assert.Equal(bankBefore + SocietyBank.Deposits(world, "aster") - depositsBefore, bank.CashMinor); // firms bank their spare cash too
         SocietyBank.Week(world, world.Society!.Nations["aster"]);
         Assert.Equal(deposit + (long)Math.Round(deposit * 3 / 5200.0), resident.DepositMinor); // 3% a year, weekly
         SocietyEconomy.AssertConservation(world);
@@ -155,7 +156,9 @@ public sealed class BankTests
         var world = NewWorld();
         var founder = Resident(world, "aster");
         foreach (var venue in SocietyLabor.Firms(world, "aster", "entertainment"))
-            venue.PriceMinor = 2 * SocietyLabor.SectorOf("entertainment").BasePrice; // an opening for a cheaper venue
+            (venue.PriceMinor, venue.LastWeekTurnedAway) = (2 * SocietyLabor.SectorOf("entertainment").BasePrice, 3); // an opening for a cheaper venue
+        world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen" && agent.Occupation == "service_worker"
+            && agent != founder).EmployerId = null; // someone out of work could staff it
         var cost = SocietyLabor.StartupCost("entertainment");
         SocietyEconomy.Transfer(world, founder, world.Agents["aster_government"], founder.CashMinor);
         Give(world, founder, cost / 2); // half the cost: more than the 25% down payment, less than the whole

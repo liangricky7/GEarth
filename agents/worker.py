@@ -162,19 +162,21 @@ FIXED_CHOICE_INSTRUCTIONS = (
     'Return only JSON with exactly "choice" and "reason": {"choice":0,"reason":"short explanation"}. '
     "choice is the number of one available action. reason is at most 100 characters. "
     "Every action parameter is already fixed by the menu. Choose its number; do not calculate, repeat or override parameters. "
-    'For example, selecting "1: set_price change_pct=10" returns {"choice":1,"reason":"Increase the price"}.'
+    # A placeholder action, so the example never nudges the model toward a real choice.
+    'For example, selecting "3: some_action amount=5" returns {"choice":3,"reason":"Why this option fits"}.'
 )
 
 RANGED_CHOICE_INSTRUCTIONS = (
     'Return only JSON: {"choice":0,"reason":"short explanation"}. '
     "choice is the number of one available action. reason is at most 100 characters. "
     'If the chosen action has fields shown as <integer MIN-MAX, now N>, also return "values" '
-    'with an integer for each, for example {"choice":1,"reason":"...","values":{"food":700}}. '
+    'with an integer for each. For example, selecting "3: some_action some_amount=<integer 0-10, now 4>" '
+    'returns {"choice":3,"reason":"Why this option fits","values":{"some_amount":5}}. '
     'Include "values" ONLY for fields displayed with <integer MIN-MAX, now N>. '
     "Ordinary numbers are fixed parameters: do not repeat or override them. "
     'When the chosen action has no <integer ...> fields, omit "values" entirely. '
-    'For example, selecting "1: household_policy target_stock=2" returns '
-    '{"choice":1,"reason":"Build a buffer"} without values.'
+    'For example, selecting "3: some_action amount=5" returns '
+    '{"choice":3,"reason":"Why this option fits"} without values.'
 )
 
 

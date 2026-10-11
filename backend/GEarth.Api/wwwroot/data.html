@@ -8,12 +8,17 @@
 <body>
 <header><div><p class="eyebrow">GEarth</p><h1>Saved run data</h1><p class="muted">Inspect what each simulation actually recorded.</p></div><a id="observer-link" href="/">World observer</a></header>
 <main>
+  <section class="panel" aria-label="Connected data source">
+    <h2 id="source-title">Checking data source…</h2>
+    <p id="source-description" class="muted" role="status"></p>
+  </section>
   <section class="panel" aria-labelledby="run-title">
     <div class="heading"><h2 id="run-title">Choose a simulation</h2><span id="discovery-status" role="status">Loading saved runs…</span></div>
     <div class="controls"><label>Simulation<select id="data-runs"><option value="">Loading…</option></select></label><button id="more-runs" hidden>Older simulations</button><button id="refresh-run">Refresh saved data</button></div>
     <p class="muted">New saved runs appear automatically every 10 seconds while this page is visible. Selecting a run does not start an import or change the simulation.</p>
     <p id="run-status" role="status" aria-live="polite">Choose a saved run.</p>
     <dl id="run-facts" class="facts"></dl>
+    <p id="run-duration" class="muted"></p>
     <details><summary>Original capture settings</summary><p id="metadata-status" class="muted"></p><pre id="capture-metadata"></pre></details>
   </section>
   <section class="panel" aria-labelledby="saves-title">

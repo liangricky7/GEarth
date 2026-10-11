@@ -64,6 +64,14 @@
     if (!select.options.length) appendOption(select, "", "No saved simulations found");
     if (state.run) select.value = state.run;
   }
+  function renderSource(storage) {
+    const local = storage === "local", neon = storage === "neon_https";
+    show("source-title", local ? "Local saved data · not connected to Neon" : neon ? "Connected to Neon saved data" : "Saved data source not identified");
+    show("source-description", local
+      ? "This page lists runs saved on this computer. It does not list your production Neon runs or count all runs in Databricks."
+      : neon ? "The simulation list comes from this server's configured Neon branch. Published Databricks results are shown separately for each run."
+      : "The simulation list is not a count of all runs in Databricks. Check the selected run's storage and publication status below.");
+  }
   async function discover(older = false) {
     if (state.discovering) return;
     state.discovering = true; $("more-runs").disabled = true;
@@ -77,7 +85,7 @@
       // Refreshing the first page must not rewind an older-page cursor.
       if (older || !state.catalogCursorInitialized) { state.catalogCursor = result.next_cursor ?? null; state.catalogCursorInitialized = true; }
       $("more-runs").hidden = !state.catalogCursor;
-      renderCatalog(); show("discovery-status", `${number(state.catalog.size)} saved simulations found`);
+      renderSource(result.storage ?? state.manifest?.storage); renderCatalog(); show("discovery-status", `${number(state.catalog.size)} ${result.storage === "local" ? "local " : ""}saved simulations found`);
       if (!state.run && result.runs.length) selectRun(result.runs[0].run_id);
     } catch (error) {
       if (isCurrent(token) && error.name !== "AbortError") show("discovery-status", `Run discovery unavailable. ${error.message}`, true);
@@ -90,7 +98,7 @@
     state.manifest = null; state.recordPin = null; state.recordScope = null; state.records = []; state.recordAfter = 0;
     state.checkpoints = []; state.checkpointAfter = 0; state.checkpointSyncRevision = 0; state.checkpointHasMore = false; state.report = null; state.datasets = null; state.dataset = null;
     state.datasetCursor = null; state.datasetRowsShown = 0;
-    for (const id of ["run-facts", "capture-metadata", "checkpoints", "frame-json", "records", "page-fields", "report-json", "dataset-columns", "dataset-fields", "dataset-rows", "dataset-catalog-json"]) $(id).replaceChildren();
+    for (const id of ["run-facts", "run-duration", "capture-metadata", "checkpoints", "frame-json", "records", "page-fields", "report-json", "dataset-columns", "dataset-fields", "dataset-rows", "dataset-catalog-json"]) $(id).replaceChildren();
     for (const id of ["more-records", "more-checkpoints", "more-dataset-rows", "frame-details", "report-download"]) $(id).hidden = true;
     for (const id of ["report-section", "dataset-select"]) { $(id).replaceChildren(); appendOption($(id), "", "No data available"); $(id).disabled = true; }
     show("run-status", "Reading committed saved data…"); show("records-status", "Waiting for capture information.");
@@ -110,6 +118,11 @@
   }
   function renderManifest(manifest) {
     state.manifest = manifest;
+    renderSource(manifest.storage);
+    const day = manifest.tick;
+    show("run-duration", Number.isSafeInteger(day)
+      ? `Selected run reached day ${number(day)}: ${number(Math.floor(day / 7))} full weeks${day % 7 ? ` plus ${number(day % 7)} day${day % 7 === 1 ? "" : "s"}` : ""}. A 365-day run has 52 full weeks plus 1 day; this page shows only history actually saved for the selected run.`
+      : "This run's saved duration is unknown. Weeks are shown only where saved history exists.");
     show("run-status", `${label(manifest.status)} · committed revision ${number(manifest.through_revision)} · Timeline: ${label(manifest.timeline_status)}`);
     const facts = [ ["Saved day", number(manifest.tick)], ["Original records", label(manifest.audit_status)],
       ["Databricks publication", label(manifest.databricks_status)], ["Storage", manifest.storage === "neon_https" ? "Neon" : manifest.storage === "local" ? "Local saved storage" : label(manifest.storage)],

@@ -59,7 +59,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
 | World engine | C#/.NET 10; 10 countries; 1,100 agents by default (software range 170–100,000); one tick = one day | No maximum population qualified for live inference |
 | Economy | Labor market, fixed salaries, entrepreneurs, 13 competing firms in 8 sectors per country, quality of life with a steep health penalty, too sick to work, always-staffed clinics with capitation, pharmacy medicine, hunger penalty, automatic input and food imports, startup grants, food and tuition subsidies, school and graduates, planned-economy quotas set by a planner, tax steps, overtime by consent, wage/sales/profit tax, welfare, unemployment and sick benefit ([5.10](#510-public-services-batch)) | Live behavior of the new levers; product quality |
 | Trade and politics | Physical shipments with escrow, freight firms, tariffs, routes; diplomacy, borders, conflict, migration, elections, five government profiles | Tick-based political durations not rescaled to days |
-| Banking | Full bank (deposits, interest, insurance, bank runs) merged | Live calibration with the public-services batch |
+| Banking | Full bank (deposits, interest, insurance, bank runs) merged, but **temporarily paused** (`SocietyBank.Paused`) so the public-services batch can be measured alone | Re-enable by reverting the pause commit, then compare runs |
 | Agents and prompts | Seeded traits and endowments; role-specific observations; compact numbered menus; `{choice, reason}` answers | Behavioral effect of traits and endowments not evaluated |
 | Scheduling | Weekly cohorts (institutions weekly, citizens every 8 weeks); weekly barrier before payroll; bounded, cancellable queue | Sustained live throughput of the weekly system |
 | Compute | Spark A: Qwen3-8B (institutions) + Qwen3-4B (citizens), verified; AMD Qwen3-4B, verified | Spark B; AMD's second model |
@@ -86,7 +86,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
   - Then a slump set in: 21–55% unemployment, no startups or closures, and firms hoarding cash.
   - This drove the redesign in [13.4](#134-redesign-after-kennedys-run).
 - **Rule-mode 365-day run before the public-services batch:** health reached 0 in 7 of 10 countries and both planned treasuries emptied.
-- **The same run after the batch (in-process):** all 10 countries keep average health 77–85 and quality of life 64–81, with exact conservation; unemployment 0–20% (highest in monarchies, which pay no benefit). `MoneyKeepsCirculatingForAFullYear` passes.
+- **The same run after the batch (in-process, banking paused):** all 10 countries keep average health 77–85 and quality of life 64–81, with exact conservation; unemployment 0–20% (highest in monarchies, which pay no benefit). `MoneyKeepsCirculatingForAFullYear` passes.
 - **A stopped hybrid live run** used both Qwen models but accumulated HTTP-error fallbacks; the cause is still unexplained.
 
 ---
@@ -365,7 +365,7 @@ Rescaling them is a design decision ([14](#14-known-problems-and-open-questions)
 
 ### 5.10 Public services batch
 
-Built on October 11, 2026 after the hosted live run `world_20261011_004205_8e1892`, in which health fell to 0 in every market country: a clinic laid off its only doctor, energy-poor countries lost their power plants and with them all food output, and governments flipped tax rates weekly while their treasuries grew.
+Built on October 11, 2026 after the hosted live run `world_20261011_004205_8e1892`, in which health fell to 0 in every market country: a clinic laid off its only doctor, energy-poor countries lost their power plants and with them all food output, and governments flipped tax rates weekly while their treasuries grew. Banking is paused while this batch is measured alone.
 
 - **Health and work:** decay, the health curve, too sick to work and pharmacy medicine ([5.5](#55-households-and-quality-of-life), [5.6](#56-health-and-public-services)).
 - **Hunger:** a resident who missed their last meal produces 99% less until they eat again. Farm workers eat first from their employer's stock, paying cash or, when broke, owing it from the next wage. Governments see hungry and priced-out residents and the share of working days lost.
@@ -949,7 +949,7 @@ The redesign added:
 ## 14. Known problems and open questions
 
 **Known problems**
-1. **Year-long collapse (addressed, awaiting a live run).** Before the public-services batch, 7–8 of 10 countries reached health 0 within a rule-mode year. The batch ([5.10](#510-public-services-batch)) keeps all ten healthy in rule mode; a Spark run should confirm it under model decisions.
+1. **Year-long collapse (addressed, awaiting a live run).** Before the public-services batch, 7–8 of 10 countries reached health 0 within a rule-mode year. The batch ([5.10](#510-public-services-batch)) keeps all ten healthy in rule mode with banking paused; a Spark run without banks, then one with banks, should confirm it under model decisions.
 2. **Planned treasuries still drain slowly** (about 0.6k a day in a rule-mode year with banking on): households' savings pile up in the state bank while the state covers firm losses. The planner's quotas and, later, bank lending should be watched for this.
 3. **Monarchies idle up to a fifth of their factory workers** in a decision-free year: they pay no unemployment benefit, so the jobless cannot buy household goods.
 4. **The hybrid live run's HTTP-error fallbacks** are unexplained.

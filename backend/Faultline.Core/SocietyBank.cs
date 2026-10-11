@@ -9,6 +9,9 @@ namespace Faultline.Core;
 public static class SocietyBank
 {
     public const string Sector = "bank";
+    // TEMPORARY: banking is paused so the public-services batch can be measured on its own (no savings sweep,
+    // loans or rate decisions; banks hold their starting capital). Revert this commit to restore banking.
+    public static readonly bool Paused = true;
     public const int ReserveRatioPct = 10;
     public const int CashBufferWeeks = 2; // residents keep two weeks of their pay as cash
     public const int LoanWeeks = 26;

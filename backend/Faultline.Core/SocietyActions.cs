@@ -24,7 +24,7 @@ public static class SocietyActions
                 if (agent.Health < 70 && SocietyEconomy.OpenClinic(world, world.Society!.Nations[agent.CountryId]) is { } clinic
                     && agent.CashMinor >= clinic.PriceMinor)
                     options.Add(Make("visit_doctor", new { }));
-                if (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank)
+                if (!SocietyBank.Paused && (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank))
                     options.Add(Make("bank_savings", new { keep_in_bank = !agent.KeepsSavingsInBank }));
                 if (agent.Role == "entrepreneur")
                 {
@@ -44,7 +44,7 @@ public static class SocietyActions
                     var loan = SocietyBank.StartupLoan(world, agent, cost);
                     if (SocietyLabor.CanStart(world, agent, sector))
                         options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch }));
-                    else if (SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
+                    else if (!SocietyBank.Paused && SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
                         options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch, loan_minor = loan }));
                 }
                 if (agent.CashMinor >= 100)
@@ -100,6 +100,8 @@ public static class SocietyActions
             return;
         if (SocietyBank.IsBank(firm))
         {
+            if (SocietyBank.Paused)
+                return;
             BankOptions(firm, options);
             foreach (var change in new[] { -1, 1 }.Where(change => firm.TargetHeadcount + change >= 0))
                 options.Add(Make("set_headcount", new { business_id = id, change }));
@@ -138,7 +140,7 @@ public static class SocietyActions
     // A firm with no loan open can borrow four or eight weeks of its payroll (or its owner's pay) over 26 weeks.
     private static void LoanOptions(World world, Agent firm, List<Candidate> options)
     {
-        if (SocietyBank.LoanOf(world, firm.Id) is not null)
+        if (SocietyBank.Paused || SocietyBank.LoanOf(world, firm.Id) is not null)
             return;
         var bank = SocietyBank.BankOf(world, firm.CountryId);
         var weekly = Math.Max(SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor),
@@ -183,7 +185,7 @@ public static class SocietyActions
             foreach (var price in new[] { basePrice * 8 / 10, basePrice, basePrice * 12 / 10 }.Where(price => price != agent.PriceMinor))
                 options.Add(Make("set_price", new { price_minor = price }));
         ImportOptions(world, agent, options);
-        if (SocietyBank.IsBank(agent)) // state firms draw on the treasury, not loans; the state bank sets rates
+        if (SocietyBank.IsBank(agent) && !SocietyBank.Paused) // state firms draw on the treasury, not loans; the state bank sets rates
             BankOptions(agent, options);
     }
 

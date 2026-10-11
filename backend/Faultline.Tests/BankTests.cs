@@ -4,6 +4,9 @@ namespace Faultline.Tests;
 
 public sealed class BankTests
 {
+    // TEMPORARY: banking is paused for the public-services batch; reverting the pause commit restores these.
+    private const string Paused = "Banking paused (SocietyBank.Paused)";
+
     // 400 agents = 10 countries x (25 residents + 15 institutions). Aster is a market democracy
     // (deposits insured to 50,000); Dune is a dictatorship (no deposit insurance).
     private static World NewWorld() => SocietyFactory.Create("bank_test", false, 400);
@@ -63,7 +66,7 @@ public sealed class BankTests
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Fact]
+    [Fact(Skip = Paused)]
     public void BusinessLoanIsRepaidInWeeklyInstallmentsWithInterest()
     {
         var world = NewWorld();
@@ -80,7 +83,7 @@ public sealed class BankTests
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Fact]
+    [Fact(Skip = Paused)]
     public void ThreeMissedInstallmentsCloseTheFirmAndTheBankBooksTheLoss()
     {
         var world = NewWorld();
@@ -105,7 +108,7 @@ public sealed class BankTests
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Fact]
+    [Fact(Skip = Paused)]
     public void StartupLoanLetsAFounderWithOnlyTheDownPaymentOpenABusiness()
     {
         var world = NewWorld();
@@ -129,7 +132,7 @@ public sealed class BankTests
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Theory]
+    [Theory(Skip = Paused)]
     [InlineData("aster", true)]
     [InlineData("dune", false)]
     public void BankRunIsPaidFromReservesThenByDepositInsurance(string country, bool insured)

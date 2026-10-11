@@ -211,7 +211,8 @@ public static class SocietyEconomy
                         Transfer(world, government, firm, Math.Min(government.CashMinor, payroll - firm.CashMinor), "state_subsidy");
                 }
 
-            SocietyBank.Week(world, nation);
+            if (!SocietyBank.Paused)
+                SocietyBank.Week(world, nation);
             SocietyLabor.Week(world, nation, government, residents);
             PublicPayroll(world, nation, government, residents.Where(resident => resident.EmployerId == government.Id).ToArray());
 
@@ -260,7 +261,8 @@ public static class SocietyEconomy
                     resident.SupportsLeadership = true;
                 resident.LastWeekWellbeing = resident.Wellbeing;
             }
-            SocietyBank.Sweep(world, nation, residents);
+            if (!SocietyBank.Paused)
+                SocietyBank.Sweep(world, nation, residents);
 
             var tensions = society.Relations.Values.Where(relation => relation.AtWar
                 && (relation.First == nation.Id || relation.Second == nation.Id)).ToArray();

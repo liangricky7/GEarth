@@ -10,7 +10,7 @@ Spark A's Qwen3-8B and Qwen3-4B services were verified; AMD's Qwen3-4B endpoint 
 
 See the [design](faultline-design.md) for the full specification, current limitations, decisions and their reasons.
 
-The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Databricks and Solana settlement remain unimplemented.
+The known upstream full-year calibration test remains failing and visible. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/faultline/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
 
 ## Run locally
 
@@ -80,6 +80,7 @@ Completed, gracefully stopped and paused runs produce behavior observations, cou
 | `backend/Faultline.Api` | Bounded coordination, persistence, read API, observer and run notes |
 | `backend/Faultline.Tests` | Engine, queue, accounting, profiles, scheduling and persistence tests |
 | `agents` | Authenticated worker, model pool, compact prompts and validation |
+| `analytics` | Finished-run exports, integrity checks, Databricks notebooks and cached analytics |
 | `ops` | Launcher, synthetic checks, Spark installer, AMD setup and private relays |
 | `docs/faultline` | Operational guides, contracts, fixtures and historical/integration evidence |
 

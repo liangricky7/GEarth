@@ -24,6 +24,9 @@ public static class SocietyTrade
     {
         if (!CanImport(world, buyer, seller, good, quantity, objective))
             throw new InvalidOperationException("Trade precondition changed");
+        var cargoId = $"cargo_{world.NextEntityNumber()}";
+        using var auditContext = RunAudit.Context(world, (world.CurrentAuditContext ?? new()) with { EventId = cause });
+        using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor, cargoId);
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
         buyer.CashMinor -= value;
@@ -38,7 +41,7 @@ public static class SocietyTrade
         seller.Inventory[good] -= quantity;
         var cargo = new Cargo
         {
-            Id = $"cargo_{world.NextEntityNumber()}", BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
+            Id = cargoId, BuyerId = buyer.Id, SellerId = seller.Id, Good = good,
             Quantity = quantity, EscrowMinor = value, LocationId = seller.LocationId,
             DestinationId = buyer.LocationId, Plan = path, CreatedTick = world.Tick,
             DeadlineTick = world.Tick + 60, CauseId = cause
@@ -105,6 +108,8 @@ public static class SocietyTrade
 
     private static void Deliver(World world, Cargo cargo)
     {
+        using var auditContext = RunAudit.Context(world, new(EventId: cargo.CauseId, GroupId: cargo.Id,
+            Good: cargo.Good, Quantity: cargo.Quantity));
         var buyer = world.Agents[cargo.BuyerId];
         var seller = world.Agents[cargo.SellerId];
         buyer.Inventory[cargo.Good] += cargo.Quantity;
@@ -132,6 +137,8 @@ public static class SocietyTrade
 
     private static void Fail(World world, Cargo cargo)
     {
+        using var auditContext = RunAudit.Context(world, new(EventId: cargo.CauseId, GroupId: cargo.Id,
+            Good: cargo.Good, Quantity: cargo.Quantity));
         world.Agents[cargo.BuyerId].CashMinor += cargo.EscrowMinor;
         SocietyEconomy.RecordFlow(world, cargo.Id, cargo.BuyerId, cargo.EscrowMinor, "import_refund");
         var costs = world.Society!.PeriodCostMinor;

@@ -203,10 +203,13 @@ public static class Engine
                 observation_tick = job.ObservationTick
             });
 
+        RunAudit.Result(world, job, result, accepted, code, decisionEvent.EventId);
         if (!accepted)
             return record;
 
         var agent = world.Agents[job.AgentId];
+        using var auditContext = RunAudit.Context(world, new(DecisionId: job.RequestId, EventId: decisionEvent.EventId));
+        using var effects = RunAudit.Effects(world, agent, result.Action, job.RequestId, decisionEvent.EventId);
 
         if (result.Action.ActionType == "purchase")
             ApplyPurchase(world, agent, result, decisionEvent);
@@ -238,6 +241,8 @@ public static class Engine
 
         buyer.CashMinor -= amount;
         seller.CashMinor += amount;
+        using var auditGroup = RunAudit.Group(world, good, quantity, UnitPrice(good));
+        RunAudit.Transaction(world, buyer.Id, seller.Id, amount, "purchase");
         buyer.Inventory[good] += quantity;
         seller.Inventory[good] -= quantity;
         seller.Version++;

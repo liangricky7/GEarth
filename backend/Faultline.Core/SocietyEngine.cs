@@ -28,6 +28,7 @@ public static class SocietyEngine
     public static void Advance(World world)
     {
         world.Tick++;
+        using var routine = RunAudit.Context(world, new(RoutineId: $"{world.Id}:day:{world.Tick}"));
         SocietyDiplomacy.Advance(world);
         SocietyTrade.Advance(world);
         SocietyEconomy.Day(world);
@@ -182,9 +183,14 @@ public static class SocietyEngine
                 result.ErrorCategory, result.ErrorHttpStatus, result_request_id = result.RequestId,
                 applied_at = now, observation_tick = job.ObservationTick
             });
+        RunAudit.Result(world, job, result, accepted, code, decisionEvent.EventId);
         if (!accepted)
             return record;
         var agent = world.Agents[job.AgentId];
+        using var auditContext = RunAudit.Context(world, new(DecisionId: job.RequestId, EventId: decisionEvent.EventId));
+        // Government effects are captured when the policy actually enacts (which may be delayed).
+        using var effects = agent.Role == "government" ? null
+            : RunAudit.Effects(world, agent, result.Action, job.RequestId, decisionEvent.EventId);
         Execute(world, agent, result.Action, decisionEvent.EventId);
         agent.LastDecisionTick = world.Tick;
         agent.LastRequestId = job.RequestId;

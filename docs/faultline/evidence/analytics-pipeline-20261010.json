@@ -1,0 +1,235 @@
+{
+  "schema_version": "faultline.analytics-verification.v1",
+  "scope": "Isolated RULE pilot; ordinary completed runs only. Not a production or 50,000-agent capacity result.",
+  "main_commit": "004aae7eac507e930d8e224b30a90f82648d455c",
+  "engine_commit": "257a77d1b78aca6530314268b5a56a51f0ce4f37",
+  "run_id": "world_20261011_010100_6ab61a",
+  "population": 160,
+  "ticks": 8,
+  "through_revision": 9,
+  "through_sequence": 3218,
+  "source_manifest_sha256": "16e48cd8f043764900205f811d6e1beb5efb885a66f7770bc668b17d8e68f892",
+  "counts_by_kind": {
+    "action_effect": 304,
+    "agent_day": 1440,
+    "decision_request": 301,
+    "decision_result": 301,
+    "event": 480,
+    "nation_day": 90,
+    "opening_balance": 160,
+    "run_metadata": 1,
+    "transaction": 141
+  },
+  "compressed_export_bytes": 165099,
+  "checkpoint_bytes": 684879,
+  "storage": {
+    "neon_project_id": "hidden-night-95238449",
+    "isolated_branch_id": "br-frosty-forest-b5oxhv6z",
+    "production_writes": false
+  },
+  "analysis_version": "1.1.0",
+  "report_checks": [
+    {
+      "details": {
+        "records": 3218
+      },
+      "evidence_refs": [],
+      "name": "manifest_integrity",
+      "status": "pass"
+    },
+    {
+      "details": {
+        "examples": [],
+        "mismatched_accounts": 0,
+        "missing_final_balances": 0,
+        "missing_openings": 0
+      },
+      "evidence_refs": [],
+      "name": "ledger_account_reconciliation",
+      "status": "pass"
+    },
+    {
+      "details": {
+        "agent_snapshots": 1440,
+        "basis": "opening plus running ledger net at each snapshot audit sequence",
+        "escrow_snapshots": 0,
+        "examples": [],
+        "mismatches": 0,
+        "unknown_openings": 0
+      },
+      "evidence_refs": [
+        {
+          "kind": "agent_day",
+          "run_id": "world_20261011_010100_6ab61a",
+          "sequence": 500
+        },
+        {
+          "kind": "agent_day",
+          "run_id": "world_20261011_010100_6ab61a",
+          "sequence": 501
+        }
+      ],
+      "name": "daily_account_reconciliation",
+      "status": "pass"
+    },
+    {
+      "details": {
+        "initial_cash_minor": 1720000,
+        "latest_minor": 1720000,
+        "ledger_net_minor": 0,
+        "opening_minor": 1720000
+      },
+      "evidence_refs": [],
+      "name": "cash_plus_escrow_conservation",
+      "status": "pass"
+    },
+    {
+      "details": {
+        "accepted_without_offered_index": 0,
+        "invalid_indices": 0,
+        "missing_context": 0,
+        "request_count": 301,
+        "result_count": 301,
+        "unfinished_requests": 0
+      },
+      "evidence_refs": [],
+      "name": "offered_choice_index",
+      "status": "pass"
+    },
+    {
+      "details": {
+        "reason": "Daily aggregate flow records are not part of audit.v1; individual transfers retained."
+      },
+      "evidence_refs": [],
+      "name": "daily_flow_reconciliation",
+      "status": "unknown"
+    }
+  ],
+  "databricks": {
+    "import_job_id": 481628443823475,
+    "import_job_url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/646823368546520/run/481628443823475",
+    "replay_job_id": 5492972379894,
+    "replay_job_url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/584043529674799/run/5492972379894",
+    "all_four_notebooks": "success",
+    "repeat_bronze_counts_unchanged": true,
+    "repeat_silver_counts_unchanged": true,
+    "qualification": {
+      "bronze": {
+        "first_sequence": 1,
+        "kind_action_effect": 304,
+        "kind_agent_day": 1440,
+        "kind_decision_request": 301,
+        "kind_decision_result": 301,
+        "kind_event": 480,
+        "kind_nation_day": 90,
+        "kind_opening_balance": 160,
+        "kind_run_metadata": 1,
+        "kind_transaction": 141,
+        "last_sequence": 3218,
+        "rows": 3218,
+        "unique_sequences": 3218
+      },
+      "daily_account_reconciliation": {
+        "details": {
+          "mismatches": 0,
+          "snapshots": 1440,
+          "unknown_openings": 0
+        },
+        "status": "pass"
+      },
+      "expected_derived_counts": {
+        "decision_options": 1774,
+        "event_edges": 153
+      },
+      "gold": {
+        "agent_days": {
+          "available": true,
+          "rows": 1280
+        },
+        "agent_latest": {
+          "available": true,
+          "rows": 160
+        },
+        "agent_timeline": {
+          "available": true,
+          "rows": 301
+        },
+        "country_days": {
+          "available": true,
+          "rows": 80
+        },
+        "import_receipts": {
+          "available": true,
+          "rows": 1
+        }
+      },
+      "run_id": "world_20261011_010100_6ab61a",
+      "schema_version": "faultline.delta-qualification.v1",
+      "silver": {
+        "action_effects": {
+          "rows": 304,
+          "unique_sequences": 304
+        },
+        "agent_daily": {
+          "rows": 1440,
+          "unique_sequences": 1440
+        },
+        "country_daily": {
+          "rows": 90,
+          "unique_sequences": 90
+        },
+        "decision_options": {
+          "rows": 1774,
+          "unique_keys": 1774
+        },
+        "decision_requests": {
+          "rows": 301,
+          "unique_sequences": 301
+        },
+        "decision_results": {
+          "rows": 301,
+          "unique_sequences": 301
+        },
+        "event_edges": {
+          "rows": 153,
+          "unique_keys": 153
+        },
+        "events": {
+          "rows": 480,
+          "unique_sequences": 480
+        },
+        "opening_balances": {
+          "rows": 160,
+          "unique_sequences": 160
+        },
+        "runs": {
+          "rows": 1,
+          "unique_sequences": 1
+        },
+        "transactions": {
+          "rows": 141,
+          "unique_sequences": 141
+        }
+      },
+      "source_manifest_sha256": "16e48cd8f043764900205f811d6e1beb5efb885a66f7770bc668b17d8e68f892",
+      "status": "pass",
+      "through_revision": 9,
+      "through_sequence": 3218
+    }
+  },
+  "cached_api_report_exact_manifest_verified": true,
+  "automated_tests": {
+    "backend_passed": 100,
+    "python_passed": 151,
+    "observer_passed": 8,
+    "observer_optional_fixture_skipped": 1,
+    "known_upstream_failure": "EconomicLoopTests.MoneyKeepsCirculatingForAFullYear (rerun and confirmed; excluded from passing backend count)"
+  },
+  "limits": [
+    "50,000-agent/365-day capacity remains unmeasured",
+    "Fork comparison requires timeline identity and lineage next",
+    "Legacy daily-flow aggregate comparison is unknown; individual transfers are retained",
+    "Historical checkpoint parts are retained; storage and existing run-note memory need measurement",
+    "Pilot uses RULE decisions; no live inference calls"
+  ]
+}

@@ -118,6 +118,17 @@ public sealed class World
     public int Tick { get; set; }
     public long Revision { get; set; }
     public long Seq { get; set; }
+    public bool AnalyticsEnabled { get; set; }
+    public long AuditSequence { get; set; }
+    public int AuditSchemaVersion { get; set; }
+    public int? AuditStartTick { get; set; }
+    public DateTimeOffset? AuditStartedAt { get; set; }
+    public bool AuditOpeningBalancesCaptured { get; set; }
+    public int AuditDailyThroughTick { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<AuditRecord> PendingAudit { get; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public AuditContext? CurrentAuditContext { get; set; }
     // Numbers new firms, cargo, loans and policies. Separate from Seq so an extra event (a fork's own) doesn't rename later entities.
     public long LastEntityNumber { get; set; }
     public long NextEntityNumber() => ++LastEntityNumber;
@@ -162,6 +173,7 @@ public sealed class World
             source, entities, causes, Wire.Node(payload));
 
         Events.Add(worldEvent);
+        RunAudit.Append(this, "event", worldEvent);
         return worldEvent;
     }
 

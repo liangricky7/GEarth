@@ -461,3 +461,37 @@ input,
   overflow-wrap: anywhere;
   font-size: 10px;
 }
+
+.analytics-panel {
+  margin: 20px 0;
+  padding-bottom: 20px;
+}
+.analytics-panel > p,
+#analytics-summary,
+#analytics-countries {
+  margin-left: 24px;
+  margin-right: 24px;
+}
+.analytics-panel a {
+  color: var(--accent);
+  font-size: 12px;
+}
+#analytics-summary,
+#analytics-checks,
+#analytics-countries {
+  font-size: 12px;
+  line-height: 1.6;
+}
+#analytics-checks {
+  padding-left: 40px;
+  padding-right: 24px;
+}
+.analytics-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+.analytics-panel summary {
+  cursor: pointer;
+}

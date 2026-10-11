@@ -8,6 +8,7 @@ let agentOffset = 0;
 let agentTotal = 0;
 let followCurrent = true;
 let notesCache = null;
+let analyticsReport = null;
 let refreshController = null;
 let profileController = null;
 let viewGeneration = 0;
@@ -308,6 +309,14 @@ async function showProfile() {
     for (const memory of data.agent.memories ?? [])
       memories.append(textNode("li", memory));
     profile.append(memories);
+    const analysis = analyticsReport?.agents?.find((item) =>
+      (item.agent_id ?? item.id) === agentId);
+    if (analysis) {
+      const details = document.createElement("details");
+      details.append(textNode("summary", "Investigate imported agent analysis"),
+        textNode("pre", JSON.stringify(analysis, null, 2)));
+      profile.append(details);
+    }
     // The recent-decisions window keeps full observations; the agent's own copy is slim.
     const decision = data.decisions.at(-1) ?? data.last_decision;
     const observed = decision && Object.keys(decision.job.observation ?? {}).length > 0;
@@ -362,6 +371,9 @@ function clearRunView() {
     "relations",
     "agents",
     "run-notes",
+    "analytics-summary",
+    "analytics-checks",
+    "analytics-country-list",
   ])
     element(id).replaceChildren();
   for (const id of ["tick", "population", "coverage", "decisions", "failures"])
@@ -378,6 +390,10 @@ function clearRunView() {
   element("notes-status").textContent = "Loading run observations…";
   element("notes-download").hidden = true;
   element("notes-download").removeAttribute("href");
+  element("analytics-status").textContent = "Loading imported analytics…";
+  element("analytics-download").hidden = true;
+  element("analytics-download").removeAttribute("href");
+  element("analytics-countries").hidden = true;
   element("previous-page").disabled = true;
   element("next-page").disabled = true;
   clearProfile();
@@ -393,6 +409,7 @@ function selectRun(runId, cancelRefresh = true) {
   lastSequence = 0;
   displayedEvents = [];
   notesCache = null;
+  analyticsReport = null;
   element("country-filter").value = "";
   element("role-filter").value = "";
   element("agent-search").value = "";
@@ -452,15 +469,18 @@ async function refresh() {
       offset: agentOffset,
       limit: 50,
     });
-    const [history, notes, page] = await Promise.all([
+    const [history, notes, page, analysis] = await Promise.all([
       loadEvents(path, snapshot, controller.signal),
       loadRunNotes(path, snapshot, health, controller.signal),
       getJson(`${path}/agents?${query}`, controller.signal),
+      loadAnalyticsReport(path, snapshot, controller.signal),
     ]);
     if (!isCurrent()) return;
     displayedEvents = history.events;
     lastSequence = history.sequence;
     notesCache = notes;
+    analyticsReport = analysis.report;
+    showAnalyticsReport(runId, analysis);
     element("tick").textContent = snapshot.tick;
     element("population").textContent = snapshot.agents_summary.spawned;
     element("coverage").textContent =
@@ -759,4 +779,68 @@ function showRunNotes(runId, notes) {
       );
     list.append(item);
   }
+}
+
+async function loadAnalyticsReport(path, snapshot, signal) {
+  if (!["completed", "stopped", "failed"].includes(snapshot.run.status))
+    return { report: null, message: "Simulation in progress. Analysis becomes available after a finished run is exported and its report is imported." };
+  try {
+    const report = await getJson(`${path}/analytics/report`, signal);
+    if (report.schema_version !== "faultline.analytics-report.v1" || report.run_id !== snapshot.run.id
+        || report.through_revision !== snapshot.run.revision)
+      return { report: null, message: "The imported report does not match this checkpoint." };
+    return { report };
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return { report: null, message: error.message.includes("404")
+      ? "No imported analytics report is available for this run."
+      : "Imported analytics report is unavailable. The recorded world remains available." };
+  }
+}
+
+function showAnalyticsReport(runId, analysis) {
+  const summary = element("analytics-summary");
+  const checks = element("analytics-checks");
+  const countries = element("analytics-country-list");
+  summary.replaceChildren(); checks.replaceChildren(); countries.replaceChildren();
+  element("analytics-download").hidden = !analysis.report;
+  element("analytics-countries").hidden = true;
+  if (!analysis.report) {
+    element("analytics-status").textContent = analysis.message;
+    element("analytics-download").removeAttribute("href");
+    return;
+  }
+  const report = analysis.report;
+  const complete = report.completeness ?? {};
+  element("analytics-download").href = `/api/runs/${encodeURIComponent(runId)}/analytics/report`;
+  element("analytics-status").textContent =
+    `${String(complete.run_status ?? "unknown").toUpperCase()} · ${complete.run_complete === true ? "finished run" : "partial run"} · audit through #${report.through_sequence} · revision ${report.through_revision} · analysis ${report.analysis_version}`;
+  const totals = report.summary ?? {};
+  summary.append(textNode("p", `${totals.record_count ?? "Unknown"} audit records · ${totals.transaction_count ?? "Unknown"} transfers · ${totals.agent_count ?? "Unknown"} agents · ${totals.decision_result_count ?? "Unknown"} decision results · ${totals.fallback_count ?? "Unknown"} fallbacks`));
+  if (totals.transfer_minor !== undefined)
+    summary.append(textNode("p", `${(Number(totals.transfer_minor) / 100).toLocaleString()} WLD recorded transfers`));
+  const missing = complete.missing_data ?? [];
+  const unknown = complete.metadata_unknown ?? [];
+  summary.append(textNode("p", `Audit snapshot: ${complete.snapshot_complete === true ? "complete" : "partial"} · Missing data: ${missing.length ? missing.join(", ") : "none declared"} · Unknown metadata: ${unknown.length ? unknown.join(", ") : "none declared"}`, "scope"));
+  for (const check of (report.checks ?? []).slice(0, 30)) {
+    const item = textNode("li", `${check.name}: ${check.status}`);
+    if (check.details && Object.keys(check.details).length) {
+      const details = document.createElement("details");
+      details.append(textNode("summary", "Inspect check and evidence"),
+        textNode("pre", JSON.stringify({ details: check.details, evidence_refs: check.evidence_refs ?? [] }, null, 2)));
+      item.append(details);
+    }
+    checks.append(item);
+  }
+  for (const country of (report.countries ?? []).slice(-30))
+    countries.append(textNode("pre", JSON.stringify(country, null, 2)));
+  element("analytics-countries").hidden = !countries.childElementCount;
+  const comparison = report.government_comparison;
+  if (comparison) summary.append(textNode("p", `Government comparison: ${comparison.status} · ${comparison.reason}`, "scope"));
+  const provenance = document.createElement("details");
+  provenance.append(textNode("summary", "Source manifest and evidence"),
+    textNode("pre", JSON.stringify({ source_manifest_sha256: report.source_manifest_sha256,
+      generated_at: report.generated_at, synthetic: complete.synthetic ?? "unknown",
+      evidence_refs: (report.evidence_refs ?? []).slice(0, 50) }, null, 2)));
+  summary.append(provenance);
 }

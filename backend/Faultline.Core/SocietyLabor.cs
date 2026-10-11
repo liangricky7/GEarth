@@ -155,6 +155,7 @@ public static class SocietyLabor
         world.Emit("business_started", "rule", [firm.Id, founder.Id, nation.Id], new
         {
             sector, owner = founder.Id, invested_minor = cost, launch_price_minor = launchPrice,
+            account_id = firm.Id, opening_cash_minor = 0L,
             edge = "market opportunity; launched below the cheapest incumbent",
             chosen_by = cause == "" ? "rule: sector had no firm" : "agent decision"
         }, cause == "" ? [] : [cause]);

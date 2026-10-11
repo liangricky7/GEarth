@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using GEarth.Core;
 
 namespace GEarth.Tests;
@@ -94,5 +95,203 @@ public sealed class RealismFixesTests
         (relation.ProposedBy, relation.ProposalKind, relation.ProposalExpiresTick) = ("ionia", "trade", world.Tick - 1);
         SocietyDiplomacy.Advance(world); // the offer lapses unanswered
         Assert.True(ConflictOffered());
+    }
+
+    [Fact]
+    public void SchoolEntryUsesOccupiedSeatsEvenWhenNoTuitionWasSoldLastWeek()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var school = world.Agents["aster_school"];
+        var idle = world.InCountry("aster").First(person => person.Role == "citizen" && person.Occupation == "factory_worker");
+        SocietyLabor.Fire(world, idle);
+        idle.Occupation = "teacher";
+        Assert.False(SocietyLabor.HasGap(world, nation, "school"));
+
+        var seats = SocietyLabor.Seats(world, school);
+        foreach (var student in world.InCountry("aster").Where(person => person.Role == "citizen" && person != idle
+                     && person.EmployerId != school.Id).Take(seats))
+            (student.SchoolId, student.StudentUntilTick) = (school.Id, world.Tick + SocietyLabor.CourseDays);
+
+        Assert.Equal(0, school.LastWeekUnitsSold);
+        Assert.True(SocietyLabor.HasGap(world, nation, "school"));
+    }
+
+    [Fact]
+    public void EmptyGoodsShelvesCountAsDemandBeforeAnySalesCanBeMade()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var idle = world.InCountry("aster").First(person => person.Role == "citizen" && person.Occupation == "farmer");
+        SocietyLabor.Fire(world, idle);
+        foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
+        {
+            farm.PriceMinor = 80;
+            Assert.Equal(0, farm.LastWeekUnitsSold);
+            world.Agents["aster_government"].Inventory["food"] += farm.Inventory["food"];
+            farm.Inventory["food"] = 0;
+        }
+
+        Assert.True(SocietyLabor.HasGap(world, nation, "food"));
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void LargerFirmDoesNotCloseForOwnerHungerAlone()
+    {
+        var world = NewWorld();
+        var firm = world.Agents["aster_tools"];
+        var owner = world.Agents[firm.OwnerId!];
+        // Keep the firm staffed and able to pay wages, but make no profit or owner draw.
+        foreach (var workshop in SocietyLabor.Firms(world, "aster", "tools"))
+        {
+            world.Agents["aster_government"].Inventory["tools"] += workshop.Inventory["tools"];
+            workshop.Inventory["tools"] = 0;
+        }
+        Assert.True(SocietyLabor.Staff(world, firm).Length > 1);
+
+        owner.HungryThisWeek = true;
+        Week(world, "aster");
+        Assert.Equal("business", firm.Role);
+        Assert.Equal(0, owner.UnpaidHungryWeeks);
+        Assert.True(SocietyLabor.Staff(world, firm).Length > 1);
+        owner.HungryThisWeek = true;
+        Week(world, "aster");
+
+        Assert.Equal("business", firm.Role);
+        Assert.Equal("entrepreneur", owner.Role);
+        Assert.Equal(0, owner.UnpaidHungryWeeks);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void AnInterveningFedWeekResetsTheOwnerExitCounter()
+    {
+        var world = NewWorld();
+        var firm = world.Agents["aster_entertainment"];
+        var owner = world.Agents[firm.OwnerId!];
+        foreach (var worker in SocietyLabor.Staff(world, firm))
+            SocietyLabor.Fire(world, worker);
+        firm.TargetHeadcount = 0;
+        SocietyEconomy.Transfer(world, firm, world.Agents["aster_government"], firm.CashMinor);
+
+        owner.HungryThisWeek = true;
+        Week(world, "aster");
+        Assert.Equal(1, owner.UnpaidHungryWeeks);
+        owner.HungryThisWeek = false;
+        Week(world, "aster");
+        Assert.Equal(0, owner.UnpaidHungryWeeks);
+        owner.HungryThisWeek = true;
+        Week(world, "aster");
+        Assert.Equal("business", firm.Role);
+        Assert.Equal(1, owner.UnpaidHungryWeeks);
+    }
+
+    [Fact]
+    public void IdleServicesWithNoCapacityNeedEvidenceOfUnmetDemand()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var idle = world.InCountry("aster").First(person => person.Role == "citizen" && person.Occupation == "service_worker");
+        SocietyLabor.Fire(world, idle);
+        var venues = SocietyLabor.Firms(world, "aster", "entertainment").ToArray();
+        foreach (var venue in venues)
+        {
+            venue.PriceMinor = 180;
+            foreach (var worker in SocietyLabor.Workers(world, venue))
+                worker.WorkEffort = 0;
+        }
+
+        Assert.False(SocietyLabor.HasGap(world, nation, "entertainment"));
+        venues[0].LastWeekTurnedAway = 1;
+        Assert.True(SocietyLabor.HasGap(world, nation, "entertainment"));
+    }
+
+    [Fact]
+    public void AConflictPolicyCannotEnactWithoutFailedDiplomacy()
+    {
+        var world = NewWorld();
+        var relation = SocietyDiplomacy.Relation(world, "aster", "ionia");
+        var government = world.Agents["aster_government"];
+        relation.Tension = 99;
+        var cash = government.CashMinor;
+        var action = new ActionProposal("declare_conflict", new JsonObject { ["country_id"] = "ionia" }, "test", []);
+        SocietyDiplomacy.Propose(world, government, action, "cause");
+        world.Tick += Governments.Get(world.Society!.Nations["aster"].GovernmentId).PolicyDelay;
+        SocietyDiplomacy.ProcessPolicies(world);
+
+        Assert.False(relation.AtWar);
+        Assert.Equal(cash, government.CashMinor);
+        Assert.Contains(world.Events, item => item.EventType == "policy_blocked" && item.Payload["action"]!.GetValue<string>() == "declare_conflict");
+
+        relation.DiplomacyFailedTick = world.Tick;
+        SocietyDiplomacy.Propose(world, government, action, "cause");
+        world.Tick += Governments.Get(world.Society.Nations["aster"].GovernmentId).PolicyDelay;
+        SocietyDiplomacy.ProcessPolicies(world);
+        Assert.True(relation.AtWar);
+        Assert.InRange(government.CashMinor, cash - 5000, cash - 1); // soldiers' income tax returns to the treasury
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void ClosingForAnotherReasonClearsTheOwnersUnpaidHungryWeeks()
+    {
+        var world = NewWorld();
+        var firm = world.Agents["aster_entertainment"];
+        var owner = world.Agents[firm.OwnerId!];
+        owner.UnpaidHungryWeeks = 1;
+
+        SocietyLabor.Close(world, world.Society!.Nations["aster"], firm, "test closure");
+
+        Assert.Equal("citizen", owner.Role);
+        Assert.Equal(0, owner.UnpaidHungryWeeks);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void IndexationDoesNotCutAnOfferAlreadyAboveTheCeiling()
+    {
+        var world = NewWorld();
+        foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
+            farm.PriceMinor = 80;
+        var workshop = world.Agents["aster_tools"];
+        workshop.WageOfferMinor = 5000;
+        world.Society!.PeriodRevenueMinor[workshop.Id] = 10_000_000;
+        world.Tick = SocietyLabor.IndexationDays;
+
+        Week(world, "aster");
+
+        Assert.Equal(5000, workshop.WageOfferMinor);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Theory]
+    [InlineData("set_unemployment_benefit", "amount_minor", 900)]
+    [InlineData("set_welfare", "amount_minor", 200)]
+    [InlineData("set_sales_tax", "sales_tax_basis_points", 1000)]
+    [InlineData("fund_services", "amount_minor", 150)]
+    public void GovernmentRangesAcceptTheirBoundsAndRejectValuesOutside(string actionType, string field, int maximum)
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var government = world.Agents["aster_government"];
+        var now = DateTimeOffset.UtcNow;
+        var job = SocietyEngine.Observe(world, government.Id, now);
+        var candidate = Assert.Single(job.Candidates, item => item.ActionType == actionType);
+        Assert.True(SocietyActions.Matches(candidate, actionType, new JsonObject { [field] = 0 }));
+        Assert.False(SocietyActions.Matches(candidate, actionType, new JsonObject { [field] = -1 }));
+        Assert.False(SocietyActions.Matches(candidate, actionType, new JsonObject { [field] = maximum + 1 }));
+        var result = new DecisionResult(job.RequestId, new(actionType, new JsonObject { [field] = maximum }, "test", []), "model", "test", 0);
+        Assert.True(SocietyEngine.Apply(world, job, result, now).Accepted);
+        world.Tick += Governments.Get(nation.GovernmentId).PolicyDelay;
+        SocietyDiplomacy.ProcessPolicies(world);
+        var value = actionType switch
+        {
+            "set_unemployment_benefit" => nation.UnemploymentBenefitMinor,
+            "set_welfare" => nation.WelfareMinor,
+            "set_sales_tax" => nation.SalesTaxBasisPoints,
+            _ => nation.ServiceBudgetPerResidentMinor
+        };
+        Assert.Equal(maximum, value);
     }
 }

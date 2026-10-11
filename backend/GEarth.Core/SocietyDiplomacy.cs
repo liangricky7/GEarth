@@ -176,7 +176,7 @@ public static class SocietyDiplomacy
                 return true;
             case "declare_conflict":
                 var opponent = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
-                if (government.CashMinor < 5000 || opponent.Tension < 60 || opponent.AtWar)
+                if (government.CashMinor < 5000 || opponent.Tension < 60 || opponent.AtWar || opponent.DiplomacyFailedTick < 0)
                     return false;
                 SocietyEconomy.PaySoldiers(world, nation, government, 5000);
                 opponent.AtWar = true;

@@ -240,6 +240,8 @@ public sealed class PublicServicesTests
         var sink = world.Agents["aster_journalist"];
         SocietyEconomy.Transfer(world, government, sink, government.CashMinor);
         SocietyEconomy.Transfer(world, school, sink, school.CashMinor);
+        var contractor = world.Agents["aster_construction"]; // an idle contractor returns its cash to the treasury
+        SocietyEconomy.Transfer(world, contractor, sink, contractor.CashMinor);
 
         for (var day = 0; day < 2 * SocietyLabor.DaysPerWeek; day++)
             SocietyEngine.Advance(world);

@@ -160,15 +160,35 @@ re-imported the same goods (cinder: 10.2k ore out, 10.4k in); haven's treasury w
 
 | # | Decision | Status |
 |---|---|---|
-| I1 | Builders work for a construction firm the government contracts (state-owned in planned economies), not a civil-service job; idle between projects like real construction. Builder is an unskilled job. Observe in runs: ticks a project waits for builders (old-build run had 7–33 unemployed per market country, 0 in planned ones) | agreed |
-| I2 | Catalog: roads (+5% all goods), power grid (+15% energy), irrigation (+15% food), mine rail (+15% ore and fuel), port (-25% shipping cost, -1 day transit), hospital (+50% clinic capacity); Phase 3 adds anti-missile turret | default (not yet confirmed) |
+| I1 | Builders work for a construction firm the government contracts (state-owned in planned economies), not a civil-service job; idle between projects like real construction. Builder is an unskilled job. Observe in runs: ticks a project waits for builders (old-build run had 7–33 unemployed per market country, 0 in planned ones) | superseded by C1: state contractor everywhere |
+| I2 | Catalog: roads (+5% all goods), power grid (+15% energy), irrigation (+15% food), mine rail (+15% ore and fuel), port (-25% transit time per level-1 port; see C4), hospital (+50% clinic capacity); Phase 3 adds anti-missile turret | default (not yet confirmed) |
 | I3 | Boosts sized to evidence (public capital output elasticity about 0.1–0.2): +5–15%, not +50% | agreed |
 | I4 | Each project needs builders (3–6), ticks and materials (ore, tools, energy); paid weekly as work progresses, not all upfront | agreed: roads 28, irrigation 28, grid 35, mine rail 35, port 42, hospital 42 ticks; observe and tune in runs |
 | I5 | Degradation agreed. Proposal: the engine tracks a condition 0–100 per project (like Stocks); it loses 2 a week; weekly upkeep (1% of build cost, paid automatically to the construction firm, needs its builders) restores it; boost = full x condition/100; government can cut upkeep to save money (set_maintenance) | agreed |
 | I6 | One of each type per country, up to level 3, smaller gain each level | default (not yet confirmed) |
 | I7 | Paid from the treasury only; no government borrowing (bonds deferred) | default (not yet confirmed) |
-| I8 | Builders: about 3 per 100 workers to start, taken from factory work (25 to 22) | default (not yet confirmed) |
+| I8 | Builders: about 3 per 100 workers to start, taken from factory work (25 to 22) | superseded by C5: no starting crew |
 | I9 | Planned economies have no unemployed: the state construction firm takes workers from the largest state firm for the project's length | agreed |
+
+### Infrastructure review fixes (Oct 11, after merging main into `gearth/phase-2-infrastructure`)
+
+Review finding: infrastructure almost never got built. In a probe where every country ordered irrigation and a
+hospital on day 56, 1 of 20 projects finished in 140 days. Five of eight market contractors closed. Planned contractors
+deadlocked: they had no cash for materials, the state settlement swept them and their crews struck. Idle market
+contractors' owners went hungry all year. After the fixes, 19 of 20 projects finished within 8 weeks and the
+twentieth a week later.
+
+| # | Fix | Status |
+|---|---|---|
+| C1 | The construction contractor is state-owned in every country, like the school. It never closes, nobody can found one, and the rules run it, not an agent | built |
+| C2 | A generous advance: half the project cost is paid when it is ordered. Installments resume once work passes it. While builders are missing, the contractor raises its wage offer 10% a week, up to 2x the table wage, and recruits from unskilled jobs outside the essential sectors | built |
+| C3 | Before each payroll the treasury tops the contractor up to a week of its builders' pay. With no project under way, it takes back anything above two weeks of pay | built |
+| C4 | A port cuts import transit time on every leg (25% at level 1) instead of freight fees. The fees go to the country's own freight firm, so cutting them gained the country nothing | built |
+| C5 | No starting builders: the seeded crew was laid off in week one in market countries and sat idle all year in planned ones | built |
+| — | Optional, not approved: index contract prices to costs; upkeep 1%/week (52%/yr) against about 2–4%/yr in reality | open |
+
+Watch in the next run: whether governments order projects, weeks a project waits for builders, which sectors lose
+workers to the contractor, and contractor top-ups against treasury cash.
 
 ## Phase 3: War, unrest, relations (in discussion; stretch goal)
 

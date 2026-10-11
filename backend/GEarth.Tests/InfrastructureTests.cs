@@ -44,17 +44,41 @@ public sealed class InfrastructureTests
     }
 
     [Fact]
-    public void SetupMovesThreePercentOfResidentsAndKeepsPlannedFirmPublic()
+    public void ContractorIsStateOwnedEverywhereStartsWithoutBuildersAndCannotBeFounded()
     {
         var world = NewWorld();
         foreach (var nation in world.Society!.Nations.Values)
         {
             var firm = Assert.Single(SocietyLabor.Firms(world, nation.Id, PhaseContracts.Construction));
-            Assert.Equal(3, SocietyLabor.Workers(world, firm).Length);
+            Assert.Empty(SocietyLabor.Staff(world, firm));
             Assert.Equal(1300, firm.WageOfferMinor);
-            if (SocietyLabor.IsPlanned(nation))
-                Assert.Null(firm.OwnerId);
+            Assert.Null(firm.OwnerId);
+            Assert.False(SocietyLabor.DecidesForItself(firm));
         }
+        var founder = world.InCountry("aster").First(person => person.Role == "citizen");
+        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], founder, 20000);
+        Assert.False(SocietyLabor.CanStart(world, founder, PhaseContracts.Construction));
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void IdleContractorReturnsSurplusAndOrderedWorkIsToppedUpForPayroll()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var firm = world.Agents["aster_construction"];
+        var government = world.Agents["aster_government"];
+        Days(world, 7);
+        Assert.Equal(0, SocietyBank.Liquid(world, firm));
+        var treasury = government.CashMinor;
+        var project = Start(world);
+        Assert.Equal(project.CostMinor / 2, project.PaidMinor);
+        Assert.Equal(project.CostMinor / 2, treasury - government.CashMinor);
+        Assert.Equal(project.CostMinor / 2, firm.CashMinor);
+        Staff(world, 4);
+        SocietyEconomy.Transfer(world, firm, government, firm.CashMinor);
+        Days(world, 7);
+        Assert.Equal(SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor), SocietyBank.Liquid(world, firm));
     }
 
     [Fact]
@@ -66,19 +90,20 @@ public sealed class InfrastructureTests
         nation.MaintenanceFunded = false;
         Staff(world, 0);
         Days(world, 3);
+        var advance = project.CostMinor / 2;
         Assert.Equal(31, project.ReadyTick);
-        Assert.Equal(0, project.PaidMinor);
+        Assert.Equal(advance, project.PaidMinor);
         Assert.False(project.Complete);
         Staff(world, 4);
         var treasury = world.Agents["aster_government"].CashMinor;
-        Days(world, 3);
-        Assert.Equal(0, project.PaidMinor);
-        Days(world, 1);
-        Assert.Equal(project.CostMinor * 4 / 28, project.PaidMinor);
-        Days(world, 24);
+        Days(world, 11);
+        Assert.Equal(advance, project.PaidMinor); // installments resume once work passes the advance
+        Days(world, 7);
+        Assert.Equal(project.CostMinor * 18 / 28, project.PaidMinor);
+        Days(world, 10);
         Assert.True(project.Complete);
         Assert.Equal(project.CostMinor, project.PaidMinor);
-        Assert.Equal(project.CostMinor, treasury - world.Agents["aster_government"].CashMinor);
+        Assert.Equal(project.CostMinor - advance, treasury - world.Agents["aster_government"].CashMinor);
         Assert.Equal(PhaseContracts.Materials("roads", 1)["tools"], world.Society.ConsumedGoods["tools"]);
         Assert.Equal(PhaseContracts.Materials("roads", 1)["energy"], world.Society.ConsumedGoods["energy"]);
         Assert.Single(world.Events, item => item.EventType == "infrastructure_started");
@@ -98,7 +123,7 @@ public sealed class InfrastructureTests
         }
         Days(world, 7);
         Assert.Equal(35, project.ReadyTick);
-        Assert.Equal(0, project.PaidMinor);
+        Assert.Equal(project.CostMinor / 2, project.PaidMinor);
         Assert.Equal(0, world.Society!.ConsumedGoods["energy"]);
         Assert.False(project.Complete);
     }
@@ -112,12 +137,12 @@ public sealed class InfrastructureTests
         var government = world.Agents["aster_government"];
         var bank = world.Agents["aster_bank"];
         SocietyEconomy.Transfer(world, government, bank, government.CashMinor);
-        Days(world, 7);
+        Days(world, 21); // the advance covers the first half; the third week's installment cannot be paid
         Assert.Equal(29, project.ReadyTick);
-        Assert.Equal(0, project.PaidMinor);
+        Assert.Equal(project.CostMinor / 2, project.PaidMinor);
         Assert.Equal(0, government.CashMinor);
         SocietyEconomy.Transfer(world, bank, government, project.CostMinor);
-        Days(world, 22);
+        Days(world, 8);
         Assert.True(project.Complete);
         Assert.Equal(project.CostMinor, project.PaidMinor);
     }
@@ -150,7 +175,7 @@ public sealed class InfrastructureTests
         var project = Start(world, "hospital", nation.Id);
         Days(world, 1);
         var borrowed = nation.BorrowedBuilders.Keys.ToArray();
-        Assert.Equal(3, borrowed.Length);
+        Assert.Equal(6, borrowed.Length);
         Days(world, 41);
         Assert.True(project.Complete);
         Assert.Empty(nation.BorrowedBuilders);
@@ -178,10 +203,10 @@ public sealed class InfrastructureTests
         Days(world, 7);
         Assert.Equal(46, project.Condition);
         Staff(world, 1);
-        var cash = world.Agents["aster_government"].CashMinor;
+        world.Society.PeriodRevenueMinor.Clear();
         Days(world, 7);
         Assert.Equal(100, project.Condition);
-        Assert.Equal(310, cash - world.Agents["aster_government"].CashMinor);
+        Assert.Equal(310, world.Society.PeriodRevenueMinor["aster_construction"]);
     }
 
     [Theory]
@@ -247,19 +272,6 @@ public sealed class InfrastructureTests
         Assert.False(nation.MaintenanceFunded);
         Assert.False(SocietyInfrastructure.Enact(world, nation, new() { ActionType = "set_maintenance" }));
         Assert.Equal(6, options.Count(option => option.ActionType == "build_infrastructure"));
-    }
-
-    [Fact]
-    public void AFounderCanReplaceAClosedContractorButCannotCreateASecondOne()
-    {
-        var world = NewWorld();
-        var nation = world.Society!.Nations["aster"];
-        var founder = world.InCountry(nation.Id).First(person => person.Role == "citizen");
-        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], founder, 20000);
-        Assert.False(SocietyLabor.CanStart(world, founder, PhaseContracts.Construction));
-        SocietyLabor.Close(world, nation, world.Agents["aster_construction"], "test");
-        Assert.True(SocietyLabor.CanStart(world, founder, PhaseContracts.Construction));
-        SocietyEconomy.AssertConservation(world);
     }
 
     [Fact]

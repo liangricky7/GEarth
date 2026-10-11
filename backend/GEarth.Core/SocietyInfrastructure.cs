@@ -13,7 +13,10 @@ public sealed record BorrowedBuilder(string EmployerId, string Occupation, long 
 
 public static class SocietyInfrastructure
 {
-    public const string Note = "Governments can build_infrastructure from treasury cash: builders need materials and are paid weekly as work progresses; shortages delay completion. Upgrades replace the existing project's boost during construction. Funded upkeep needs builders and costs 1% weekly; set_maintenance can stop it, losing 2 condition per week. ";
+    public const string Note = "Governments can build_infrastructure from treasury cash through the state construction contractor: half the cost is advanced when ordered and the rest paid weekly as work progresses, the treasury covers builders' pay when the contractor runs short, and the contractor bids up its wage offer and recruits from non-essential unskilled jobs while builders are missing; shortages of builders or materials delay completion. A port cuts import transit time. Upgrades replace the existing project's boost during construction. Funded upkeep needs builders and costs 1% weekly; set_maintenance can stop it, losing 2 condition per week. ";
+
+    // Share of a project's cost paid to the contractor when it is ordered, so it can hire and buy materials.
+    public const double AdvanceShare = 0.5; // ponytail: tune after runs
 
     private static IEnumerable<Project> Active(Nation nation) => nation.Infrastructure.Where(project => !project.Complete)
         .OrderBy(project => project.StartedTick);
@@ -26,25 +29,6 @@ public static class SocietyInfrastructure
 
     private static int Working(World world, Agent? firm) => firm is null ? 0
         : SocietyLabor.Workers(world, firm).Count(worker => SocietyLabor.DayEffort(world, worker) > 0);
-
-    public static void Setup(World world)
-    {
-        foreach (var nation in world.Society!.Nations.Values)
-        {
-            var firm = Firm(world, nation)!;
-            var residents = world.InCountry(nation.Id).Where(SocietyLabor.IsResident).ToArray();
-            var wanted = (int)Math.Round(residents.Length * 0.03);
-            var owner = firm.OwnerId is null ? 0 : 1;
-            foreach (var worker in residents.Where(person => person.Role == "citizen" && person.Occupation == "factory_worker"
-                         && person.EmployerId is not null).OrderBy(person => person.Id).Take(Math.Max(0, wanted - owner)))
-            {
-                var previous = world.Agents[worker.EmployerId!];
-                SocietyLabor.Hire(world, firm, worker, "builder");
-                previous.TargetHeadcount = SocietyLabor.Staff(world, previous).Length;
-            }
-            firm.TargetHeadcount = SocietyLabor.Staff(world, firm).Length;
-        }
-    }
 
     private static bool CanBuild(World world, Nation nation, ProjectSpec spec, int level)
     {
@@ -97,9 +81,11 @@ public static class SocietyInfrastructure
             CostMinor = PhaseContracts.CostOf(type, level), StartedTick = world.Tick, ReadyTick = world.Tick + spec.Ticks
         };
         nation.Infrastructure.Add(project);
+        project.PaidMinor = (long)(project.CostMinor * AdvanceShare);
+        SocietyEconomy.Transfer(world, world.Agents[nation.Id + "_government"], Firm(world, nation)!, project.PaidMinor, "construction_advance");
         world.Emit("infrastructure_started", "rule", [nation.Id, project.Id], new
         {
-            project.Type, project.Level, project.CostMinor, project.ReadyTick, spec.Builders
+            project.Type, project.Level, project.CostMinor, advance_minor = project.PaidMinor, project.ReadyTick, spec.Builders
         }, policy.CauseId);
         return true;
     }
@@ -217,10 +203,24 @@ public static class SocietyInfrastructure
                     if (before >= 50 && project.Condition < 50)
                         world.Emit("infrastructure_worn", "rule", [nation.Id, project.Id], new { project.Type, project.Condition });
                 }
+                if (firm is not null)
+                    Settle(world, nation, firm, government);
             }
             if (firm is not null)
                 AssignBuilders(world, nation, firm);
         }
+    }
+
+    // Before payroll, the treasury tops the state contractor up to a week of its builders' pay; with no project
+    // under way it takes back anything above two weeks of pay.
+    private static void Settle(World world, Nation nation, Agent firm, Agent government)
+    {
+        var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
+        var liquid = SocietyBank.Liquid(world, firm);
+        if (liquid < payroll)
+            SocietyEconomy.Transfer(world, government, firm, Math.Min(SocietyBank.Liquid(world, government), payroll - liquid), "state_subsidy");
+        else if (!Active(nation).Any() && liquid > payroll * 2)
+            SocietyEconomy.Transfer(world, firm, government, liquid - payroll * 2, "state_surplus");
     }
 
     public static object View(World world, Nation nation)

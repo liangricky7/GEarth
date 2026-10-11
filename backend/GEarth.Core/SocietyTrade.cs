@@ -277,7 +277,10 @@ public static class SocietyTrade
                 edge = world.Routes[path.EdgeIds[0]];
                 world.Emit("shipment_rerouted", "rule", [cargo.Id], new { plan = path }, Causes(cargo));
             }
-            cargo.EdgeRemainingTicks = edge.TravelTicks - 1;
+            // A port in the buyer's country cuts every leg's transit time (fees go to its own freight firm, so
+            // cheaper freight would only move money between residents).
+            var port = Math.Clamp(PhaseContracts.Boost(world.Society.Nations[buyer.CountryId], "shipping"), 0, 0.9);
+            cargo.EdgeRemainingTicks = Math.Max(1, (int)Math.Round(edge.TravelTicks * (1 - port))) - 1;
             if (cargo.EdgeRemainingTicks == 0)
             {
                 cargo.LocationId = edge.To;

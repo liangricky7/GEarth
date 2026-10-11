@@ -212,9 +212,10 @@ public static class SocietyEconomy
             if (SocietyLabor.IsPlanned(nation) && SocietyBank.Liquid(world, government) < government.LastWeekOutMinor)
                 SocietyBank.BorrowForTreasury(world, nation, government.LastWeekOutMinor - SocietyBank.Liquid(world, government));
             // The state owns every firm in a planned economy, and the school everywhere: it takes surplus above four
-            // weeks of payroll and covers shortfalls. The state bank is left alone: its cash is depositors' reserves.
+            // weeks of payroll and covers shortfalls (the contractor settles in SocietyInfrastructure). The state bank
+            // is left alone: its cash is depositors' reserves.
             foreach (var firm in agents.Where(agent => agent.Role == "business" && !SocietyBank.IsBank(agent) && agent.OwnerId is null
-                         && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
+                         && agent.Specialty != PhaseContracts.Construction && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
                 {
                     var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
                     var operations = payroll + SocietyResources.InputWorkingCapital(world, nation, firm);

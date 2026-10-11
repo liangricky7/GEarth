@@ -84,9 +84,9 @@ public static class SocietyLabor
 
     public static bool IsPlanned(Nation nation) => nation.GovernmentId == "planned_republic";
 
-    // The state runs schools by rule; owned businesses act through their entrepreneur; closed ones never act.
+    // The state runs schools and the construction contractor by rule; owned businesses act through their entrepreneur; closed ones never act.
     public static bool DecidesForItself(Agent agent) =>
-        agent.Role != "defunct" && !(agent.Role == "business" && (agent.OwnerId is not null || agent.Specialty == "school"));
+        agent.Role != "defunct" && !(agent.Role == "business" && (agent.OwnerId is not null || agent.Specialty is "school" or PhaseContracts.Construction));
 
     public static bool IsStudent(Agent agent) => agent.StudentUntilTick >= 0;
 
@@ -225,7 +225,7 @@ public static class SocietyLabor
         var nation = world.Society!.Nations[founder.CountryId];
         var cost = StartupCost(sector);
         return founder.Role == "citizen" && !IsStudent(founder) && !IsPlanned(nation) && StartableSectors().Contains(sector)
-            && (sector != PhaseContracts.Construction || !Firms(world, nation.Id, sector).Any())
+            && sector != PhaseContracts.Construction
             && SocietyBank.Liquid(world, founder) + loan >= cost && loan <= SocietyBank.StartupLoan(world, founder, cost)
             && HasGap(world, nation, sector) && CanStaff(world, founder, sector);
     }
@@ -517,6 +517,11 @@ public static class SocietyLabor
         if (firm.Specialty == PhaseContracts.Construction)
         {
             SocietyInfrastructure.Autopilot(world, nation, firm);
+            // The state contractor raises its offer as fast as a firm in a shortage while builders are missing.
+            var builderWage = TableWage["builder"];
+            firm.WageOfferMinor = Staff(world, firm).Length < firm.TargetHeadcount
+                ? Math.Min(builderWage * 2, firm.WageOfferMinor * (100 + MaxPriceStepPct) / 100)
+                : Math.Max(builderWage, firm.WageOfferMinor * 95 / 100);
             return;
         }
         var society = world.Society!;
@@ -584,10 +589,12 @@ public static class SocietyLabor
                         && world.Tick - person.UnemployedSinceTick >= RelatedJobAfterDays)))
                 .OrderByDescending(person => person.Graduated).ThenBy(person => person.UnemployedSinceTick).ThenBy(person => person.Id);
             // Employed workers switch for at least 10% more pay (any raise while looking for a better job);
-            // public employees stay in the public sector.
+            // public employees stay in the public sector. The contractor also recruits from unskilled jobs outside
+            // the essential sectors.
             var switchers = residents.Where(person => person.Role == "citizen" && person.EmployerId is { } current
                     && current != firm.Id && world.Agents[current].Role == "business"
-                    && person.Occupation == occupation
+                    && (person.Occupation == occupation || occupation == "builder" && Unskilled.Contains(person.Occupation)
+                        && !Essential.Contains(world.Agents[current].Specialty!))
                     && person.SalaryMinor * (person.SeekingUntilTick >= world.Tick ? 10 : 11) / 10 < firm.WageOfferMinor)
                 .OrderByDescending(person => person.Graduated).ThenBy(person => person.SalaryMinor).ThenBy(person => person.Id);
             foreach (var person in unemployed.Concat(switchers).Take(open).ToArray())
@@ -642,7 +649,7 @@ public static class SocietyLabor
             firm.TargetHeadcount = Math.Min(firm.TargetHeadcount, staff.Length);
             firm.DistressWeeks++;
         }
-        else if (!planned)
+        else if (!planned && !stateRun)
             firm.DistressWeeks = revenue == 0 && SocietyBank.Liquid(world, firm) < TableWage[SectorOf(firm.Specialty!).Occupation]
                 ? firm.DistressWeeks + 1 : 0;
         var paid = 0L;

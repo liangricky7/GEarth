@@ -35,3 +35,11 @@ Catalog costs, durations, staffing, 1% upkeep, two-point degradation and startin
 Completed work is retained if construction later stalls; materials are not consumed again when reloaded or when a contractor is replaced. Upkeep restores damaged condition to 100 as specified, so Phase 3 should account for repair when evaluating missile damage. Old worlds without construction firms load, but do not automatically receive new institutions. Cross-phase resource/war behavior still needs integration testing after those branches merge.
 
 No Phase 1 or Phase 3 logic, Spark runs, remote service checks, deployment, or GitHub push is included. Local test environments and generated outputs remain ignored.
+
+## Review fixes (Oct 11)
+
+After merging main, the contractor became state-owned everywhere and the seeded crew was dropped. A project now
+pays half its cost upfront, and the treasury covers the contractor's payroll shortfalls. While builders are
+missing, the contractor bids wages up and recruits from non-essential unskilled jobs. A port cuts transit time
+instead of freight fees. The calibration notes above describe the previous behaviour. Decisions C1–C5 are in
+`next-steps.md`.

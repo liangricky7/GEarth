@@ -40,7 +40,8 @@ public sealed class EconomicLoopTests
     [Fact]
     public void SickResidentSeesTheCheapestDoctorAndClinicUsesSupplies()
     {
-        var world = SocietyFactory.Create("health_test", false, 300);
+        // Leave employees after allocating owners for the additional construction firm.
+        var world = SocietyFactory.Create("health_test", false, 400);
         var patient = world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen");
         patient.Health = 20;
         var clinic = world.Agents["aster_clinic"];

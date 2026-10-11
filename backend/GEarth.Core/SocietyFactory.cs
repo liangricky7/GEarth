@@ -210,6 +210,7 @@ public static class SocietyFactory
                 + (long)(nation.WelfareMinor + nation.ServiceBudgetPerResidentMinor) * citizensPerCountry));
         }
 
+        SocietyInfrastructure.Setup(world);
         AddRoutes(world);
         foreach (var first in Geography)
             foreach (var second in Geography.Where(other => string.CompareOrdinal(other.Id, first.Id) > 0))

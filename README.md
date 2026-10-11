@@ -68,6 +68,8 @@ Earlier consolidation results, including the previous calibration failure, remai
 
 For observer changes, `node ops/check_observer.cjs` checks desktop/mobile rendering, saved-run switching with delayed responses, agent filters and pagination using API fixtures and installed Chrome or Edge. Screenshots are saved under ignored `artifacts/local/`.
 
+For Kenny's visual renderer, see the [weekly replay contract and client](renderer/README.md). Fresh runs capture all-agent weekly frames independently of analytics; the read-only API and `ops/export_renderer.py` feed live or saved playback. Older runs retain their recorded data without fabricated missing weeks.
+
 For a completed world being served, `ops/check_world.py` checks conservation, durable ordered events, checkpoint readback, pagination, request bounds and read-only assets. Add `--require-model` for real model turns and `--require-full-coverage` only when explicitly qualifying coverage; coverage uses actual decision makers rather than owner-controlled firms. `ops/check_stage2_api.py` checks the committed API without new inference.
 
 ## Observer and reports

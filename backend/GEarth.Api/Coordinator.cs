@@ -164,6 +164,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 SocietyFactory.ChangeGovernment(world, countryId, profileId);
         }
         world.Society!.WorkerCapacity = capacity;
+        // Renderer history belongs to fresh run identities; forks cannot append to the parent's replay.
+        world.RendererCaptureEnabled = store is IRendererStore && string.IsNullOrEmpty(resumeId);
         world.Society.TickIntervalMilliseconds = interval;
         var providerConfig = Environment.GetEnvironmentVariable("GEARTH_COMPUTE_PROVIDERS");
         if (!string.IsNullOrEmpty(providerConfig))
@@ -309,6 +311,9 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                         await Commit();
                 }
                 SocietyEngine.Advance(world);
+                // Capture the actual seven-day endpoint after payroll, before next week's model turns.
+                if (world.RendererCaptureEnabled && world.Tick % SocietyLabor.DaysPerWeek == 0 && tick < tickLimit)
+                    await Commit();
                 if ((world.Tick == 1 || world.Tick % SocietyLabor.DaysPerWeek == 0) && tick < tickLimit)
                     foreach (var agent in SocietyScheduler.WeeklyCohort(world))
                         queue.Enqueue(agent.Id);

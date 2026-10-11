@@ -45,6 +45,8 @@ var port = int.TryParse(Environment.GetEnvironmentVariable("GEARTH_PORT"), out v
 builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
+builder.Services.AddCors(options => options.AddPolicy("RendererReadOnly", policy =>
+    policy.AllowAnyOrigin().WithMethods("GET").AllowAnyHeader()));
 
 IWorldStore store = CreateStore();
 
@@ -55,10 +57,12 @@ builder.Services.AddSingleton<Coordinator>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<Coordinator>());
 
 var app = builder.Build();
+app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapAnalytics();
+app.MapRenderer();
 
 app.MapGet("/api/health", (Coordinator coordinator) => Results.Ok(new
 {

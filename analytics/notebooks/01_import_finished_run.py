@@ -18,9 +18,9 @@ from analytics.export import canonical
 from analytics.report import build_report
 from analytics.delta_validation import qualify_delta
 from analytics.browse import export_delta_bundle
-from analytics.transform import AGENT_TYPES, COUNTRY_TYPES
+from analytics.transform import AGENT_TYPES, COUNTRY_TYPES, AGENT_JSON_FACTS, COUNTRY_JSON_FACTS, LEGACY_AGENT_JSON_FACTS, LEGACY_COUNTRY_JSON_FACTS, PROJECT_TYPES
 from analytics.conditions import comparison_conditions
-from analytics.schema import nullable_additions
+from analytics.schema import nullable_additions, economy_backfill_fields
 from pyspark.sql import functions as F
 from delta.tables import DeltaTable
 
@@ -43,6 +43,35 @@ for schema in ("gearth_bronze", "gearth_silver", "gearth_gold"):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS workspace.{schema}")
 
 
+_backfilled_tables = set()
+
+
+def enrich_existing_snapshots(table):
+    """Recover only new nullable projections from each row's own original JSON.
+
+    Retry-safe even when a prior job stopped after ADD COLUMNS: this allowlist
+    runs once per import/table regardless of whether any additions are now new.
+    Never overwrite a non-null typed value, raw payload, hash, or source identity.
+    """
+    fields = economy_backfill_fields(table)
+    if not fields or table in _backfilled_tables:
+        return
+    expressions = {}
+    needs_value = None
+    for column, (field, datatype) in fields.items():
+        value = F.get_json_object("payload_json", "$." + field)
+        if datatype == "json":
+            value = F.when(F.array_contains(F.json_object_keys(F.col("payload_json")), field),
+                F.coalesce(value, F.lit("null"))).otherwise(F.lit(None).cast("string"))
+        else:
+            value = value.cast(datatype)
+        expressions[column] = F.coalesce(F.col(column), value)
+        condition = F.col(column).isNull() & value.isNotNull()
+        needs_value = condition if needs_value is None else needs_value | condition
+    DeltaTable.forName(spark, table).update(condition=needs_value, set=expressions)
+    _backfilled_tables.add(table)
+
+
 def insert_only(frame, table, keys):
     """Immutable MERGE: equal replay is harmless, conflicting replay is rejected."""
     if not spark.catalog.tableExists(table):
@@ -57,6 +86,7 @@ def insert_only(frame, table, keys):
                      for name, datatype in nullable_additions(existing_types, new_types).items()]
         if additions:
             spark.sql(f"ALTER TABLE {table} ADD COLUMNS (" + ", ".join(additions) + ")")
+    enrich_existing_snapshots(table)
     if frame.limit(1).count() == 0:
         return
     duplicates = frame.groupBy(*keys).count().where("count > 1")
@@ -73,6 +103,11 @@ def insert_only(frame, table, keys):
 
 def p(path, type="string"):
     return F.get_json_object("payload_json", "$." + path).cast(type)
+
+
+def json_p(field):
+    return F.when(F.array_contains(F.json_object_keys(F.col("payload_json")), field),
+        F.coalesce(p(field), F.lit("null"))).otherwise(F.lit(None).cast("string"))
 
 
 # All tables retain original payload, source cursor, and digest. Money is BIGINT.
@@ -92,11 +127,12 @@ projections["opening_balance"][2]["creation_tick"] = p("creation_tick", "long")
 # Public-services v1 adds nullable fields without reinterpreting old run facts.
 for field, datatype in AGENT_TYPES.items():
     projections["agent_day"][2][field] = p(field, datatype)
-projections["agent_day"][2]["qol_parts_points_json"] = p("qol_parts_points")
+for field in AGENT_JSON_FACTS:
+    projections["agent_day"][2][field + "_json"] = p(field) if field in LEGACY_AGENT_JSON_FACTS else json_p(field)
 for field, datatype in COUNTRY_TYPES.items():
     projections["nation_day"][2][field] = p(field, datatype)
-for field in ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params"):
-    projections["nation_day"][2][field + "_json"] = p(field)
+for field in COUNTRY_JSON_FACTS:
+    projections["nation_day"][2][field + "_json"] = p(field) if field in LEGACY_COUNTRY_JSON_FACTS else json_p(field)
 for field in ("active_features", "features", "economy_configuration"):
     projections["run_metadata"][2][field + "_json"] = p(field)
 projections["run_metadata"][2].update(banking_paused=p("banking_paused", "boolean"), capture_contract_version=p("capture_contract_version"))
@@ -133,6 +169,21 @@ for entry in manifest["files"]:
         if null_keys.limit(1).count():
             raise ValueError(f"Missing immutable key in {name}")
         insert_only(typed, "workspace.gearth_silver." + name, keys)
+        if kind == "nation_day":
+            # Missing/null/empty project lists yield zero child rows; original
+            # country payload inventory still distinguishes their capture status.
+            project_schema = "array<struct<" + ",".join(name + ":" + datatype for name, datatype in PROJECT_TYPES.items()) + ">>"
+            projects = typed.select("run_id", "country_id", "tick", "frame_kind", "sequence", "revision",
+                "payload_json", "record_sha256", "source_manifest_sha256", "infrastructure_json",
+                F.posexplode(F.from_json("infrastructure_json", project_schema)).alias("project_index", "project"))
+            projects = projects.select("run_id", "country_id", "tick", "frame_kind", "sequence", "revision",
+                "payload_json", "record_sha256", "source_manifest_sha256", F.col("project.id").alias("project_id"),
+                F.expr("get_json_object(infrastructure_json,concat('$[',cast(project_index as string),']'))").alias("project_json"),
+                *[F.col("project." + name).alias(name) for name in PROJECT_TYPES if name != "id"],
+                F.when(F.col("project.complete") == True, F.lit("complete"))
+                 .when(F.col("project.complete") == False, F.lit("under_construction")).alias("status"))
+            insert_only(projects, "workspace.gearth_silver.infrastructure_daily",
+                ["run_id", "country_id", "tick", "frame_kind", "project_id"])
         if kind == "event":
             edges = typed.select("run_id", "event_id", "sequence", "record_sha256", "source_manifest_sha256",
                 F.explode(F.from_json("cause_ids_json", "array<string>")).alias("cause_event_id"))
@@ -161,14 +212,7 @@ SELECT * EXCEPT (row_rank) FROM (
   SELECT *,row_number() OVER (PARTITION BY run_id,agent_id ORDER BY sequence DESC) AS row_rank
   FROM workspace.gearth_silver.agent_daily) WHERE row_rank=1""")
 spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.country_days AS
-SELECT run_id,country_id,tick,sequence,government_type,
-CAST(get_json_object(payload_json,'$.residents') AS BIGINT) AS residents,
-CAST(get_json_object(payload_json,'$.unemployed') AS BIGINT) AS unemployed,
-CAST(get_json_object(payload_json,'$.approval') AS DOUBLE) AS approval,
-CAST(get_json_object(payload_json,'$.gini') AS DOUBLE) AS gini,
-CAST(get_json_object(payload_json,'$.unmet_needs') AS BIGINT) AS unmet_needs,
-CAST(get_json_object(payload_json,'$.government_cash_minor') AS BIGINT) AS treasury_minor,
-payload_json,source_manifest_sha256
+SELECT *,government_cash_minor AS treasury_minor
 FROM workspace.gearth_silver.country_daily WHERE frame_kind='day'""")
 spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.public_service_days AS
 SELECT run_id,country_id,tick,sequence,government_type,students,graduates,job_seekers,hungry_residents,

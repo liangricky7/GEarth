@@ -10,6 +10,8 @@ The data explorer is a read-only companion to the world observer. Runs share sto
 4. Inspect the captured feature metadata and field coverage. Missing historical fields, explicit nulls, and recorded zero/false values mean different things. Fields seen on a displayed page are not proof of complete run-wide coverage.
 5. For an explicitly analyzed and published finished run, inspect its report, actual Databricks column schemas and per-run field counts, and complete cached table rows. Raw JSON remains accessible when no dedicated typed column exists.
 
+The feature comparison separates schooling, wages and arrears, prices, currency/trade, resources and infrastructure. A typed column with only null values is labelled as unproven capture for that run. Expanded daily fields and the optional infrastructure dataset follow [the current capture contract](27-complete-economy-capture.md).
+
 ## Finished-run data publication
 
 The existing operator workflow captures an audit, exports a finished run, imports it into Databricks, then publishes results to the observer. Analytics capture and imports remain explicit. See [analytics operations](20-analytics-pipeline.md).

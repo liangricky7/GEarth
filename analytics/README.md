@@ -64,7 +64,7 @@ and the exact source `manifest.json`. Publication validates the checkpoint and
 manifest hash; website clients only read the cached report. `ops/analyze_run.py`
 provides orchestration when available. Local report generation is deterministic
 in facts/provenance; `generated_at` varies with execution time.
-The current analysis version is `1.2.0`. A changed analysis version may replace the
+The current analysis version is `1.3.0`. A changed analysis version may replace the
 derived current report alias only for identical manifest/run pins; the previous
 report is preserved as `report-<manifestprefix>-<analysisversion>.json`. Conflicting
 facts at the same analysis version and conflicting archives are refused. Export
@@ -286,3 +286,36 @@ verification. Browser reads are cache-only and never connect to Databricks.
 The report stays small: optional `dataset_catalog` holds schemas/coverage,
 not full rows. All existing report sections are inspectable; its agent list
 remains a capped preview.
+
+
+## Economy capture v2
+
+New runs using `gearth.economy_capture.v2` retain part-time schooling, wage arrears,
+insured balances, price response, infrastructure/maintenance, currency/trade,
+resource endowment/imports, inventory, and bank failure/default/insurance totals.
+Agent and country tables add nullable scalar or `_json` columns. No historical
+values are fabricated: missing JSON keys remain SQL null; an explicitly recorded
+JSON null is the literal `null` in a newly introduced JSON column. Existing JSON
+columns retain their prior SQL-null semantics; original payload coverage preserves
+the distinction. Zero and false remain values.
+The report's `economy_capture` section measures actual daily/end key presence.
+A v2 run missing its required keys is rejected before Delta import.
+
+`workspace.gearth_silver.infrastructure_daily` contains one recorded project per
+country/day/frame (`run_id,country_id,tick,frame_kind,project_id`), including status,
+level, condition, payments, dates, and engine-derived progress with its named basis.
+Every row retains the nation payload, project JSON, source audit sequence/revision,
+record hash, and source manifest hash. Empty project arrays create zero rows;
+legacy missing arrays remain unknown in country payload coverage. Qualification
+checks child counts, unique keys, source identity, and typed values against Bronze.
+New browse bundles include this twentieth dataset; verified older 19-table bundles
+continue to work. Reimport adds nullable columns but never overwrites old evidence.
+
+Schema enrichment fills only this migration's new SQL-null columns from each
+stored row's own `payload_json`; it never changes non-null facts, raw payloads,
+hashes or source identity. It runs once per import/table even when an earlier job
+stopped after `ADD COLUMNS`, making retries idempotent. Previously captured
+inventories/bank totals therefore become searchable columns without manufacturing
+any missing past fields. Qualification independently rebuilds all agent/country
+scalar and JSON projections from Bronze and requires null-safe equality in both
+directions, plus the fresh manifest hash on every Bronze/Silver dataset.

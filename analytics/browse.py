@@ -25,7 +25,7 @@ MAX_PATHS = 4096
 MAX_DEPTH = 4
 DATASETS = {"bronze.audit": "workspace.gearth_bronze.audit", **{
     "silver." + name: "workspace.gearth_silver." + name for name in TABLES.values()}, **{
-    "silver." + name: "workspace.gearth_silver." + name for name in ("decision_options", "event_edges")}, **{
+    "silver." + name: "workspace.gearth_silver." + name for name in ("decision_options", "event_edges", "infrastructure_daily")}, **{
     "gold." + name: "workspace.gearth_gold." + name for name in (
         "agent_days", "agent_latest", "country_days", "public_service_days", "public_service_transfers", "import_receipts")}}
 
@@ -248,7 +248,7 @@ def validate_manifest(manifest):
             total += chunk["row_count"]
         if total != entry["row_count"]:
             raise ValueError("Browse dataset/chunk count disagreement")
-    if seen != set(DATASETS):
+    if seen not in (set(DATASETS), set(DATASETS) - {"silver.infrastructure_daily"}):
         raise ValueError("Browse dataset inventory is incomplete")
 
 

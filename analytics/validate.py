@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check, canonical
-from .transform import typed_record
+from .transform import typed_record, validate_capture
 from .contracts import contract_matches
 
 
@@ -166,6 +166,7 @@ def validate(manifest_path):
             for record in iter_records(manifest_path, manifest):
                 kind = record["kind"]
                 _, row = typed_record(record)
+                validate_capture(record, run.get("capture_contract_version"))
                 if kind == "run_metadata":
                     metadata_count += 1
                     if record["sequence"] != 1:

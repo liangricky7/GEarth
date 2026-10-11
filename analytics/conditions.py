@@ -17,6 +17,16 @@ def comparison_conditions(metadata):
     features = metadata.get("features")
     if not isinstance(features, dict) or any(not isinstance(features.get(key), str) or not features[key] for key in ("public_services", "bounded_integer_choices")):
         unknown.append("feature_versions")
+    if metadata.get("capture_contract_version") == "gearth.economy_capture.v2":
+        if not isinstance(features, dict) or any(not isinstance(features.get(key), str) or not features[key]
+                for key in ("infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade")):
+            unknown.append("economy_v2_feature_versions")
+        expanded = metadata.get("economy_configuration")
+        if not isinstance(expanded, dict) or any(not isinstance(expanded.get(key), dict) or not expanded[key]
+                for key in ("labor", "infrastructure", "currency_trade")):
+            unknown.append("economy_v2_configuration_sections")
+        if not isinstance(expanded, dict) or not isinstance(expanded.get("school"), dict) or expanded["school"].get("part_time_course_days") is None:
+            unknown.append("part_time_course_configuration")
     active = metadata.get("active_features")
     if not isinstance(active, list) or not active or any(not isinstance(value, str) or not value for value in active):
         unknown.append("active_feature_set")

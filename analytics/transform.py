@@ -16,7 +16,10 @@ AGENT_FACTS = ("occupation", "specialty", "owner_id", "owned_business_id", "stud
                "last_week_income_constrained", "last_week_operating_profit_minor",
                "last_week_operating_cash_surplus_minor", "operating_cash_surplus_average_minor",
                "operating_cash_surplus_observed_weeks", "estate_beneficiary_id", "estate_finalized",
-               "deposit_interest_suspended")
+               "deposit_interest_suspended", "part_time_student", "arrears_minor", "arrears_weeks",
+               "unpaid_hungry_weeks", "insured_minor", "price_change_tick", "price_change_pct",
+               "units_before_price_change", "profit_before_price_change_minor", "price_before_price_change_minor",
+               "estate_unreported_payout_minor", "week_disposable_income_minor", "week_work_days")
 COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_residents_last_week", "priced_out_last_week",
                  "output_lost_to_hunger_pct", "food_subsidy_pct", "food_subsidy_paid_minor", "startup_grants_paid_minor",
                  "capitation_paid_minor", "tuition_subsidy_pct", "student_stipend", "hiring_bonus_minor", "doctor_visits",
@@ -25,19 +28,109 @@ COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_res
                  "welfare_minor", "unemployment_benefit_minor", "sales_tax_basis_points", "profit_tax_basis_points",
                  "service_budget_per_resident_minor", "productivity", "last_policy_action", "last_policy_tick", "net_before_last_policy_minor",
                  "employed_residents", "labor_force", "nonparticipants", "jobless_residents", "gini_disposable_income", "gini_net_wealth",
-                 "essentials_basket_minor", "median_real_disposable_income_minor")
+                 "essentials_basket_minor", "median_real_disposable_income_minor", "maintenance_funded", "currency_index",
+                 "trade_net_week_minor", "trade_gross_week_minor", "bank_failures", "defaulted_loans",
+                 "deposit_insurance_paid_minor", "tax_changed_tick", "living_cost_at_review", "crisis_until_tick", "crisis_good")
 
 AGENT_TYPES = {key: "long" for key in AGENT_FACTS}
 AGENT_TYPES.update({key: "boolean" for key in ("graduated", "is_student", "seeking_better_job", "hungry", "hungry_this_week",
     "priced_out_this_week", "works_overtime", "keeps_savings_in_bank", "too_sick", "estate_finalized",
-    "deposit_interest_suspended")})
+    "deposit_interest_suspended", "part_time_student")})
 AGENT_TYPES.update({key: "string" for key in ("occupation", "specialty", "owner_id", "owned_business_id", "school_id", "lending_standard", "estate_beneficiary_id")})
 AGENT_TYPES["needs_met"] = "double"
 AGENT_TYPES["last_week_work_days"] = "double"
+AGENT_TYPES["week_work_days"] = "double"
 COUNTRY_TYPES = {key: "long" for key in COUNTRY_FACTS}
-COUNTRY_TYPES.update(student_stipend="boolean", last_policy_action="string")
+COUNTRY_TYPES.update(student_stipend="boolean", last_policy_action="string", maintenance_funded="boolean", crisis_good="string")
 COUNTRY_TYPES.update({key: "double" for key in ("approval", "gini", "output_lost_to_hunger_pct", "average_health", "average_wellbeing", "productivity")})
-COUNTRY_TYPES.update(gini_disposable_income="double", gini_net_wealth="double")
+COUNTRY_TYPES.update(gini_disposable_income="double", gini_net_wealth="double", currency_index="double", living_cost_at_review="double")
+
+
+AGENT_JSON_FACTS = ("inventory", "qol_parts_points")
+COUNTRY_JSON_FACTS = ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params",
+    "infrastructure", "construction_materials_used", "borrowed_builders", "endowment", "resource_imports",
+    "powered_sessions_left", "production_input_credits")
+LEGACY_AGENT_JSON_FACTS = ("qol_parts_points",)
+LEGACY_COUNTRY_JSON_FACTS = ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params")
+CAPTURE_VERSION = "gearth.economy_capture.v2"
+REQUIRED_AGENT_V2 = ("part_time_student", "arrears_minor", "arrears_weeks", "unpaid_hungry_weeks", "insured_minor",
+    "price_change_tick", "price_change_pct", "units_before_price_change", "profit_before_price_change_minor",
+    "price_before_price_change_minor", "inventory")
+REQUIRED_COUNTRY_V2 = ("infrastructure", "maintenance_funded", "construction_materials_used", "borrowed_builders",
+    "currency_index", "trade_net_week_minor", "trade_gross_week_minor", "endowment", "resource_imports",
+    "bank_failures", "defaulted_loans", "deposit_insurance_paid_minor")
+PROJECT_TYPES = {"id": "string", "type": "string", "level": "long", "condition": "long",
+    "cost_minor": "long", "paid_minor": "long", "started_tick": "long", "ready_tick": "long", "complete": "boolean",
+    "progress_days": "long", "required_days": "long", "progress_fraction": "double", "progress_basis": "string",
+    "required_builders": "long"}
+
+
+def json_fact(payload, key):
+    # SQL null for unknown/absent, JSON literal null for explicitly captured null.
+    if key in (*LEGACY_AGENT_JSON_FACTS, *LEGACY_COUNTRY_JSON_FACTS):
+        # Preserve pre-migration Delta column semantics; original payload proves
+        # the difference between an absent key and explicitly recorded null.
+        return canonical(payload[key]).decode() if payload.get(key) is not None else None
+    return canonical(payload[key]).decode() if key in payload else None
+
+
+def capture_requirements(kind):
+    return REQUIRED_AGENT_V2 if kind == "agent_day" else REQUIRED_COUNTRY_V2 if kind == "nation_day" else ()
+
+
+def validate_capture(record, capture_version):
+    if capture_version == CAPTURE_VERSION:
+        missing = [key for key in capture_requirements(record["kind"]) if key not in record["payload"]]
+        if missing:
+            raise ValueError("v2 capture omitted fields: " + ", ".join(missing))
+        if record["kind"] == "nation_day":
+            for project in record["payload"].get("infrastructure") or []:
+                if isinstance(project, dict) and any(key not in project for key in PROJECT_TYPES):
+                    raise ValueError("v2 capture omitted infrastructure project fields")
+
+
+def structure_facts(payload):
+    structures = {"inventory": dict, "qol_parts_points": dict, "infrastructure": list,
+        "construction_materials_used": list, "borrowed_builders": dict, "endowment": dict, "resource_imports": dict,
+        "powered_sessions_left": dict, "production_input_credits": dict}
+    for key, kind in structures.items():
+        if payload.get(key) is not None and not isinstance(payload[key], kind):
+            raise ValueError("Invalid structured snapshot fact: " + key)
+
+
+def infrastructure_rows(record):
+    """Normalize recorded projects without inventing rows for old or empty lists.
+
+    Derived progress is supplied by the engine with its named basis, never guessed
+    from balances or dates here. Keep the full nation payload and project payload.
+    """
+    payload = record["payload"]
+    projects = payload.get("infrastructure")
+    if projects is None:
+        return []
+    if not isinstance(projects, list):
+        raise ValueError("Invalid infrastructure project list")
+    country = payload.get("country_id", payload.get("id"))
+    seen = set()
+    rows = []
+    for project in projects:
+        if not isinstance(project, dict):
+            raise ValueError("Invalid infrastructure project")
+        fact_types(project, PROJECT_TYPES)
+        identity = project.get("id")
+        if not isinstance(identity, str) or not identity or identity in seen:
+            raise ValueError("Missing or duplicate infrastructure project ID")
+        seen.add(identity)
+        if not isinstance(country, str) or not country:
+            raise ValueError("Infrastructure project missing country ID")
+        row = {key: record[key] for key in ("run_id", "sequence", "tick", "revision")}
+        row.update(country_id=country, frame_kind=payload.get("frame_kind", "day"), project_id=identity,
+            record_sha256=__import__("hashlib").sha256(canonical(record)).hexdigest(),
+            payload_json=canonical(payload).decode(), project_json=canonical(project).decode())
+        row.update({key: project.get(key) for key in PROJECT_TYPES if key != "id"})
+        row["status"] = "complete" if project.get("complete") is True else "under_construction" if project.get("complete") is False else None
+        rows.append(row)
+    return rows
 
 
 def fact_types(payload, types):
@@ -53,7 +146,7 @@ def fact_types(payload, types):
 
 
 def agent_facts(payload):
-    return {**{key: payload.get(key) for key in AGENT_FACTS}, "qol_parts_points": payload.get("qol_parts_points")}
+    return {**{key: payload.get(key) for key in AGENT_FACTS}, **{key: payload.get(key) for key in AGENT_JSON_FACTS}}
 
 TABLES = {"opening_balance": "opening_balances", "agent_day": "agent_daily", "nation_day": "country_daily",
           "transaction": "transactions", "bank_ledger": "bank_ledger", "decision_request": "decision_requests",
@@ -105,18 +198,22 @@ def typed_record(record):
             raise ValueError("equity_minor must be an integer")
     elif kind == "agent_day":
         fact_types(payload, AGENT_TYPES)
+        structure_facts(payload)
         common.update(agent_id=payload["agent_id"], country_id=payload.get("country_id"), role=payload.get("role"),
                       cash_minor=integer(payload["cash_minor"], "cash_minor"), health=payload.get("health"),
                       wellbeing=payload.get("wellbeing"), employer_id=payload.get("employer_id"),
                       decision_maker=payload.get("decision_maker"), closed=payload.get("closed"), frame_kind=payload.get("frame_kind", "day"))
         common.update({key: payload.get(key) for key in AGENT_FACTS})
-        common["qol_parts_points_json"] = canonical(payload.get("qol_parts_points")).decode()
+        for key in AGENT_JSON_FACTS:
+            common[key + "_json"] = json_fact(payload, key)
     elif kind == "nation_day":
         fact_types(payload, COUNTRY_TYPES)
+        structure_facts(payload)
         common.update(country_id=payload.get("country_id", payload.get("id")), frame_kind=payload.get("frame_kind", "day"))
         common.update({key: payload.get(key) for key in COUNTRY_FACTS})
-        for key in ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params"):
-            common[key + "_json"] = canonical(payload.get(key)).decode()
+        for key in COUNTRY_JSON_FACTS:
+            common[key + "_json"] = json_fact(payload, key)
+        infrastructure_rows(record)  # Validate before Spark can cast malformed structures to null.
     elif kind == "decision_request":
         job = payload.get("job", {})
         common.update(decision_id=payload["decision_id"], agent_id=payload["agent_id"], role=payload.get("role"),

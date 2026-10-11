@@ -74,6 +74,26 @@ test('run explorer shows real save markers, full original payloads, report secti
   close(v);
 });
 
+test('expanded feature comparison separates typed null legacy data, retained JSON and absent infrastructure',async()=>{
+  const f=fixture();
+  f.manifest.capture_metadata={ features:{part_time_school:'v1',wage_arrears:'v1',price_response:'v1',currency_trade:'v1',infrastructure:'phase2_v1'},active_features:[] };
+  f.records.records[0].payload={part_time_student:false,arrears_minor:0,price_change_pct:0,currency_index:1,maintenance_funded:false};
+  f.datasets.dataset_catalog.datasets[0].columns.push({name:'arrears_minor',data_type:'bigint',nullable:true,non_null_count:0});
+  f.datasets.dataset_catalog.datasets[0].payload_fields.push({path:'/part_time_student',present_count:205,null_count:0,non_null_count:205,zero_or_false_count:205});
+  f.datasets.dataset_catalog.datasets.push({dataset_id:'silver.infrastructure_daily',availability:'unavailable',unavailable_reason:'table_not_present',row_count:null,columns:[],payload_fields:[],field_coverage_scope:'unavailable'});
+  const v=view({A:f});await ready(v);
+  const rows=[...v.doc.querySelectorAll('#feature-coverage tr')];
+  const schooling=rows.find(row=>row.cells[0].textContent==='Schooling').textContent;
+  assert.match(schooling,/part_time_school: "v1"/);assert.match(schooling,/part_time_student: payload retained.*205 zero\/false/);
+  const wages=rows.find(row=>row.cells[0].textContent==='Labor, wages and unpaid income').textContent;
+  assert.match(wages,/arrears_minor: typed column, 0 non-null; capture not proven by column existence/);
+  const infrastructure=rows.find(row=>row.cells[0].textContent==='Infrastructure and maintenance').textContent;
+  assert.match(infrastructure,/silver.infrastructure_daily: unavailable; no verified rows/);assert.ok(!infrastructure.includes('0 rows'));
+  assert.match(rows.find(row=>row.cells[0].textContent==='Prices and price changes').textContent,/price_response: "v1"/);
+  assert.match(rows.find(row=>row.cells[0].textContent==='Currency and trade balances').textContent,/currency_trade: "v1"/);
+  close(v);
+});
+
 test('catalog discovers new IDs while preserving selected older run and pages through old IDs',async()=>{
   let page=0;
   const v=view({A:fixture('A')},path=>{

@@ -30,6 +30,7 @@ public static class RunAudit
 {
     public const int SchemaVersion = 1;
     public const string PublicServicesContract = "gearth.public_services.v1";
+    public const string EconomyCaptureContract = "gearth.economy_capture.v2";
     public const string MenuContract = "fixed_or_bounded_integer.v1";
 
     public static void PrepareResume(World world, bool enableAnalytics)
@@ -57,17 +58,23 @@ public static class RunAudit
             capture_started_at = world.AuditStartedAt, capture_start_tick = world.Tick,
             schema_version = SchemaVersion, engine_commit = (string?)null
         }).AsObject();
-        configuration["capture_contract_version"] = PublicServicesContract;
+        configuration["capture_contract_version"] = EconomyCaptureContract;
         configuration["features"] = Wire.Node(new
         {
             public_services = world.Society is null ? null : "v1",
             bounded_integer_choices = "v1",
             banking = world.Society is null ? null : SocietyBank.AccountingVersion,
             resources = world.Society is null ? null : "phase1_v1",
-            labor_distribution = world.Society is null ? null : "v1"
+            labor_distribution = world.Society is null ? null : "v1",
+            infrastructure = world.Society is null ? null : "phase2_v1",
+            part_time_school = world.Society is null ? null : "v1",
+            wage_arrears = world.Society is null ? null : "v1",
+            price_response = world.Society is null ? null : "v1",
+            currency_trade = world.Society is null ? null : "v1"
         });
         configuration["active_features"] = Wire.Node(world.Society is null ? new[] { "bounded_integer_choices" }
-            : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices", "deposit_creation", "resources", "labor_distribution" });
+            : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices", "deposit_creation", "resources", "labor_distribution",
+                "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade" });
         configuration["banking_paused"] = world.Society is null ? null : JsonValue.Create(SocietyBank.Paused);
         configuration["economy_configuration"] = world.Society is null ? null : Wire.Node(EconomyConfiguration());
         Append(world, "run_metadata", configuration);
@@ -109,7 +116,9 @@ public static class RunAudit
 
     private static object EconomyConfiguration() => new
     {
-        school = new { SocietyLabor.CourseDays, SocietyLabor.GraduateOutputBoost,
+        school = new { SocietyLabor.CourseDays, SocietyLabor.PartTimeCourseDays,
+            part_time_work_fraction = 0.5, part_time_pay_fraction = 0.5,
+            SocietyLabor.GraduateOutputBoost, SocietyLabor.GraduatePayPremiumPct,
             students_per_teacher = SocietyLabor.SectorOf("school").DailyOutput,
             seeking_better_job_days = SocietyLabor.CourseDays },
         health = new { SocietyEconomy.VisitHealthGain, SocietyEconomy.MedicineHealthGain,
@@ -121,6 +130,21 @@ public static class RunAudit
             SocietyEconomy.SavingsHorizonWeeks, parts_basis = "snapshot_state_recomputed",
             wellbeing_basis = "engine_smoothed_score", adjustment_divisor = 4 },
         planning = new { SocietyPlanning.PlanningWeeks, SocietyPlanning.PlannedSectors },
+        labor = new { SocietyLabor.DaysPerWeek, SocietyLabor.ArrearsStrikeWeeks, SocietyLabor.OwnerGivesUpWeeks,
+            SocietyLabor.MaxPriceStepPct, SocietyLabor.IndexationDays, SocietyLabor.IndexationShare },
+        infrastructure = new
+        {
+            SocietyInfrastructure.AdvanceShare, upkeep_cost_fraction_per_week = 0.01,
+            unfunded_condition_loss_per_week = 2,
+            progress_basis = "engine_remaining_schedule_ticks",
+            catalog = PhaseContracts.Catalog.Where(spec => spec.Type is not (PhaseContracts.Missile or PhaseContracts.Turret))
+                .Select(spec => new { spec.Type, spec.Builders, spec.Ticks, spec.CostMinor, spec.MaxLevel, spec.Effects,
+                    levels = Enumerable.Range(1, spec.MaxLevel).Select(level => new
+                    { level, cost_minor = PhaseContracts.CostOf(spec.Type, level), materials = PhaseContracts.Materials(spec.Type, level) }) })
+        },
+        currency_trade = new { SocietyTrade.CurrencyStep, SocietyTrade.CurrencyFloor, SocietyTrade.CurrencyCeiling,
+            balance_basis = "world_value_orders_current_week_exports_positive",
+            planned_economy_rate = "fixed_official_index_1", rate_basis = "single_money_treasury_surcharge_rebate" },
         banking = new { SocietyBank.Paused, SocietyBank.ReserveRatioPct, SocietyBank.CapitalRatioPct, SocietyBank.AccountingVersion, SocietyBank.CashBufferWeeks,
             automatic_topups = "best_effort_proportional_spare_reserves_no_insurance",
             foreign_goods_settlement = "cash_escrow_domestic_fees_deposits",
@@ -157,6 +181,9 @@ public static class RunAudit
         agent.GoodsBoughtLastWeek, agent.ServicesBoughtLastWeek, agent.LastWeekWellbeing,
         agent.SickDays, agent.Hungry, agent.NeedsMet, agent.HungryThisWeek, agent.PricedOutThisWeek, agent.InKindMinor,
         agent.StudentUntilTick, agent.SchoolId, agent.Graduated, agent.SeekingUntilTick,
+        agent.PartTimeStudent, agent.ArrearsMinor, agent.ArrearsWeeks, agent.UnpaidHungryWeeks, agent.InsuredMinor,
+        agent.PriceChangeTick, agent.PriceChangePct, agent.UnitsBeforePriceChange,
+        agent.ProfitBeforePriceChangeMinor, agent.PriceBeforePriceChangeMinor,
         is_student = SocietyLabor.IsStudent(agent), seeking_better_job = agent.SeekingUntilTick >= world.Tick,
         too_sick = SocietyLabor.IsResident(agent) ? (bool?)SocietyEconomy.TooSick(agent) : null,
         works_overtime = SocietyLabor.IsResident(agent) ? (bool?)SocietyLabor.WorksOvertime(world, agent) : null,
@@ -171,7 +198,8 @@ public static class RunAudit
         agent.DepositMinor, agent.KeepsSavingsInBank, agent.DepositRatePct, agent.LoanRatePct,
         agent.LendingStandard, agent.UnmetWithdrawalsMinor,
         agent.WeekInMinor, agent.WeekOutMinor, agent.LastWeekInMinor, agent.LastWeekOutMinor,
-        agent.WageIndexReference, agent.LastWeekDisposableIncomeMinor, agent.LastWeekRealIncomeMinor,
+        agent.WageIndexReference, agent.WeekDisposableIncomeMinor, agent.WeekWorkDays,
+        agent.LastWeekDisposableIncomeMinor, agent.LastWeekRealIncomeMinor,
         agent.LastWeekWorkDays, agent.LastWeekIncomeTick,
         agent.LastWeekIncomeConstrained, agent.LastWeekOperatingProfitMinor,
         last_week_operating_cash_surplus_minor = agent.LastWeekOperatingProfitMinor,
@@ -179,11 +207,11 @@ public static class RunAudit
             : (long)agent.OperatingSurplusWeeksMinor.Average(),
         operating_cash_surplus_observed_weeks = agent.OperatingSurplusWeeksMinor.Count,
         agent.OperatingSurplusWeeksMinor, agent.EstateBeneficiaryId, agent.EstateCreditIds, agent.EstateFinalized,
-        agent.DepositInterestSuspended,
+        agent.DepositInterestSuspended, agent.EstateUnreportedPayoutMinor,
         net_wealth_minor = SocietyLabor.IsResident(agent) ? (long?)SocietyMetrics.NetWealth(world, agent) : null
     };
 
-    private static object NationState(Nation nation) => new
+    private static object NationState(World world, Nation nation) => new
     {
         nation.TaxBasisPoints, nation.WelfareMinor, nation.UnemploymentBenefitMinor,
         nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints, nation.ServiceBudgetPerResidentMinor, nation.Productivity,
@@ -197,10 +225,30 @@ public static class RunAudit
         nation.DoctorVisits, nation.PublicDoctorVisits, nation.DividendsPaidMinor, nation.UnemploymentPaidMinor,
         nation.BusinessesStarted, nation.BusinessesClosed, nation.DepositInsurancePaidMinor,
         nation.BankFailures, nation.DefaultedLoans,
+        infrastructure = nation.Infrastructure.Select(project => ProjectState(world, project)).ToArray(),
+        nation.MaintenanceFunded,
+        construction_materials_used = nation.ConstructionMaterialsUsed.Order(StringComparer.Ordinal).ToArray(),
+        nation.BorrowedBuilders, nation.CurrencyIndex, nation.TradeNetWeekMinor, nation.TradeGrossWeekMinor,
+        nation.Endowment, nation.ResourceImports, nation.PoweredSessionsLeft, nation.ProductionInputCredits,
+        nation.TaxChangedTick, nation.LivingCostAtReview, nation.CrisisUntilTick, nation.CrisisGood,
         nation.EmployedResidents, nation.LaborForce, nation.Nonparticipants, nation.JoblessResidents,
         nation.GiniDisposableIncome, nation.GiniNetWealth, nation.EssentialsBasketMinor, nation.MedianRealDisposableIncomeMinor,
         labor_and_distribution = SocietyMetrics.View(nation)
     };
+
+    // The engine uses the remaining schedule to measure work; payments are separate from progress.
+    private static object ProjectState(World world, Project project)
+    {
+        var spec = PhaseContracts.Spec(project.Type);
+        var progress = project.Complete ? spec.Ticks : Math.Clamp(spec.Ticks - (project.ReadyTick - world.Tick), 0, spec.Ticks);
+        return new
+        {
+            project.Id, project.Type, project.Level, project.Condition, project.CostMinor, project.PaidMinor,
+            project.StartedTick, project.ReadyTick, project.Complete,
+            progress_days = progress, required_days = spec.Ticks, progress_fraction = (double)progress / spec.Ticks,
+            progress_basis = "engine_remaining_schedule_ticks", required_builders = spec.Builders
+        };
+    }
 
     // Exactly one row per agent per simulated day. Call at the day's boundary, after late results.
     // Opening balances contain tick-zero state; final checkpoint contains terminal state.
@@ -249,7 +297,7 @@ public static class RunAudit
                             edge = cargo.Plan?.EdgeIds.ElementAtOrDefault(cargo.EdgeIndex), cargo.EdgeRemainingTicks
                         }).ToArray()
                 }).AsObject();
-                foreach (var field in Wire.Node(NationState(nation)).AsObject())
+                foreach (var field in Wire.Node(NationState(world, nation)).AsObject())
                     payload[field.Key] = field.Value?.DeepClone();
                 Append(world, "nation_day", payload);
             }
@@ -420,7 +468,7 @@ public static class RunAudit
             if (agent.Role is "government" or "planner" && world.Society is { } society)
             {
                 var nation = society.Nations[agent.CountryId];
-                states["n:" + nation.Id] = Wire.Node(NationState(nation));
+                states["n:" + nation.Id] = Wire.Node(NationState(world, nation));
                 if (action.Params["edge_id"]?.GetValue<string>() is { } edge)
                     states["r:" + edge] = Wire.Node(world.Routes[edge]);
                 if (action.Params["country_id"]?.GetValue<string>() is { } country)

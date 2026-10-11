@@ -329,11 +329,14 @@
     return { scope:"displayed_page", record_count:objects.length, max_depth:maxDepth, array_elements:false, truncated, fields:[...fields.values()].sort((a,b) => a.path.localeCompare(b.path)) };
   }
   const features = [
-    { name:"Banking / deposits", keys:["banking","deposit_creation"], terms:["bank","banking","deposit_minor","bank_ledger","deposit"] },
-    { name:"School, health and public services", keys:["public_services","school"], terms:["school","health","hungry","hunger","public_service","clinic","qol","quality_of_life","is_student","enrolled_students"] },
-    { name:"Labor and income distribution", keys:["labor_distribution"], terms:["disposable_income","labor_force","inequality","wage","salary"] },
-    { name:"Resources", keys:["resources"], terms:["inventory","stock","endowment","resources"] },
-    { name:"Infrastructure", keys:["infrastructure"], terms:["infrastructure","construction","maintenance"] },
+    { name:"Banking / deposits", keys:["banking","deposit_creation"], terms:["bank","banking","deposit_minor","bank_ledger","deposit","insured_minor"] },
+    { name:"Schooling", keys:["public_services","school","part_time_school"], terms:["school","is_student","student","part_time_student","enrolled_students"] },
+    { name:"Health and public services", keys:["public_services"], terms:["health","hungry","hunger","public_service","clinic","qol","quality_of_life"] },
+    { name:"Labor, wages and unpaid income", keys:["labor_distribution","wage_arrears"], terms:["disposable_income","labor_force","inequality","wage","salary","arrears","unpaid_hungry_weeks"] },
+    { name:"Prices and price changes", keys:["price_response"], terms:["price","price_change","units_before_price_change","profit_before_price_change_minor","price_before_price_change_minor"] },
+    { name:"Currency and trade balances", keys:["currency_trade"], terms:["currency","trade_net_week_minor","trade_gross_week_minor","trade_value_minor"] },
+    { name:"Resources", keys:["resources"], terms:["inventory","stock","endowment","resource","resources"] },
+    { name:"Infrastructure and maintenance", keys:["infrastructure"], terms:["infrastructure","construction","maintenance","borrowed_builders"] },
     { name:"War", keys:["war","warfare"], terms:["war","warfare","military"] },
     { name:"Central banks", keys:["central_banks","central_bank"], terms:["central_bank","central_banks"] }
   ];
@@ -364,11 +367,14 @@
     if (!state.datasets) return `${label(state.manifest?.databricks_status)} · per-run field coverage unknown`;
     const evidence = [];
     for (const dataset of state.datasets.datasets || []) {
-      if (dataset.availability === "unavailable") continue;
+      if (dataset.availability === "unavailable") {
+        if (matches(dataset.dataset_id,feature.terms)) evidence.push(`${dataset.dataset_id}: unavailable; no verified rows`);
+        continue;
+      }
       const typed = (dataset.columns || []).filter(column => matches(column.name,feature.terms));
       const fields = (dataset.payload_fields || []).filter(field => matches(field.path,feature.terms));
-      if (matches(dataset.dataset_id,feature.terms)) evidence.push(`${dataset.dataset_id}: ${number(dataset.row_count)} rows`);
-      for (const column of typed.slice(0,3)) evidence.push(`${dataset.dataset_id}.${column.name}: typed column, ${number(column.non_null_count)} non-null`);
+      if (matches(dataset.dataset_id,feature.terms)) evidence.push(`${dataset.dataset_id}: ${number(dataset.row_count)} rows${dataset.row_count === 0 ? "; empty table alone does not prove capture" : ""}`);
+      for (const column of typed.slice(0,3)) evidence.push(`${dataset.dataset_id}.${column.name}: typed column, ${number(column.non_null_count)} non-null${column.non_null_count === 0 && dataset.row_count > 0 ? "; capture not proven by column existence" : ""}`);
       for (const field of fields.slice(0,3)) evidence.push(`${dataset.dataset_id}${field.path}: payload retained, ${number(field.present_count)} present, ${number(field.null_count)} null, ${number(field.zero_or_false_count)} zero/false${typed.length ? "" : "; typed feature column not shown"}`);
     }
     return evidence.length ? evidence.slice(0,7).join("; ") + (evidence.length > 7 ? "; more in dataset field inventory" : "") : "No matching field in published inventory · unknown beyond its coverage limits";

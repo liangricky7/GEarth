@@ -4,7 +4,7 @@ The flow is simulation → Neon → finished-run export → Databricks → cache
 
 ## Capture a new run
 
-Add `--analytics` to a new world run. For an isolated rule baseline:
+Fresh normal `--world` runs capture analytics by default; `--analytics` is still accepted and `--no-analytics` explicitly disables capture. Saved-run inspection and forks keep their original capture boundaries. Direct API deployments must set `GEARTH_ANALYTICS=true` for fresh runs. For an isolated rule baseline:
 
 ```sh
 .venv/bin/python ops/run_stage1.py --world --storage local --analytics --population 200 --ticks 8 --interval 0

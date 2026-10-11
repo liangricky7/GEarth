@@ -20,7 +20,7 @@ public sealed class AnalyticsBrowseStore(string directory)
     {
         "bronze.audit", "silver.opening_balances", "silver.agent_daily", "silver.country_daily", "silver.transactions",
         "silver.bank_ledger", "silver.decision_requests", "silver.decision_results", "silver.action_effects", "silver.events",
-        "silver.runs", "silver.decision_options", "silver.event_edges", "gold.agent_days", "gold.agent_latest",
+        "silver.runs", "silver.decision_options", "silver.event_edges", "silver.infrastructure_daily", "gold.agent_days", "gold.agent_latest",
         "gold.country_days", "gold.public_service_days", "gold.public_service_transfers", "gold.import_receipts"
     };
     public static string Text(JsonObject obj, string key) => obj[key] is JsonValue value && value.TryGetValue<string>(out var text)

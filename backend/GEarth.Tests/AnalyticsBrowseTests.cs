@@ -64,6 +64,26 @@ public sealed class AnalyticsBrowseTests
         }
         public JsonObject Dataset => Manifest["datasets"]![0]!.AsObject();
         public JsonObject Chunk => Dataset["chunks"]![0]!.AsObject();
+        public async Task AddInfrastructureDataset()
+        {
+            const string relative = "silver.infrastructure_daily/000000.ndjson.gz";
+            var row = Node(new { run_id = World.Id, project_id = "hospital_1", condition = 0, complete = false,
+                source_manifest_sha256 = AnalyticsBrowseStore.Digest(Source), revision = World.Revision,
+                sequence = World.AuditSequence, payload_json = "{\"maintenance_funded\":false,\"legacy_unknown\":null}" });
+            var bytes = Encoding.UTF8.GetBytes(row.ToJsonString(Wire.Json) + "\n");
+            var path = Path.Combine(Bundle, relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await using (var stream = File.Create(path)) await using (var gzip = new GZipStream(stream, CompressionLevel.Fastest)) await gzip.WriteAsync(bytes);
+            var compressed = await File.ReadAllBytesAsync(path);
+            Manifest["datasets"]!.AsArray().Add(Node(new { dataset_id = "silver.infrastructure_daily",
+                table_name = "workspace.gearth_silver.infrastructure_daily", availability = "available", row_count = 1,
+                columns = row.Select(pair => new { name = pair.Key, data_type = pair.Key is "condition" or "revision" or "sequence" ? "bigint" : pair.Key == "complete" ? "boolean" : "string", nullable = false, non_null_count = 1 }).ToArray(),
+                payload_fields = new[] { new { path = "/maintenance_funded", present_count = 1, null_count = 0, non_null_count = 1, zero_or_false_count = 1 },
+                    new { path = "/legacy_unknown", present_count = 1, null_count = 1, non_null_count = 0, zero_or_false_count = 0 } },
+                payload_source = "payload_json", field_coverage_scope = "all_run_rows_bounded_inventory",
+                field_coverage_limit = new { max_depth = 4, array_elements = false },
+                chunks = new[] { new { path = relative, row_count = 1, sha256 = AnalyticsBrowseStore.Digest(compressed), compressed_bytes = compressed.Length, uncompressed_bytes = bytes.Length } } }));
+            await Rebuild();
+        }
         public async Task Rebuild()
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(Manifest, Wire.Json); await File.WriteAllBytesAsync(Path.Combine(Bundle, "browse-manifest.json"), bytes);
@@ -92,6 +112,29 @@ public sealed class AnalyticsBrowseTests
         var datasets = Node(await service.Datasets(f.World.Id, default)); Assert.Equal(2, datasets["dataset_catalog"]!["datasets"]!.AsArray().Count);
         Assert.Equal(f.Report["dataset_catalog"]!["bundle_manifest_sha256"]!.GetValue<string>(), datasets["bundle_manifest_sha256"]!.GetValue<string>());
         var noRows = await Assert.ThrowsAsync<AnalyticsException>(() => f.Browse.Rows(f.Report, "silver.bank_ledger", null, 100, default)); Assert.Equal(404, noRows.StatusCode);
+    }
+    [Fact]
+    public async Task InfrastructureRowsPreserveSourcePinsZeroFalseAndNullWithoutInventingLegacyData()
+    {
+        using var f = new Fixture(); await f.Initialize(0);
+        await f.Publish();
+        Assert.Equal(404, (await Assert.ThrowsAsync<AnalyticsException>(() => f.Browse.Rows(f.Report, "silver.infrastructure_daily", null, 100, default))).StatusCode);
+        await f.AddInfrastructureDataset(); await f.Publish();
+        var page = Node(await f.Browse.Rows(f.Report, "silver.infrastructure_daily", null, 100, default));
+        var row = Assert.Single(page["rows"]!.AsArray());
+        Assert.Equal(0, row!["condition"]!.GetValue<int>()); Assert.False(row["complete"]!.GetValue<bool>());
+        Assert.Equal(AnalyticsBrowseStore.Digest(f.Source), row["source_manifest_sha256"]!.GetValue<string>());
+        var payload = JsonNode.Parse(row["payload_json"]!.GetValue<string>())!.AsObject();
+        Assert.False(payload["maintenance_funded"]!.GetValue<bool>()); Assert.True(payload.ContainsKey("legacy_unknown")); Assert.Null(payload["legacy_unknown"]);
+    }
+    [Fact]
+    public async Task InfrastructureCoverageClaimsStillMustMatchItsMeasuredRows()
+    {
+        using var f = new Fixture(); await f.Initialize(0); await f.AddInfrastructureDataset();
+        f.Manifest["datasets"]![2]!["payload_fields"]![0]!["zero_or_false_count"] = 0L;
+        await f.Rebuild();
+        Assert.Contains("Measured payload field coverage", (await Assert.ThrowsAsync<AnalyticsException>(() => f.Publish())).Message);
+        Assert.Null(await f.Store.ReadAnalyticsReport(f.World.Id, default));
     }
     [Fact]
     public async Task CursorRejectsCrossDatasetAndStalePublication()

@@ -131,7 +131,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         var tickLimit = ReadNumber("GEARTH_TICKS", 360, 1, 10000);
         var interval = ReadNumber("GEARTH_INTERVAL_MS", 2000, 0, 30000);
         var capacity = ReadNumber("GEARTH_CAPACITY", 64, 1, 384);
-        var population = ReadNumber("GEARTH_POPULATION", 1100, 170, 100000);
+        var population = ReadNumber("GEARTH_POPULATION", 1100, 200, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
         var resumeId = Environment.GetEnvironmentVariable("GEARTH_RESUME_RUN_ID");

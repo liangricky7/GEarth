@@ -98,7 +98,7 @@ def main():
     parser.add_argument("--max-runs", type=int, default=0, help="0 means unlimited")
     parser.add_argument("--min-free-mib", type=int, default=1024)
     options = parser.parse_args()
-    if (not 170 <= options.population <= 100000 or not 1 <= options.ticks <= 10000
+    if (not 200 <= options.population <= 100000 or not 1 <= options.ticks <= 10000
             or not 0 <= options.interval <= 30 or not 1 <= options.first_seed < 2147483647
             or options.pause < 0 or options.max_runs < 0 or options.min_free_mib < 0):
         parser.error("Invalid experiment settings")

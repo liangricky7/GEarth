@@ -18,7 +18,7 @@ public sealed class CoordinatorAuditTests
         var settings = new Dictionary<string, string?>
         {
             ["GEARTH_ANALYTICS"] = "true", ["GEARTH_WORLD"] = "true", ["GEARTH_LIVE"] = "false",
-            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "170", ["GEARTH_INTERVAL_MS"] = "0",
+            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "200", ["GEARTH_INTERVAL_MS"] = "0",
             ["GEARTH_VERBOSE"] = "false", ["GEARTH_SAVED_RUN_ID"] = null,
             ["GEARTH_COMPUTE_PROVIDERS"] = null, ["GEARTH_RESUME_RUN_ID"] = null
         };
@@ -77,7 +77,7 @@ public sealed class CoordinatorAuditTests
         var settings = new Dictionary<string, string?>
         {
             ["GEARTH_ANALYTICS"] = "false", ["GEARTH_WORLD"] = "true", ["GEARTH_LIVE"] = "false",
-            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "170", ["GEARTH_INTERVAL_MS"] = "0",
+            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "200", ["GEARTH_INTERVAL_MS"] = "0",
             ["GEARTH_VERBOSE"] = "false", ["GEARTH_SAVED_RUN_ID"] = null,
             ["GEARTH_COMPUTE_PROVIDERS"] = null, ["GEARTH_RESUME_RUN_ID"] = runId,
             ["GEARTH_TIMELINE"] = "ordinary_fork", ["GEARTH_FORK_GOVERNMENT"] = null
@@ -89,7 +89,7 @@ public sealed class CoordinatorAuditTests
                 Environment.SetEnvironmentVariable(key, value);
             var parentStore = new LocalStore(parentDirectory);
             await parentStore.Initialize(CancellationToken.None);
-            var parent = SocietyFactory.Create(runId, false, 170);
+            var parent = SocietyFactory.Create(runId, false, 200);
             RunAudit.Enable(parent);
             for (var day = 1; day <= 6; day++)
             {

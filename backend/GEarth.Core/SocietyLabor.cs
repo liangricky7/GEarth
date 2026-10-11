@@ -67,7 +67,7 @@ public static class SocietyLabor
     // Unskilled jobs are open to anyone after a spell of unemployment, so skilled workers can step down;
     // doctors and researchers also move between each other. Banks train their own staff, so anyone can
     // become a banker. Teachers are skilled; soldiers and planners are public-sector only.
-    public static readonly string[] Unskilled = ["farmer", "service_worker", "energy_worker", "factory_worker", "dockworker"];
+    public static readonly string[] Unskilled = ["farmer", "service_worker", "energy_worker", "factory_worker", "dockworker", "miner", "builder"];
 
     public static bool CanSwitch(string from, string to) => from == to
         || Unskilled.Contains(to) || to == "banker"

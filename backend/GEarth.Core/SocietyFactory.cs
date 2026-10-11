@@ -85,7 +85,7 @@ public static class SocietyFactory
 
     public static World Create(string id, bool live, int population, int seed = 20261010, int rotation = 0)
     {
-        if (population < Geography.Length * (InstitutionsPerCountry + 1) || population > 100000)
+        if (population < Math.Max(200, Geography.Length * (InstitutionsPerCountry + 1)) || population > 100000)
             throw new ArgumentOutOfRangeException(nameof(population));
 
         var world = new World

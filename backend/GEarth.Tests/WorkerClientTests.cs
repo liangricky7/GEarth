@@ -62,6 +62,8 @@ public sealed class WorkerClientTests
     public async Task WorkerHttpRejectionPreservesStatusAndMeasuredDuration(int status)
     {
         var (world, job) = CreateJob();
+        if (status == 429)
+            job = job with { Deadline = DateTimeOffset.UtcNow.AddMilliseconds(200) };
         using var http = new HttpClient(new Handler(async (_, token) =>
         {
             await Task.Delay(10, token);
@@ -78,6 +80,67 @@ public sealed class WorkerClientTests
         Assert.Equal(status, world.Events.Last().Payload["error_http_status"]!.GetValue<int>());
         Assert.Equal(0, world.Society!.ModelDecisionCount);
         Assert.Equal(1, world.Society.FallbackDecisionCount);
+    }
+
+    [Fact]
+    public async Task BusyWorkerRetriesTheSameJobAndAcceptsTheModelResult()
+    {
+        var (_, job) = CreateJob();
+        var attempts = 0;
+        using var http = new HttpClient(new Handler(async (request, token) =>
+        {
+            var received = await request.Content!.ReadFromJsonAsync<DecisionJob>(Wire.Json, token);
+            Assert.Equal(job.RequestId, received!.RequestId);
+            Assert.Equal(job.Deadline, received.Deadline);
+            Assert.Equal(job.ObservationTick, received.ObservationTick);
+            if (++attempts < 3)
+            {
+                var busy = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+                busy.Headers.RetryAfter = new(TimeSpan.FromMilliseconds(250));
+                return busy;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = JsonContent.Create(ModelResult(job), options: Wire.Json) };
+        }));
+        var result = await WorkerClient.Decide(http, job, true, CancellationToken.None);
+        Assert.Equal(3, attempts);
+        Assert.Equal("model", result.Source);
+        Assert.Null(result.ErrorCategory);
+        Assert.True(result.CoordinatorLatencyMs >= 400);
+        Assert.Equal(7, result.LatencyMs);
+    }
+
+    [Fact]
+    public async Task BusyRetryHonorsHostCancellationWithoutApplyingFallback()
+    {
+        var (_, job) = CreateJob();
+        var seen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var http = new HttpClient(new Handler((_, _) =>
+        {
+            seen.SetResult();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+        }));
+        using var stop = new CancellationTokenSource();
+        var request = WorkerClient.Decide(http, job, true, stop.Token);
+        await seen.Task;
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+    }
+
+    [Fact]
+    public async Task DecisionDeadlineBoundsARequestEvenWithALongerHttpTimeout()
+    {
+        var (_, job) = CreateJob();
+        job = job with { Deadline = DateTimeOffset.UtcNow.AddMilliseconds(100) };
+        using var http = new HttpClient(new Handler(async (_, token) =>
+        {
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Unreachable");
+        }));
+        var result = await WorkerClient.Decide(http, job, true, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal("worker_timeout", result.ErrorCategory);
+        Assert.Equal("rule_fallback", result.Source);
     }
 
     [Theory]

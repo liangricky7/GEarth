@@ -222,15 +222,14 @@ pool finishes in one wave. Tick pacing (2 s) already overlaps inference.
 | # | Change | Status |
 |---|---|---|
 | P1 | Upload the Neon week-boundary checkpoint in the background while the next tick dispatches decisions | built |
-| P2 | World-run worker timeout 60 s -> 20 s; run notes report worker latency p50/p95/max and timeouts per backend | built |
+| P2 | World-run worker timeout 60 s -> 20 s; run notes report worker latency p50/p95/max and timeouts per backend | timeout reverted after run a24105; latency notes retained |
 | P3 | Raise 8B concurrency (16 -> 24-32 per Spark) | rejected: serving frozen |
 | P4 | FP8 8B weights | rejected: serving frozen |
 | P5 | Move entrepreneurs to 4B | rejected: entrepreneurs keep 8B |
 | P6 | Entrepreneurs decide every 2 weeks (rotation like citizens) | open |
 | P7 | Let stragglers spill past the weekly barrier | rejected |
 
-Check after the next run: the latency note's p95 for spark_a/spark_b against the 20 s timeout. Planner and
-ranged-value turns make 2-3 model calls inside that budget.
+Run `world_20261011_101952_a24105` exposed a timeout/admission cascade: at day 49 there were 452 accepted model decisions and 1,486 fallbacks. Model timeouts triggered provider cooldowns, and HTTP 429 admissions were immediately counted as fallback holds. Restore the 60-second world budget (planner and ranged-value turns make 2-3 model calls), and retry busy-worker admissions with backoff within the unchanged 65-second proposal deadline. Authentication and other HTTP errors remain explicit failures; cancellation abandons the request. Verify the replacement run using fallback categories and model coverage, not just elapsed run time.
 
 ## Deferred
 

@@ -12,10 +12,13 @@ dbutils.widgets.text("library_zip", "/Volumes/workspace/faultline_bronze/run_exp
 import sys
 from pathlib import Path
 sys.path.insert(0, dbutils.widgets.get("library_zip"))
-from analytics.validate import validate, read_manifest, safe_file
+from analytics.validate import validate, read_manifest, safe_file, iter_records
 from analytics.export import canonical
 from analytics.report import build_report
 from analytics.delta_validation import qualify_delta
+from analytics.transform import AGENT_TYPES, COUNTRY_TYPES
+from analytics.conditions import comparison_conditions
+from analytics.schema import nullable_additions
 from pyspark.sql import functions as F
 from delta.tables import DeltaTable
 
@@ -25,6 +28,12 @@ integrity = validate(manifest_path)  # bounded driver iteration, never collect a
 manifest = read_manifest(manifest_path)
 run = manifest["run"]
 manifest_hash = integrity["source_manifest_sha256"]
+metadata_rows = iter_records(manifest_path, manifest)
+try:
+    original_metadata = next(metadata_rows)["payload"]
+finally:
+    metadata_rows.close()
+conditions = comparison_conditions(original_metadata)
 display(spark.createDataFrame([integrity]))
 
 # COMMAND ----------
@@ -37,6 +46,15 @@ def insert_only(frame, table, keys):
     if not spark.catalog.tableExists(table):
         # Even zero-decision RULE runs expose typed empty investigation tables.
         frame.limit(0).write.format("delta").mode("error").saveAsTable(table)
+    else:
+        # Add nullable projections only. Existing raw/hash/facts remain immutable;
+        # older rows retain null for unavailable new observations.
+        existing_types = {field.name: field.dataType.simpleString() for field in spark.table(table).schema.fields}
+        new_types = {field.name: field.dataType.simpleString() for field in frame.schema.fields}
+        additions = ["`" + name.replace("`", "``") + "` " + datatype
+                     for name, datatype in nullable_additions(existing_types, new_types).items()]
+        if additions:
+            spark.sql(f"ALTER TABLE {table} ADD COLUMNS (" + ", ".join(additions) + ")")
     if frame.limit(1).count() == 0:
         return
     duplicates = frame.groupBy(*keys).count().where("count > 1")
@@ -67,6 +85,24 @@ projections = {
     "event": ("events", ["run_id", "event_sequence"], {"event_id": F.coalesce(p("event_id"), p("id")), "event_sequence": p("seq", "long"), "event_type": p("event_type"), "source": p("source"), "cause_ids_json": p("cause_ids"), "entity_ids_json": p("entity_ids")}),
     "run_metadata": ("runs", ["run_id"], {"seed": p("seed", "long"), "mode": p("mode"), "government_rotation": p("government_rotation", "long"), "tick_limit": p("tick_limit", "long"), "population": F.coalesce(p("initial_population", "long"), p("population", "long")), "engine_commit": p("engine_commit"), "configuration_json": p("configuration")}),
 }
+projections["opening_balance"][2]["creation_tick"] = p("creation_tick", "long")
+
+# Public-services v1 adds nullable fields without reinterpreting old run facts.
+for field, datatype in AGENT_TYPES.items():
+    projections["agent_day"][2][field] = p(field, datatype)
+projections["agent_day"][2]["qol_parts_points_json"] = p("qol_parts_points")
+for field, datatype in COUNTRY_TYPES.items():
+    projections["nation_day"][2][field] = p(field, datatype)
+for field in ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params"):
+    projections["nation_day"][2][field + "_json"] = p(field)
+for field in ("active_features", "features", "economy_configuration"):
+    projections["run_metadata"][2][field + "_json"] = p(field)
+projections["run_metadata"][2].update(banking_paused=p("banking_paused", "boolean"), capture_contract_version=p("capture_contract_version"))
+projections["run_metadata"][2].update(condition_signature=F.lit(conditions["signature"]), conditions_known=F.lit(conditions["known"]),
+    conditions_unknown_json=F.lit(canonical(conditions["unknown"]).decode()))
+projections["decision_request"][2]["menu_parameter_contract"] = p("menu_parameter_contract")
+projections["decision_result"][2].update(selected_params_json=F.coalesce(p("selected_params"), p("result.action.params")),
+    selection_match_count=p("selection_match_count", "long"), selection_provenance=p("selection_provenance"))
 
 # COMMAND ----------
 for entry in manifest["files"]:
@@ -94,8 +130,10 @@ for entry in manifest["files"]:
             insert_only(edges, "workspace.faultline_silver.event_edges", ["run_id", "event_id", "cause_event_id"])
         elif kind == "decision_request":
             options = typed.select("run_id", "decision_id", "agent_id", "sequence", "record_sha256", "source_manifest_sha256", "payload_json",
-                F.posexplode(F.from_json("options_json", "array<struct<action_type:string,params:map<string,string>>>" )).alias("option_index", "option"))
-            options = options.select("run_id", "decision_id", "agent_id", "sequence", "record_sha256", "source_manifest_sha256", "payload_json", "option_index", F.col("option.action_type").alias("action_type"), F.to_json(F.col("option.params")).alias("typed_params_json"))
+                "options_json", F.posexplode(F.from_json("options_json", "array<struct<action_type:string>>" )).alias("option_index", "option"))
+            options = options.select("run_id", "decision_id", "agent_id", "sequence", "record_sha256", "source_manifest_sha256", "payload_json", "option_index", F.col("option.action_type").alias("action_type"),
+                F.lit(None).cast("string").alias("typed_params_json"),
+                F.expr("get_json_object(options_json,concat('$[',cast(option_index as string),'].params'))").alias("offered_params_json"))
             insert_only(options, "workspace.faultline_silver.decision_options", ["run_id", "decision_id", "option_index"])
 
 # COMMAND ----------
@@ -123,6 +161,15 @@ CAST(get_json_object(payload_json,'$.unmet_needs') AS BIGINT) AS unmet_needs,
 CAST(get_json_object(payload_json,'$.government_cash_minor') AS BIGINT) AS treasury_minor,
 payload_json,source_manifest_sha256
 FROM workspace.faultline_silver.country_daily WHERE frame_kind='day'""")
+spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.public_service_days AS
+SELECT run_id,country_id,tick,sequence,government_type,students,graduates,job_seekers,hungry_residents,
+too_sick_residents,average_health,average_wellbeing,food_subsidy_pct,food_subsidy_paid_minor,
+startup_grants_paid_minor,capitation_paid_minor,tuition_subsidy_pct,student_stipend,hiring_bonus_minor,
+output_lost_to_hunger_pct,plan_json,qol_parts_json,planning_view_json,last_policy_params_json,
+payload_json,source_manifest_sha256 FROM workspace.faultline_silver.country_daily WHERE frame_kind='day'""")
+spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.public_service_transfers AS
+SELECT * FROM workspace.faultline_silver.transactions WHERE transfer_kind IN
+('startup_grant','food_subsidy','tuition','tuition_subsidy','student_stipend','hiring_bonus','capitation','public_healthcare','sick_pay')""")
 
 # COMMAND ----------
 # Emit a cached report only after the entire manifest has imported successfully.
@@ -137,7 +184,7 @@ if report_path.exists() and report_path.read_bytes() != report_bytes:
     if any(previous[key] != report[key] for key in ("run_id", "through_revision", "through_sequence", "source_manifest_sha256")):
         raise ValueError("Existing cached report has conflicting source provenance")
     if previous["analysis_version"] == report["analysis_version"]:
-        if any(previous[key] != report[key] for key in ("summary", "checks", "completeness", "agents", "countries", "government_comparison", "evidence_refs")):
+        if any(previous[key] != report[key] for key in ("summary", "checks", "completeness", "agents", "countries", "government_comparison", "public_services", "evidence_refs")):
             raise ValueError("Existing cached report has conflicting analysis at the same version")
     else:
         import re

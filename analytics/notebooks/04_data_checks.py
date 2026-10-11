@@ -80,7 +80,7 @@ if export_directory:
         raise ValueError("Selected run differs from source manifest")
     qualification = qualify_delta(spark, manifest, integrity["source_manifest_sha256"])
     qualification["gold"] = {}
-    for name in ("import_receipts", "agent_days", "agent_latest", "country_days", "agent_timeline"):
+    for name in ("import_receipts", "agent_days", "agent_latest", "country_days", "agent_timeline", "public_service_days", "public_service_transfers"):
         target_table = "workspace.faultline_gold." + name
         qualification["gold"][name] = {"available": spark.catalog.tableExists(target_table)}
         if qualification["gold"][name]["available"]:

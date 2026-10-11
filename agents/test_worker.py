@@ -337,11 +337,60 @@ def test_free_numbers_fill_ranged_fields_within_bounds():
     assert worker.render_action(1, job.candidates[1]) == (
         "1: set_plan food=<integer 0-1000, now 700> energy=<integer 0-900, now 800>"
     )
-    for values in ({"food": 720}, {"food": 1001, "energy": 1}, {"food": "720", "energy": 1}, None):
+    for values in (
+        {"food": 720}, {"food": 1001, "energy": 1}, {"food": "720", "energy": 1}, None,
+        {"food": 720, "energy": 810, "invented": 1}, {"food": -1, "energy": 810},
+        {"food": True, "energy": 810}, {"food": 720.0, "energy": 810},
+    ):
         with pytest.raises(ValueError, match="INVALID_VALUES"):
             worker.validate_action({"choice": 1, "reason": "Plan.", "values": values}, job)
-    with pytest.raises(ValueError, match="INVALID_SCHEMA"):  # fixed actions take no values
-        worker.validate_action({"choice": 0, "reason": "Wait.", "values": {"food": 1}}, job)
+    with pytest.raises(ValueError, match="INVALID_VALUES"):
+        worker.validate_action({"choice": 1, "reason": "Plan."}, job)
+    for values in ({"food": 1},):  # fixed choices cannot invent parameters
+        with pytest.raises(ValueError, match="INVALID_SCHEMA"):
+            worker.validate_action({"choice": 0, "reason": "Wait.", "values": values}, job)
+
+
+def test_numeric_request_falls_back_then_numbered_menu_roundtrip_recovers(monkeypatch):
+    monkeypatch.setattr(worker, "TOKEN", "test-token")
+    job = make_job()
+    job.observation = {"world_stage": 2, "self": {"role": "planner"}}
+    params = {"business_id": "state_firm", "food": {"min": 0, "max": 1000, "default": 700},
+              "energy": {"min": 0, "max": 900, "default": 800}}
+    job.candidates.append({"action_type": "set_plan", "params": params})
+    calls = []
+
+    def model_response(request):
+        prompt = json.loads(request.content)
+        menu = json.loads(prompt["messages"][1]["content"])["available_actions"]
+        assert menu == ["0: hold", "1: set_plan food=<integer 0-1000, now 700> energy=<integer 0-900, now 800>"]
+        calls.append(request)
+        values = {"food": True, "energy": 810} if len(calls) == 1 else {"food": 0, "energy": 900}
+        content = json.dumps({"choice": 1, "reason": "Set the weekly targets.", "values": values})
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    async def request():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(model_response)) as model_client:
+            monkeypatch.setattr(worker.app.state, "model_client", model_client, raising=False)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=worker.app), base_url="http://test") as client:
+                for expected_source in ("rule_fallback", "model"):
+                    response = await client.post("/decide", json=job.model_dump(mode="json"),
+                                                 headers={"Authorization": "Bearer test-token"})
+                    assert response.status_code == 200
+                    result = response.json()
+                    assert result["source"] == expected_source
+                    assert worker.active_requests == 0
+                    assert sum(worker.provider_pool.active.values()) == 0
+                    if expected_source == "rule_fallback":
+                        assert result["error_category"] == "model_invalid_response"
+                        assert result["action"]["action_type"] == "hold"
+                    else:
+                        assert result["error"] is None
+                        assert result["action"]["params"] == {"business_id": "state_firm", "food": 0, "energy": 900}
+                        assert result["action"]["evidence_ids"] == job.evidence_ids
+                assert job.candidates[1]["params"] == params  # Resolving numbers never changes the offered menu.
+
+    asyncio.run(request())
 
 
 @pytest.mark.parametrize("choice", [True, -1, 1, "0", None])

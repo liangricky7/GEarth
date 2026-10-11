@@ -64,7 +64,7 @@ and the exact source `manifest.json`. Publication validates the checkpoint and
 manifest hash; website clients only read the cached report. `ops/analyze_run.py`
 provides orchestration when available. Local report generation is deterministic
 in facts/provenance; `generated_at` varies with execution time.
-The current analysis version is `1.1.0`. A changed analysis version may replace the
+The current analysis version is `1.2.0`. A changed analysis version may replace the
 derived current report alias only for identical manifest/run pins; the previous
 report is preserved as `report-<manifestprefix>-<analysisversion>.json`. Conflicting
 facts at the same analysis version and conflicting archives are refused. Export
@@ -136,7 +136,7 @@ drive paths. Money remains integer minor units (100 minor units = 1 WLD).
 Reports use `schema_version=faultline.analytics-report.v1`, `analysis_version`,
 `run_id`, `through_revision`, `through_sequence`, `source_manifest_sha256`,
 `generated_at`, `completeness`, `summary`, `checks`, `agents`, `countries`,
-`government_comparison`, and `evidence_refs`. Checks use `pass`, `fail`, or
+`government_comparison`, `public_services`, and `evidence_refs`. Checks use `pass`, `fail`, or
 `unknown` plus details and evidence references. References identify the run,
 audit sequence and record kind. Agent rows are a capped preview, not a replacement
 for the full investigation tables. A stopped/failed snapshot can be intact while
@@ -150,11 +150,55 @@ Bronze `workspace.faultline_bronze.audit` uses `(run_id,sequence)`. Silver in
 `decision_options`, `decision_results`, `event_edges`, and `action_effects`. Keys are run-scoped IDs; event keys use
 their independent event sequence; state keys include tick and `frame_kind`.
 `day` and same-tick `end` states are retained separately. Opening state is
-separate from tick-1 daily state. Gold contains import receipts, daily agent/country
-views, latest agent state, and an agent timeline view. Options retain the full raw
-request alongside typed fields; typed parameter maps normalize values to strings,
-so the original payload supplies exact parameter types. Replays insert only absent immutable keys; conflicting duplicates
+separate from tick-1 daily state. Initial openings use `account_type=agent`;
+new state/private firms use `created_agent`, an explicit zero cash balance and
+`creation_tick` captured before funding. Initial population counts exclude created
+firms. Daily coverage starts at the authoritative creation boundary; matching
+legacy `business_started` facts remain compatible. Unknown identities, missing
+daily/end rows and created openings after funding are rejected.
+Gold contains import receipts, daily agent/country
+views, latest agent state, an agent timeline view, `public_service_days` and
+`public_service_transfers`. Options retain the full raw request alongside typed
+fields. `offered_params_json` preserves fixed values and bounded integer descriptors
+exactly; `selected_params_json` retains the returned concrete parameters.
+Legacy `typed_params_json` string maps remain unchanged in existing rows and are
+null in new rows. The decoder counts each original option without attempting to
+convert nested range descriptors into string maps. Replays insert only absent immutable keys; conflicting duplicates
 fail. Tables are unpartitioned rather than one partition per agent/day.
+
+## Public-services compatibility
+
+Analysis 1.2 adds nullable school/student/graduation/job-seeking/hunger/health facts,
+school seats and enrollment, planner quotas, policy plans and recomputed QOL parts.
+`wellbeing` remains the engine's smoothed score. The report's `public_services`
+section records the five original metadata fields (`capture_contract_version`,
+`features`, `active_features`, `banking_paused`, `economy_configuration`), resident
+snapshot counts with explicit known/missing denominators, field coverage
+(`pass`, `partial`, `unknown`), and actual transfer counts/amounts by original kind.
+Government comparisons require the same known feature versions, active feature
+set, school/health/QOL/planning/banking/accounting configuration, execution settings,
+model assignments where applicable, and engine commit. Seed is the pairing key;
+government rotation is the treatment. Missing legacy configuration cannot establish
+a matched baseline. Original metadata must agree with the manifest's feature pins.
+
+The original offered menu can contain `{min,max,default}` integer descriptors.
+Choice validation requires exact parameter keys, unchanged fixed JSON values and
+inclusive int32 bounds for concrete returned integers. Strings, floats and booleans
+cannot supply bounded values. New numbered-menu results must identify a unique
+matching original option; ambiguous or mismatched selections remain explicit in
+checks. Raw rejected actions are retained, with failing checks where appropriate.
+
+Delta upgrades add missing nullable columns and reject incompatible type changes.
+Existing records, source hashes and prior non-null projections are never rewritten;
+old records keep null in new columns even when reimported. Old exports remain
+importable, and regenerated 1.2 reports archive their prior version before updating
+the alias. Absence of old service fields is reported as unknown rather than zero.
+Deposit balances are claims on bank cash and in-kind balances are wage deductions;
+neither is added to cash-plus-escrow conservation or counted as a transfer. Banking
+pause is an explicit condition, not inferred from absent transactions. Transfers
+for grants, food, tuition, stipends, bonuses and public health retain their actual
+engine kinds and individual legs; categorization does not establish causality.
+Daily capture and weekly decision/save scheduling are unchanged.
 
 Local validation and reconciliation spill to temporary SQLite files. Export
 retains one HTTP page; the importer reads one compressed chunk at a time. The

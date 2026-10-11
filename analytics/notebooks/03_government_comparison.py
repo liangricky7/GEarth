@@ -13,20 +13,13 @@ receipts = spark.table("workspace.faultline_gold.import_receipts")
 countries = spark.table("workspace.faultline_silver.country_daily")
 ranked = countries.withColumn("rank", F.row_number().over(Window.partitionBy("run_id", "country_id").orderBy(F.col("sequence").desc())))
 final = ranked.where("rank = 1").drop("rank")
-facts = final.join(runs.select("run_id", "seed", "mode", "government_rotation", "tick_limit", "population", "engine_commit", F.col("payload_json").alias("run_payload")), "run_id").join(receipts.select("run_id", "run_complete", "snapshot_complete", "source_manifest_sha256"), "run_id")
+facts = final.join(runs.select("run_id", "seed", "mode", "government_rotation", "tick_limit", "population", "engine_commit", "condition_signature", "conditions_known", "conditions_unknown_json", "features_json", "active_features_json", "banking_paused", "economy_configuration_json", F.col("payload_json").alias("run_payload")), "run_id").join(receipts.select("run_id", "run_complete", "snapshot_complete", "source_manifest_sha256"), "run_id")
 for name, path in {"residents": "residents", "unemployed": "unemployed", "approval": "approval", "unmet_needs": "unmet_needs", "gini": "gini", "treasury_minor": "government_cash_minor"}.items():
     facts = facts.withColumn(name, F.get_json_object("payload_json", "$." + path).cast("long" if name in {"residents", "unemployed", "unmet_needs", "treasury_minor"} else "double"))
 facts = facts.withColumn("employment_rate", F.when(F.col("residents") > 0, 1 - F.col("unemployed") / F.col("residents")))
-providers = F.from_json(F.get_json_object("run_payload", "$.compute_providers"), "array<struct<name:string,model:string,capacity:int,decision_group:string>>")
-model_assignment_known = (F.size(providers) > 0) & ~F.exists(providers, lambda provider: provider["model"].isNull() | (F.length(F.trim(provider["model"])) == 0))
-facts = facts.withColumn("configuration_known", F.col("engine_commit").rlike("^[0-9a-fA-F]{40}$") & F.col("government_rotation").isNotNull() & F.col("tick_limit").isNotNull() & F.col("population").isNotNull()
-    & F.get_json_object("run_payload", "$.worker_capacity").isNotNull() & F.get_json_object("run_payload", "$.tick_interval_ms").isNotNull()
-    & ((F.col("mode") == "RULE") | model_assignment_known))
-facts = facts.withColumn("condition_signature", F.sha2(F.to_json(F.struct("mode", "tick_limit", "population", "engine_commit",
-    F.get_json_object("run_payload", "$.worker_capacity").alias("worker_capacity"),
-    F.get_json_object("run_payload", "$.tick_interval_ms").alias("tick_interval_ms"),
-    F.get_json_object("run_payload", "$.compute_providers").alias("compute_providers"))), 256))
-display(facts.select("run_id", "seed", "mode", "government_rotation", "country_id", "government_type", "run_complete", "configuration_known", "residents", "employment_rate", "approval", "unmet_needs", "gini", "treasury_minor"))
+facts = facts.withColumn("configuration_known", F.coalesce(F.col("conditions_known"), F.lit(False)) & F.col("government_rotation").isNotNull())
+display(facts.select("run_id", "seed", "mode", "government_rotation", "country_id", "government_type", "run_complete", "configuration_known", "conditions_unknown_json", "features_json", "active_features_json", "banking_paused", "residents", "employment_rate", "approval", "unmet_needs", "gini", "treasury_minor"))
+print("Older imports without explicit feature/configuration evidence stay descriptive and are excluded from matched sets. Banking pause and school/health/QOL/planner settings are part of the condition signature.")
 
 # COMMAND ----------
 eligible = facts.where("run_complete AND snapshot_complete AND configuration_known")
@@ -39,13 +32,16 @@ if paired.limit(1).count() == 0:
 else:
     # One geography-country is fixed within each matched set; sample counts and spread
     # are explicit. No simulated agent row is treated as an independent run replicate.
-    comparison = paired.groupBy("government_type", "country_id", "mode").agg(
+    comparison = paired.groupBy("condition_signature", "government_type", "country_id", "mode").agg(
         F.countDistinct("run_id").alias("run_samples"), F.countDistinct("seed").alias("seed_samples"),
         F.avg("approval").alias("approval_mean"), F.stddev_samp("approval").alias("approval_sample_sd"),
         F.avg("employment_rate").alias("employment_rate_mean"), F.avg("unmet_needs").alias("unmet_needs_mean"),
         F.avg("gini").alias("gini_mean"), F.avg("treasury_minor").alias("treasury_mean_minor"))
     display(comparison)
     comparison.createOrReplaceTempView("faultline_government_comparison")
+
+# COMMAND ----------
+display(facts.select("run_id", "country_id", "government_type", "run_complete", "features_json", "banking_paused", "students", "graduates", "job_seekers", "hungry_residents", "too_sick_residents", "average_health", "average_wellbeing", "output_lost_to_hunger_pct", "plan_json", "qol_parts_json"))
 
 # COMMAND ----------
 # Money stays integer at transfer level and is counted once per actual leg.

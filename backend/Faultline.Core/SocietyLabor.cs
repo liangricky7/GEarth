@@ -222,6 +222,7 @@ public static class SocietyLabor
             Goal = $"Produce and sell {sector}, pay workers, import scarce inputs and keep the business solvent."
         };
         world.Agents.Add(firm.Id, firm);
+        RunAudit.Created(world, firm, "state_firm");
         nation.Population++;
         nation.BusinessesStarted++;
         return firm;
@@ -242,6 +243,7 @@ public static class SocietyLabor
             Goal = $"Run a profitable {sector} business owned by {founder.Id}."
         };
         world.Agents.Add(firm.Id, firm);
+        RunAudit.Created(world, firm, "private_firm");
         SocietyBank.Draw(world, founder, cost);
         SocietyEconomy.Transfer(world, founder, firm, cost, "business_founding");
         Quit(founder);

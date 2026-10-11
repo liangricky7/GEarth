@@ -180,8 +180,8 @@ def main():
         if value is not None
     }
     # A fork runs against its own Neon branch; ops/fork_run.py passes that branch's connection string.
-    if os.environ.get("FAULTLINE_BRANCH_DATABASE_URL"):
-        config["DATABASE_URL"] = os.environ["FAULTLINE_BRANCH_DATABASE_URL"]
+    if os.environ.get("GEARTH_BRANCH_DATABASE_URL"):
+        config["DATABASE_URL"] = os.environ["GEARTH_BRANCH_DATABASE_URL"]
     if options.storage == "neon" and not config.get("DATABASE_URL"):
         raise RuntimeError("Save DATABASE_URL in .env.local, or use --storage local.")
 
@@ -212,7 +212,7 @@ def main():
 
     if not options.skip_build:
         subprocess.run(
-            ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
+            ["dotnet", "build", "GEarth.sln", "--nologo", "-v", "quiet"],
             check=True,
             cwd=ROOT,
         )
@@ -290,7 +290,7 @@ def main():
             worker_environment = os.environ.copy()
             worker_environment.pop("DATABASE_URL", None)
             worker_environment.pop("DATABASE_DIRECT_URL", None)
-            worker_environment.pop("FAULTLINE_BRANCH_DATABASE_URL", None)
+            worker_environment.pop("GEARTH_BRANCH_DATABASE_URL", None)
             worker_environment.update(provider_environment)
             if managed_spark_tunnel:
                 worker_environment["SPARK_A_API_KEY"] = api_key
@@ -323,13 +323,13 @@ def main():
         api_environment.update(
             {
                 "DATABASE_URL": config.get("DATABASE_URL", ""),
-                "FAULTLINE_STORAGE": options.storage,
-                "FAULTLINE_LIVE": str(options.live).lower(),
-                "FAULTLINE_WORLD": str(options.world).lower(),
-                "FAULTLINE_SAVED_RUN_ID": options.run_id or "",
-                "FAULTLINE_POPULATION": str(options.population),
-                "FAULTLINE_CAPACITY": str(live_capacity),
-                "FAULTLINE_COMPUTE_PROVIDERS": json.dumps(
+                "GEARTH_STORAGE": options.storage,
+                "GEARTH_LIVE": str(options.live).lower(),
+                "GEARTH_WORLD": str(options.world).lower(),
+                "GEARTH_SAVED_RUN_ID": options.run_id or "",
+                "GEARTH_POPULATION": str(options.population),
+                "GEARTH_CAPACITY": str(live_capacity),
+                "GEARTH_COMPUTE_PROVIDERS": json.dumps(
                     [
                         {
                             "name": provider.name,
@@ -340,29 +340,29 @@ def main():
                         for provider in providers
                     ]
                 ),
-                "FAULTLINE_GOVERNMENT_ROTATION": str(options.government_rotation),
-                "FAULTLINE_SEED": str(options.seed),
-                "FAULTLINE_VERBOSE": str(options.verbose).lower(),
-                "FAULTLINE_ANALYTICS": str(options.analytics).lower(),
-                "FAULTLINE_RESUME_RUN_ID": options.resume or "",
-                "FAULTLINE_FORK_GOVERNMENT": options.fork_government or "",
-                "FAULTLINE_TIMELINE": options.timeline or "",
-                "FAULTLINE_TICKS": str(options.ticks),
-                "FAULTLINE_INTERVAL_MS": str(round(options.interval * 1000)),
+                "GEARTH_GOVERNMENT_ROTATION": str(options.government_rotation),
+                "GEARTH_SEED": str(options.seed),
+                "GEARTH_VERBOSE": str(options.verbose).lower(),
+                "GEARTH_ANALYTICS": str(options.analytics).lower(),
+                "GEARTH_RESUME_RUN_ID": options.resume or "",
+                "GEARTH_FORK_GOVERNMENT": options.fork_government or "",
+                "GEARTH_TIMELINE": options.timeline or "",
+                "GEARTH_TICKS": str(options.ticks),
+                "GEARTH_INTERVAL_MS": str(round(options.interval * 1000)),
                 "WORKER_TOKEN": token,
-                "ASPNETCORE_CONTENTROOT": str(ROOT / "backend/Faultline.Api"),
+                "ASPNETCORE_CONTENTROOT": str(ROOT / "backend/GEarth.Api"),
             }
         )
 
         if options.analytics:
             commit = clean_engine_commit()
             if commit:
-                api_environment["FAULTLINE_ENGINE_COMMIT"] = commit
+                api_environment["GEARTH_ENGINE_COMMIT"] = commit
             else:
-                api_environment.pop("FAULTLINE_ENGINE_COMMIT", None)
+                api_environment.pop("GEARTH_ENGINE_COMMIT", None)
 
         api = start(
-            ["dotnet", "backend/Faultline.Api/bin/Debug/net10.0/Faultline.Api.dll"],
+            ["dotnet", "backend/GEarth.Api/bin/Debug/net10.0/GEarth.Api.dll"],
             "api.log",
             api_environment,
         )
@@ -372,14 +372,14 @@ def main():
             )
         wait_for_service(f"{API_URL}/api/health", api)
         print(f"Observer: {API_URL}", flush=True)
-        if config.get("FAULTLINE_SHARE_URL") and config.get("FAULTLINE_SHARE_KEY"):
+        if config.get("GEARTH_SHARE_URL") and config.get("GEARTH_SHARE_KEY"):
             if not supervisor_running():
                 start(
                     [sys.executable, str(ROOT / "ops/share_site.py")],
                     "share-supervisor.log",
                     os.environ.copy(),
                 )
-            print(f"Share address: {config['FAULTLINE_SHARE_URL']}", flush=True)
+            print(f"Share address: {config['GEARTH_SHARE_URL']}", flush=True)
         mode = (
             "SAVED (no new inference)"
             if options.run_id

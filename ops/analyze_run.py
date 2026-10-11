@@ -39,7 +39,7 @@ def run_analysis(run_id, destination, *, api, cli, storage, dotnet="dotnet", tim
     export_run(api, run_id, destination)
     integrity = validate(destination / "manifest.json")
     manifest_hash = integrity["source_manifest_sha256"]
-    bundle = destination / "faultline-analytics.zip"
+    bundle = destination / "gearth-analytics.zip"
     with zipfile.ZipFile(bundle, "x", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted((ROOT / "analytics").glob("*.py")):
             archive.write(path, "analytics/" + path.name)
@@ -53,8 +53,8 @@ def run_analysis(run_id, destination, *, api, cli, storage, dotnet="dotnet", tim
         deployment.update(notebook.name.encode())
         deployment.update(b"\0")
         deployment.update(notebook.read_bytes())
-    workspace = f"/Workspace/Users/{user}/Faultline/Analytics/{deployment.hexdigest()[:16]}"
-    volume = "/Volumes/workspace/faultline_bronze/run_exports"
+    workspace = f"/Workspace/Users/{user}/GEarth/Analytics/{deployment.hexdigest()[:16]}"
+    volume = "/Volumes/workspace/gearth_bronze/run_exports"
     remote_export = f"{volume}/{run_id}-{manifest_hash[:12]}"
     remote_bundle = f"{volume}/_code/{bundle_hash}.zip"
     cli.call("workspace", "mkdirs", workspace)
@@ -71,7 +71,7 @@ def run_analysis(run_id, destination, *, api, cli, storage, dotnet="dotnet", tim
     # Publish the finalized manifest last, after all required chunks exist.
     cli.call("fs", "cp", destination / "manifest.json", "dbfs:" + remote_export + "/manifest.json", "--overwrite")
     job = {
-        "run_name": "Faultline finished-run analysis",
+        "run_name": "GEarth finished-run analysis",
         "timeout_seconds": timeout,
         "tasks": [{"task_key": "import_finished_run", "max_retries": 0, "notebook_task": {
             "notebook_path": workspace + "/01_import_finished_run",
@@ -98,9 +98,9 @@ def run_analysis(run_id, destination, *, api, cli, storage, dotnet="dotnet", tim
     report_path = destination / "report.json"
     cli.call("fs", "cp", "dbfs:" + remote_export + "/report-" + manifest_hash[:12] + ".json", report_path)
     environment = os.environ.copy()
-    environment["FAULTLINE_STORAGE"] = storage
+    environment["GEARTH_STORAGE"] = storage
     publication = subprocess.run(
-        [dotnet, "run", "--project", str(ROOT / "backend/Faultline.Api"), "--no-build", "--",
+        [dotnet, "run", "--project", str(ROOT / "backend/GEarth.Api"), "--no-build", "--",
          "--publish-analytics-report", str(report_path), "--source-manifest", str(destination / "manifest.json")],
         cwd=ROOT, env=environment, capture_output=True, text=True, timeout=180,
     )
@@ -121,7 +121,7 @@ def main():
     parser.add_argument("run_id")
     parser.add_argument("destination", help="New export directory; preserve it if a Databricks job fails.")
     parser.add_argument("--api", default="http://127.0.0.1:5080")
-    parser.add_argument("--profile", default="faultline")
+    parser.add_argument("--profile", default="gearth")
     parser.add_argument("--storage", choices=("neon", "local"), required=True)
     parser.add_argument("--databricks", default=shutil.which("databricks") or "databricks")
     parser.add_argument("--dotnet", default=shutil.which("dotnet") or "dotnet")

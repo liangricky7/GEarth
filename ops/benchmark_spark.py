@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--concurrency", nargs="+", type=int, default=[4, 8, 16, 32])
     parser.add_argument("--waves", type=int, default=2)
     parser.add_argument("--jobs")
-    parser.add_argument("--output", default="docs/faultline/evidence/world-spark-benchmark.json")
+    parser.add_argument("--output", default="docs/gearth/evidence/world-spark-benchmark.json")
     options = parser.parse_args()
     key = subprocess.run(["ssh", *SSH_OPTIONS, SPARK_TARGET, "python3 -"], input=REMOTE_KEY_READER, text=True, capture_output=True, check=True).stdout.strip()
     if not key:

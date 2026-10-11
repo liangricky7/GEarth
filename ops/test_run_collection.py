@@ -52,13 +52,13 @@ while True: time.sleep(.01)
 
 
 def test_cloud_config_reaches_spark_b_without_the_laptop_reverse_tunnel(tmp_path):
-    config = {"DATABASE_URL": "postgresql://private", "FAULTLINE_SHARE_KEY": "do-not-copy", "AMD_API_KEY": "do-not-copy"}
+    config = {"DATABASE_URL": "postgresql://private", "GEARTH_SHARE_KEY": "do-not-copy", "AMD_API_KEY": "do-not-copy"}
     for prefix in ["SPARK_A", "SPARK_A_CITIZEN", "SPARK_B", "SPARK_B_CITIZEN"]:
         config.update({prefix + "_API_KEY": "punctuation\\'${secret}#", prefix + "_MODEL": "model", prefix + "_CAPACITY": "4"})
     config.update({"SPARK_B_BASE_URL": "http://100.119.198.81:18002/v1", "SPARK_B_TAILSCALE_HTTP_HOST": "100.119.198.81",
                    "SPARK_B_CITIZEN_BASE_URL": "http://100.119.198.81:18004/v1", "SPARK_B_CITIZEN_TAILSCALE_HTTP_HOST": "100.119.198.81"})
     exported = cloud_config(config)
-    assert "FAULTLINE_SHARE_KEY" not in exported
+    assert "GEARTH_SHARE_KEY" not in exported
     assert "AMD_API_KEY" not in exported
     path = tmp_path / "config.env"
     write_config(path, exported)
@@ -89,7 +89,7 @@ def test_source_bundle_excludes_credentials_runtime_and_unrelated_untracked_file
 
 
 def test_cloud_config_exports_enabled_amd_for_hybrid_citizen_decisions():
-    config = {"DATABASE_URL": "postgresql://private", "FAULTLINE_SHARE_KEY": "not-cloud-config"}
+    config = {"DATABASE_URL": "postgresql://private", "GEARTH_SHARE_KEY": "not-cloud-config"}
     for prefix in ("SPARK_A", "SPARK_A_CITIZEN", "SPARK_B", "SPARK_B_CITIZEN"):
         config.update({prefix + "_API_KEY": "private", prefix + "_MODEL": "model", prefix + "_CAPACITY": "4"})
     config.update({"SPARK_B_BASE_URL": "http://100.119.198.81:18002/v1", "SPARK_B_TAILSCALE_HTTP_HOST": "100.119.198.81",
@@ -103,7 +103,7 @@ def test_cloud_config_exports_enabled_amd_for_hybrid_citizen_decisions():
     assert all(provider.capacity == 4 for provider in providers if provider.name.startswith("spark"))
     amd = next(provider for provider in providers if provider.name == "amd")
     assert amd.serves("citizen") and not amd.serves("institution") and amd.capacity == 1
-    assert "FAULTLINE_SHARE_KEY" not in exported
+    assert "GEARTH_SHARE_KEY" not in exported
 
 
 def test_operational_overlay_preserves_base_engine_and_records_provenance(tmp_path):

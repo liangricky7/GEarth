@@ -9,10 +9,10 @@ JSON report. No notebook calls a model or writes simulation state.
 Run from the repository root:
 
 ```sh
-python3 ops/export_run.py RUN_ID /tmp/faultline-export-RUN_ID --api http://localhost:5080
-python3 -m analytics.validate /tmp/faultline-export-RUN_ID/manifest.json
-python3 -m analytics.report /tmp/faultline-export-RUN_ID/manifest.json /tmp/report.json
-python3 -m analytics.build_bundle /tmp/faultline-analytics.zip
+python3 ops/export_run.py RUN_ID /tmp/gearth-export-RUN_ID --api http://localhost:5080
+python3 -m analytics.validate /tmp/gearth-export-RUN_ID/manifest.json
+python3 -m analytics.report /tmp/gearth-export-RUN_ID/manifest.json /tmp/report.json
+python3 -m analytics.build_bundle /tmp/gearth-analytics.zip
 python3 -m unittest discover -s analytics/tests -v
 ```
 
@@ -28,9 +28,9 @@ The importer verifies optional per-chunk `uncompressed_bytes` and limits decoder
 line length, so a gzip file never hides an unbounded record in the driver.
 
 Upload every exported file to a single run directory under
-`/Volumes/workspace/faultline_bronze/run_exports/`. Upload the helper ZIP to
-`/Volumes/workspace/faultline_bronze/run_exports/_code/faultline-analytics.zip`.
-Import the four Databricks source notebooks into the Faultline workspace folder.
+`/Volumes/workspace/gearth_bronze/run_exports/`. Upload the helper ZIP to
+`/Volumes/workspace/gearth_bronze/run_exports/_code/gearth-analytics.zip`.
+Import the four Databricks source notebooks into the GEarth workspace folder.
 Review before executing; the code creates managed Delta tables/views.
 
 1. `01_import_finished_run.py`: parameters `export_directory` and `library_zip`.
@@ -79,7 +79,7 @@ checkpoint. V1 export requires `analytics_enabled`, `audit_available`, and
 and status `completed`, `stopped`, or `failed`. Paused/running and historical
 aggregate-only runs cannot satisfy the complete v1 audit contract.
 
-**Temporary fork limit:** `faultline.run-export.v1` supports original run timelines
+**Temporary fork limit:** `gearth.run-export.v1` supports original run timelines
 only. Neon control and changed forks preserve the parent `World.Id`, while the
 current Delta keys are run-scoped. Any authoritative `timeline_forked` event
 therefore rejects export before manifest finalization and rejects import/report
@@ -105,8 +105,8 @@ or explicitly unknown. Original nested payloads are retained in every table.
 
 ```json
 {
-  "schema_version": "faultline.run-export.v1",
-  "record_schema_version": "faultline.audit.v1",
+  "schema_version": "gearth.run-export.v1",
+  "record_schema_version": "gearth.audit.v1",
   "run": {
     "run_id": "...", "status": "completed", "tick": 8,
     "through_revision": 10, "through_sequence": 1234,
@@ -133,7 +133,7 @@ compressed file bytes; report provenance hashes cover exact manifest bytes.
 Safe relative gzip paths only; no traversal, symlinks, absolute paths or Windows
 drive paths. Money remains integer minor units (100 minor units = 1 WLD).
 
-Reports use `schema_version=faultline.analytics-report.v1`, `analysis_version`,
+Reports use `schema_version=gearth.analytics-report.v1`, `analysis_version`,
 `run_id`, `through_revision`, `through_sequence`, `source_manifest_sha256`,
 `generated_at`, `completeness`, `summary`, `checks`, `agents`, `countries`,
 `government_comparison`, `public_services`, and `evidence_refs`. Checks use `pass`, `fail`, or
@@ -144,8 +144,8 @@ for the full investigation tables. A stopped/failed snapshot can be intact while
 
 ## Tables, keys and limitations
 
-Bronze `workspace.faultline_bronze.audit` uses `(run_id,sequence)`. Silver in
-`workspace.faultline_silver` contains `runs`, `events`, `opening_balances`,
+Bronze `workspace.gearth_bronze.audit` uses `(run_id,sequence)`. Silver in
+`workspace.gearth_silver` contains `runs`, `events`, `opening_balances`,
 `agent_daily`, `country_daily`, `transactions`, `decision_requests`,
 `decision_options`, `decision_results`, `event_edges`, and `action_effects`. Keys are run-scoped IDs; event keys use
 their independent event sequence; state keys include tick and `frame_kind`.

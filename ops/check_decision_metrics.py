@@ -52,7 +52,7 @@ def run_checks():
     for port in (5080, 8100):
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", port))  # Do not interfere with another run.
-    subprocess.run(["dotnet", "build", "Faultline.sln", "--no-restore", "--nologo", "-v", "quiet"], check=True)
+    subprocess.run(["dotnet", "build", "GEarth.sln", "--no-restore", "--nologo", "-v", "quiet"], check=True)
     output = ROOT / "artifacts/local/decision-metrics"
     output.mkdir(parents=True, exist_ok=True)
     release = threading.Event()
@@ -116,12 +116,12 @@ def run_checks():
 
     def start(saved_id="", ticks=80):
         environment = os.environ.copy()
-        environment.update(FAULTLINE_STORAGE="local", FAULTLINE_WORLD="true", FAULTLINE_LIVE="true",
-            FAULTLINE_POPULATION="170", FAULTLINE_CAPACITY="8", FAULTLINE_TICKS=str(ticks),
-            FAULTLINE_INTERVAL_MS="10", FAULTLINE_SAVED_RUN_ID=saved_id,
-            FAULTLINE_PORT="5080", WORKER_TOKEN="controlled-local-check",
-            ASPNETCORE_CONTENTROOT=str(ROOT / "backend/Faultline.Api"))
-        return subprocess.Popen(["dotnet", "backend/Faultline.Api/bin/Debug/net10.0/Faultline.Api.dll"],
+        environment.update(GEARTH_STORAGE="local", GEARTH_WORLD="true", GEARTH_LIVE="true",
+            GEARTH_POPULATION="170", GEARTH_CAPACITY="8", GEARTH_TICKS=str(ticks),
+            GEARTH_INTERVAL_MS="10", GEARTH_SAVED_RUN_ID=saved_id,
+            GEARTH_PORT="5080", WORKER_TOKEN="controlled-local-check",
+            ASPNETCORE_CONTENTROOT=str(ROOT / "backend/GEarth.Api"))
+        return subprocess.Popen(["dotnet", "backend/GEarth.Api/bin/Debug/net10.0/GEarth.Api.dll"],
             env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
     try:

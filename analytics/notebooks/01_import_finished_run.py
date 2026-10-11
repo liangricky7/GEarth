@@ -1,14 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Import a finished Faultline run
+# MAGIC # Import a finished GEarth run
 # MAGIC Run only after review and after all immutable export files are uploaded.
 # MAGIC The default catalog is `workspace`; managed Delta tables are unpartitioned.
 # MAGIC This validates every chunk before writing, then imports one compressed chunk
 # MAGIC at a time. It performs no operational database reads and no model inference.
 
 # COMMAND ----------
-dbutils.widgets.text("export_directory", "/Volumes/workspace/faultline_bronze/run_exports/REPLACE_RUN_DIRECTORY")
-dbutils.widgets.text("library_zip", "/Volumes/workspace/faultline_bronze/run_exports/_code/faultline-analytics.zip")
+dbutils.widgets.text("export_directory", "/Volumes/workspace/gearth_bronze/run_exports/REPLACE_RUN_DIRECTORY")
+dbutils.widgets.text("library_zip", "/Volumes/workspace/gearth_bronze/run_exports/_code/gearth-analytics.zip")
 import sys
 from pathlib import Path
 sys.path.insert(0, dbutils.widgets.get("library_zip"))
@@ -37,7 +37,7 @@ conditions = comparison_conditions(original_metadata)
 display(spark.createDataFrame([integrity]))
 
 # COMMAND ----------
-for schema in ("faultline_bronze", "faultline_silver", "faultline_gold"):
+for schema in ("gearth_bronze", "gearth_silver", "gearth_gold"):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS workspace.{schema}")
 
 
@@ -117,24 +117,24 @@ for entry in manifest["files"]:
         F.col("value").alias("raw_json"), F.sha2("value", 256).alias("record_sha256"),
         F.lit(manifest_hash).alias("source_manifest_sha256"))
     # Serverless compute does not support DataFrame cache/persist APIs.
-    insert_only(raw, "workspace.faultline_bronze.audit", ["run_id", "sequence"])
+    insert_only(raw, "workspace.gearth_bronze.audit", ["run_id", "sequence"])
     for kind, (name, keys, fields) in projections.items():
         typed = raw.where(F.col("kind") == kind).select("run_id", "sequence", "tick", "revision", "payload_json", "record_sha256", "source_manifest_sha256", *[column.alias(name) for name, column in fields.items()])
         null_keys = typed.where(F.expr(" OR ".join(key + " IS NULL" for key in keys)))
         if null_keys.limit(1).count():
             raise ValueError(f"Missing immutable key in {name}")
-        insert_only(typed, "workspace.faultline_silver." + name, keys)
+        insert_only(typed, "workspace.gearth_silver." + name, keys)
         if kind == "event":
             edges = typed.select("run_id", "event_id", "sequence", "record_sha256", "source_manifest_sha256",
                 F.explode(F.from_json("cause_ids_json", "array<string>")).alias("cause_event_id"))
-            insert_only(edges, "workspace.faultline_silver.event_edges", ["run_id", "event_id", "cause_event_id"])
+            insert_only(edges, "workspace.gearth_silver.event_edges", ["run_id", "event_id", "cause_event_id"])
         elif kind == "decision_request":
             options = typed.select("run_id", "decision_id", "agent_id", "sequence", "record_sha256", "source_manifest_sha256", "payload_json",
                 "options_json", F.posexplode(F.from_json("options_json", "array<struct<action_type:string>>" )).alias("option_index", "option"))
             options = options.select("run_id", "decision_id", "agent_id", "sequence", "record_sha256", "source_manifest_sha256", "payload_json", "option_index", F.col("option.action_type").alias("action_type"),
                 F.lit(None).cast("string").alias("typed_params_json"),
                 F.expr("get_json_object(options_json,concat('$[',cast(option_index as string),'].params'))").alias("offered_params_json"))
-            insert_only(options, "workspace.faultline_silver.decision_options", ["run_id", "decision_id", "option_index"])
+            insert_only(options, "workspace.gearth_silver.decision_options", ["run_id", "decision_id", "option_index"])
 
 # COMMAND ----------
 # Fail before Gold views, cached report and receipt if the stored tables disagree.
@@ -145,13 +145,13 @@ display(spark.createDataFrame([(name, stats["rows"]) for name, stats in qualific
 
 # COMMAND ----------
 # Views preserve exactly one daily observation and the later terminal observation.
-spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.agent_days AS
-SELECT * FROM workspace.faultline_silver.agent_daily WHERE frame_kind='day'""")
-spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.agent_latest AS
+spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.agent_days AS
+SELECT * FROM workspace.gearth_silver.agent_daily WHERE frame_kind='day'""")
+spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.agent_latest AS
 SELECT * EXCEPT (row_rank) FROM (
   SELECT *,row_number() OVER (PARTITION BY run_id,agent_id ORDER BY sequence DESC) AS row_rank
-  FROM workspace.faultline_silver.agent_daily) WHERE row_rank=1""")
-spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.country_days AS
+  FROM workspace.gearth_silver.agent_daily) WHERE row_rank=1""")
+spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.country_days AS
 SELECT run_id,country_id,tick,sequence,government_type,
 CAST(get_json_object(payload_json,'$.residents') AS BIGINT) AS residents,
 CAST(get_json_object(payload_json,'$.unemployed') AS BIGINT) AS unemployed,
@@ -160,15 +160,15 @@ CAST(get_json_object(payload_json,'$.gini') AS DOUBLE) AS gini,
 CAST(get_json_object(payload_json,'$.unmet_needs') AS BIGINT) AS unmet_needs,
 CAST(get_json_object(payload_json,'$.government_cash_minor') AS BIGINT) AS treasury_minor,
 payload_json,source_manifest_sha256
-FROM workspace.faultline_silver.country_daily WHERE frame_kind='day'""")
-spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.public_service_days AS
+FROM workspace.gearth_silver.country_daily WHERE frame_kind='day'""")
+spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.public_service_days AS
 SELECT run_id,country_id,tick,sequence,government_type,students,graduates,job_seekers,hungry_residents,
 too_sick_residents,average_health,average_wellbeing,food_subsidy_pct,food_subsidy_paid_minor,
 startup_grants_paid_minor,capitation_paid_minor,tuition_subsidy_pct,student_stipend,hiring_bonus_minor,
 output_lost_to_hunger_pct,plan_json,qol_parts_json,planning_view_json,last_policy_params_json,
-payload_json,source_manifest_sha256 FROM workspace.faultline_silver.country_daily WHERE frame_kind='day'""")
-spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.public_service_transfers AS
-SELECT * FROM workspace.faultline_silver.transactions WHERE transfer_kind IN
+payload_json,source_manifest_sha256 FROM workspace.gearth_silver.country_daily WHERE frame_kind='day'""")
+spark.sql("""CREATE OR REPLACE VIEW workspace.gearth_gold.public_service_transfers AS
+SELECT * FROM workspace.gearth_silver.transactions WHERE transfer_kind IN
 ('startup_grant','food_subsidy','tuition','tuition_subsidy','student_stipend','hiring_bonus','capitation','public_healthcare','sick_pay')""")
 
 # COMMAND ----------
@@ -203,6 +203,6 @@ else:
 receipt = {"run_id": run["run_id"], "through_revision": run["through_revision"], "through_sequence": run["through_sequence"],
            "source_manifest_sha256": manifest_hash, "record_sha256": manifest_hash, "analysis_version": report["analysis_version"],
            "snapshot_complete": True, "run_complete": run["status"] == "completed", "record_count": manifest["record_count"]}
-insert_only(spark.createDataFrame([receipt]), "workspace.faultline_gold.import_receipts", ["run_id", "through_revision"])
+insert_only(spark.createDataFrame([receipt]), "workspace.gearth_gold.import_receipts", ["run_id", "through_revision"])
 display(spark.createDataFrame([(check["name"], check["status"]) for check in report["checks"]], ["check", "status"]))
 print("Cached report:", report_path)

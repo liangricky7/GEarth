@@ -15,7 +15,7 @@ from dotenv import dotenv_values
 from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-COOKIE = "__Host-faultline_team"
+COOKIE = "__Host-gearth_team"
 SESSION_SECONDS = 8 * 60 * 60
 
 
@@ -47,7 +47,7 @@ class Controller:
 
     @staticmethod
     def systemctl(action):
-        result = subprocess.run(["sudo", "-n", "/usr/bin/systemctl", action, "faultline.service"],
+        result = subprocess.run(["sudo", "-n", "/usr/bin/systemctl", action, "gearth.service"],
                                 timeout=150, capture_output=True)
         if result.returncode:
             raise RuntimeError("Collector command failed")
@@ -172,8 +172,8 @@ def create_app(controller):
 
 def main():
     import uvicorn
-    config = dotenv_values("/var/lib/faultline/control.env", interpolate=False)
-    controller = Controller("/var/lib/faultline/control", config["CONTROL_ORIGIN"],
+    config = dotenv_values("/var/lib/gearth/control.env", interpolate=False)
+    controller = Controller("/var/lib/gearth/control", config["CONTROL_ORIGIN"],
                             config["CONTROL_PASSWORD_HASH"], config["CONTROL_SESSION_KEY"])
     uvicorn.run(create_app(controller), host="127.0.0.1", port=5090, access_log=False)
 

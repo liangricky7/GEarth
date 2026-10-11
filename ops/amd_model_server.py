@@ -16,7 +16,7 @@ MODEL_MANIFEST = Path(
         "AMD_MODEL_MANIFEST", str(Path(__file__).with_name("qwen-models.json"))
     )
 )
-KEY_FILE = Path(os.environ.get("AMD_KEY_FILE", "/workspace/faultline-amd/api-key"))
+KEY_FILE = Path(os.environ.get("AMD_KEY_FILE", "/workspace/gearth-amd/api-key"))
 state = {"ready": False, "active": False, "active_models": set()}
 
 
@@ -122,7 +122,7 @@ def models():
     return {
         "object": "list",
         "data": [
-            {"id": model_id, "object": "model", "owned_by": "faultline-amd"}
+            {"id": model_id, "object": "model", "owned_by": "gearth-amd"}
             for model_id in model_ids()
         ],
     }

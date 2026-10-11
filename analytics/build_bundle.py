@@ -11,7 +11,7 @@ def main():
     with zipfile.ZipFile(args.output, "x", compression=zipfile.ZIP_DEFLATED) as bundle:
         for source in sorted(Path(__file__).resolve().parent.glob("*.py")):
             bundle.write(source, "analytics/" + source.name)
-    print("Created helper bundle; upload it to run_exports/_code/faultline-analytics.zip")
+    print("Created helper bundle; upload it to run_exports/_code/gearth-analytics.zip")
 
 
 if __name__ == "__main__":

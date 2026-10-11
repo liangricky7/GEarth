@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GEarth · Society observer</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/observer.js" defer></script>
+  <link rel="stylesheet" href="/controls.css" />
+    <script src="/controls.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">Autonomous society · World simulation</p>
+        <h1>GEarth<span> / </span><small>world observer</small></h1>
+      </div>
+      <div class="status">
+        <span id="connection">Connecting</span
+        ><select id="runs" aria-label="Recorded run"></select>
+      </div>
+    </header>
+    <main>
+      <section id="simulation-controls" class="simulation-controls" aria-labelledby="simulation-controls-title">
+        <div class="control-heading"><h2 id="simulation-controls-title">Shared simulation</h2><span id="simulation-state" role="status">Connecting</span></div>
+        <p>Runs repeat automatically. Stop pauses this world; Start resumes it. Reset starts a fresh world and keeps saved runs.</p>
+        <form id="team-login"><label for="team-password">Team password</label><input id="team-password" type="password" autocomplete="current-password" required maxlength="256"><button type="submit">Unlock controls</button></form>
+        <div id="team-actions" hidden><button id="simulation-start" type="button">Start</button><button id="simulation-stop" type="button">Stop</button><button id="simulation-reset" type="button">Reset</button><button id="team-logout" type="button">Lock controls</button></div>
+        <p id="simulation-message" role="status" aria-live="polite"></p>
+        <dialog id="reset-confirmation"><form method="dialog"><h2>Reset this world?</h2><p>The current run will be saved, and a fresh world will start. Everyone shares this simulation.</p><button value="cancel">Cancel</button><button value="reset">Reset simulation</button></form></dialog>
+      </section>
+
+      <section class="metrics" aria-label="Simulation metrics">
+        <article><span>World tick</span><strong id="tick">—</strong></article>
+        <article>
+          <span>Agents spawned</span><strong id="population">—</strong>
+        </article>
+        <article>
+          <span>Model coverage</span><strong id="coverage">—</strong>
+        </article>
+        <article>
+          <span>Accepted model decisions</span><strong id="decisions">—</strong>
+        </article>
+        <article>
+          <span>Fallback / rejected</span><strong id="failures">—</strong>
+        </article>
+      </section>
+      <div class="columns">
+        <section class="panel geography">
+          <div class="panel-heading">
+            <h2>Trade corridors</h2>
+            <span id="mode" class="badge">Waiting</span>
+          </div>
+          <svg
+            id="map"
+            viewBox="0 0 900 470"
+            role="img"
+            aria-label="Schematic country locations and trade routes"
+          ></svg>
+          <div class="legend">
+            <span class="open">Open corridor</span
+            ><span class="closed">Closed border</span
+            ><span class="planned">Active shipments</span>
+          </div>
+          <div id="route-plan" class="route-plan">
+            Waiting for a route decision.
+          </div>
+          <p class="scope">
+            Synthetic countries trade, produce, consume and govern. Government
+            rules are experimental assumptions; currency and escrow are
+            simulated.
+          </p>
+        </section>
+        <section class="panel timeline">
+          <div class="panel-heading">
+            <h2>World events</h2>
+            <span id="event-count" class="muted">0 events</span>
+          </div>
+          <ol id="events" aria-live="polite"></ol>
+        </section>
+      </div>
+      <p id="compute" class="scope">Waiting for compute telemetry.</p>
+      <section class="panel notes-panel">
+        <div class="panel-heading">
+          <h2>Run observations</h2>
+          <a id="notes-download" href="#">Download Markdown notes</a>
+        </div>
+        <p id="notes-status" class="scope">
+          Notes are saved when a run completes or stops.
+        </p>
+        <ul id="run-notes"></ul>
+        <p class="scope">
+          Recorded behavior and synthetic outcomes. Agent explanations are
+          attributed statements; government comparisons require matched
+          experiments.
+        </p>
+      </section>
+      <section class="panel analytics-panel" aria-labelledby="analytics-title">
+        <div class="panel-heading">
+          <h2 id="analytics-title">Finished run analysis</h2>
+          <a id="analytics-download" hidden>Download report JSON</a>
+        </div>
+        <p id="analytics-status" class="scope" role="status">No imported analytics report is available for this run.</p>
+        <div id="analytics-summary"></div>
+        <ul id="analytics-checks"></ul>
+        <details id="analytics-countries" hidden>
+          <summary>Country outcomes</summary>
+          <div id="analytics-country-list"></div>
+        </details>
+        <p class="scope">Recorded synthetic outcomes. Select an agent below to investigate its imported analysis. Government comparisons describe this run and do not establish causality.</p>
+      </section>
+      <section id="world-details">
+        <section class="panel countries-panel">
+          <div class="panel-heading">
+            <h2>Governments and outcomes</h2>
+            <span class="muted"
+              >Needs met · public support · inequality · treasury</span
+            >
+          </div>
+          <div id="nations"></div>
+        </section>
+        <div class="columns world-ledgers">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Shipment ledger</h2>
+              <span id="shipping-count" class="muted"></span>
+            </div>
+            <div id="shipments" class="ledger"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Diplomacy and credit</h2>
+              <span class="muted">Offers, agreements, conflicts and loans</span>
+            </div>
+            <div id="relations" class="ledger"></div>
+          </section>
+        </div>
+      </section>
+      <section class="panel agents-panel">
+        <div class="panel-heading">
+          <h2>Agents</h2>
+          <span class="muted"
+            >Select an agent to inspect its profile and decisions</span
+          >
+        </div>
+        <div class="agent-filters">
+          <select id="country-filter" aria-label="Filter agents by country">
+            <option value="">All countries</option>
+          </select>
+          <select id="role-filter" aria-label="Filter agents by role">
+            <option value="">All roles</option>
+            <option value="citizen">Residents</option>
+            <option value="government">Governments</option>
+            <option value="entrepreneur">Entrepreneurs</option>
+            <option value="business">Businesses</option>
+            <option value="media">Journalists</option>
+          </select>
+          <input
+            id="agent-search"
+            type="search"
+            placeholder="Search name or occupation"
+            aria-label="Search agents"
+          />
+          <button id="previous-page" type="button">Previous</button
+          ><button id="next-page" type="button">Next</button
+          ><span id="agent-page" class="muted"></span>
+        </div>
+        <div class="agent-columns">
+          <div id="agents"></div>
+          <div id="profile">
+            <p class="muted">
+              Individual goals, traits, observations, and memories appear here.
+            </p>
+          </div>
+        </div>
+      </section>
+      <p id="message" role="status"></p>
+    </main>
+    <footer>
+      <span>Read-only observer · Synthetic world · Simulated WLD</span
+      ><span id="updated">Waiting for committed state</span>
+    </footer>
+  </body>
+</html>

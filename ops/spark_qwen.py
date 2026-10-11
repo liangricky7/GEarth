@@ -18,7 +18,7 @@ MODELS = (
     ("institution", "Qwen/Qwen3-8B", 8000, "0.30", "16"),
     ("citizen", "Qwen/Qwen3-4B", 8001, "0.45", "64"),
 )
-LABEL = "io.faultline.workload=qwen-roles"
+LABEL = "io.gearth.workload=qwen-roles"
 ORIGINAL = "vllm_node"
 RESTORE_SCRIPT = "/workspace/exec-script.sh"
 MANIFEST = Path(__file__).with_name("qwen-models.json")
@@ -174,7 +174,7 @@ from transformers import AutoConfig, AutoTokenizer
 for model, snapshot in json.loads(sys.argv[1]).items():
     AutoConfig.from_pretrained(snapshot, local_files_only=True)
     tokenizer = AutoTokenizer.from_pretrained(snapshot, local_files_only=True)
-    if not tokenizer.encode('Hello from Faultline'):
+    if not tokenizer.encode('Hello from GEarth'):
         raise RuntimeError('Cached tokenizer returned no tokens')
     print('Verified cached tokenizer: ' + model, flush=True)
 """
@@ -209,7 +209,7 @@ def serving_arguments(image, state, role, model, port, memory, sequences, revisi
         "run",
         "-d",
         "--name",
-        f"faultline-qwen-{role}",
+        f"gearth-qwen-{role}",
         "--label",
         LABEL,
         "--gpus",
@@ -353,7 +353,7 @@ def model_request(port, key, payload=None):
 def wait_ready(state, role, model, port, timeout=900):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        container = inspect(f"faultline-qwen-{role}")
+        container = inspect(f"gearth-qwen-{role}")
         if (
             container is None
             or not container["State"]["Running"]
@@ -415,11 +415,11 @@ def rollback(state):
             "Original container identity changed; automatic restoration stopped"
         )
     for role, *_ in MODELS:
-        name = f"faultline-qwen-{role}"
+        name = f"gearth-qwen-{role}"
         container = inspect(name)
         if container is not None:
             if (
-                container["Config"].get("Labels", {}).get("io.faultline.workload")
+                container["Config"].get("Labels", {}).get("io.gearth.workload")
                 != "qwen-roles"
             ):
                 raise RuntimeError("Replacement container ownership does not match")
@@ -459,9 +459,9 @@ def recover(state, owner, original_id, provider="SPARK_A"):
         )
     docker("exec", ORIGINAL, "test", "-f", RESTORE_SCRIPT)
     for role, *_ in MODELS:
-        container = inspect(f"faultline-qwen-{role}")
+        container = inspect(f"gearth-qwen-{role}")
         if container is not None and (
-            container.get("Config", {}).get("Labels", {}).get("io.faultline.workload")
+            container.get("Config", {}).get("Labels", {}).get("io.gearth.workload")
             != "qwen-roles"
         ):
             raise RuntimeError("Replacement container ownership does not match")
@@ -494,9 +494,9 @@ def reinstall(state, owner, provider="SPARK_A"):
     validate_cached_tokenizers(state, prepared)
     for role, *_ in MODELS:
         api_key(state, role)
-        container = inspect(f"faultline-qwen-{role}")
+        container = inspect(f"gearth-qwen-{role}")
         if container is not None and (
-            container.get("Config", {}).get("Labels", {}).get("io.faultline.workload")
+            container.get("Config", {}).get("Labels", {}).get("io.gearth.workload")
             != "qwen-roles"
         ):
             raise RuntimeError("Replacement container ownership does not match")
@@ -519,12 +519,12 @@ def reinstall(state, owner, provider="SPARK_A"):
                 )
         replacements = []
         for role, *_ in MODELS:
-            container = inspect(f"faultline-qwen-{role}")
+            container = inspect(f"gearth-qwen-{role}")
             if container is not None:
                 if (
                     container.get("Config", {})
                     .get("Labels", {})
-                    .get("io.faultline.workload")
+                    .get("io.gearth.workload")
                     != "qwen-roles"
                 ):
                     raise RuntimeError(
@@ -595,7 +595,7 @@ def launch(state, owner, fresh=False, provider="SPARK_A", expected_original_id=N
             )
         docker("exec", ORIGINAL, "test", "-f", RESTORE_SCRIPT)
     for role, *_ in MODELS:
-        if inspect(f"faultline-qwen-{role}") is not None:
+        if inspect(f"gearth-qwen-{role}") is not None:
             raise RuntimeError(
                 "A replacement container already exists; inspect it before relaunching"
             )
@@ -683,7 +683,7 @@ def resume(state, owner, fresh=False, provider="SPARK_A"):
         raise RuntimeError("Fresh resume refuses to stop a running original container")
     existing = {}
     for role, model, port, memory, sequences in MODELS:
-        name = f"faultline-qwen-{role}"
+        name = f"gearth-qwen-{role}"
         container = inspect(name)
         existing[role] = container
         if container is None:
@@ -712,7 +712,7 @@ def resume(state, owner, fresh=False, provider="SPARK_A"):
             for mount in container.get("Mounts", [])
         )
         if (
-            config.get("Labels", {}).get("io.faultline.workload") != "qwen-roles"
+            config.get("Labels", {}).get("io.gearth.workload") != "qwen-roles"
             or container.get("Image") != prepared["image"]
             or config.get("Entrypoint") != ["vllm"]
             or config.get("Cmd") != arguments[arguments.index(prepared["image"]) + 1 :]
@@ -743,7 +743,7 @@ def resume(state, owner, fresh=False, provider="SPARK_A"):
                     )
                 )
             elif not container["State"]["Running"]:
-                docker("start", f"faultline-qwen-{role}")
+                docker("start", f"gearth-qwen-{role}")
             print(f"Resuming {model} on loopback port {port}", flush=True)
             wait_ready(state, role, model, port)
             validate_server(state, role, model, port)
@@ -779,7 +779,7 @@ def main():
     if os.geteuid() != 0 or not os.environ.get("SUDO_USER"):
         raise RuntimeError("Run with sudo from the Spark operator's SSH terminal")
     owner = pwd.getpwnam(os.environ["SUDO_USER"])
-    state = Path(owner.pw_dir) / "faultline-qwen"
+    state = Path(owner.pw_dir) / "gearth-qwen"
     state.mkdir(mode=0o700, exist_ok=True)
     state.chmod(0o700)
     os.chown(state, owner.pw_uid, owner.pw_gid)

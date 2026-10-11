@@ -1,0 +1,168 @@
+{
+  "hardware": "AMD Radeon Pro W7900D",
+  "selected_capacity": 64,
+  "gpu_utilization_observed_percent": [
+    98,
+    100
+  ],
+  "absolute_maximum_proven": false,
+  "prompt_source": "32 recorded citizen observations; current choice-only instructions",
+  "model": "Qwen/Qwen3-4B",
+  "baseline": {
+    "concurrency": 1,
+    "attempts": 32,
+    "valid": 32,
+    "elapsed_seconds": 25.242,
+    "valid_per_second": 1.268,
+    "p50_seconds": 0.746,
+    "p95_seconds": 1.132
+  },
+  "results": [
+    {
+      "concurrency": 32,
+      "attempts": 96,
+      "valid": 96,
+      "elapsed_seconds": 33.132,
+      "valid_per_second": 2.898,
+      "p50_seconds": 8.968,
+      "p95_seconds": 16.526,
+      "min_free_gib": 18.23,
+      "largest_batch": 29,
+      "oom_splits": 0
+    },
+    {
+      "concurrency": 48,
+      "attempts": 144,
+      "valid": 144,
+      "elapsed_seconds": 47.919,
+      "valid_per_second": 3.005,
+      "p50_seconds": 16.116,
+      "p95_seconds": 19.867,
+      "min_free_gib": 11.41,
+      "largest_batch": 44,
+      "oom_splits": 0
+    },
+    {
+      "concurrency": 64,
+      "attempts": 192,
+      "valid": 192,
+      "elapsed_seconds": 57.547,
+      "valid_per_second": 3.336,
+      "p50_seconds": 20.622,
+      "p95_seconds": 22.314,
+      "min_free_gib": 1.76,
+      "largest_batch": 64,
+      "oom_splits": 0
+    }
+  ],
+  "baseline_note": "Single-request concurrency on the same batched runtime and fixtures; counters and memory are cumulative and omitted.",
+  "measured_at": "2026-10-11T10:45:39.492432+00:00",
+  "production_https": {
+    "concurrency": 64,
+    "attempts": 192,
+    "valid": 192,
+    "elapsed_seconds": 60.919,
+    "valid_per_second": 3.152,
+    "p50_seconds": 19.495,
+    "p95_seconds": 22.047,
+    "min_free_gib": 18.83,
+    "largest_batch": 62,
+    "oom_splits": 0
+  },
+  "production_speedup_over_single_request": 2.49,
+  "worker_validation": {
+    "attempts": 16,
+    "accepted_model_actions": 16,
+    "range_actions": 8,
+    "fallbacks": 0
+  },
+  "configured_worker_capacity": 160,
+  "automated_checks": {
+    "passed": 71,
+    "command": ".venv/bin/python -m pytest agents/test_providers.py ops/test_compute_config.py ops/test_amd_batch_server.py ops/test_amd_model_server.py -q"
+  },
+  "limitations": [
+    "Short load tests; sustained or absolute hardware maximum not established.",
+    "Choice throughput is not simulation throughput; ranged actions can need another request.",
+    "Running world retains startup admission 97 and original provider labels until next run."
+  ],
+  "live_verification": {
+    "world": {
+      "status": "ok",
+      "error": null,
+      "storage": "neon_https",
+      "run_id": "world_20261011_102658_3098da",
+      "tick": 119,
+      "run_status": "running",
+      "updated_at": "2026-10-11T10:50:23.1693977+00:00"
+    },
+    "worker": {
+      "status": "ok",
+      "model": "Qwen/Qwen3-8B",
+      "active_requests": 32,
+      "capacity": 160,
+      "providers": [
+        {
+          "name": "spark_a",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution",
+          "active_requests": 16,
+          "completed_requests": 143,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_b",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution",
+          "active_requests": 16,
+          "completed_requests": 145,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_a_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 28,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "spark_b_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 30,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        },
+        {
+          "name": "amd",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 64,
+          "decision_group": "citizen",
+          "active_requests": 0,
+          "completed_requests": 36,
+          "failed_requests": 0,
+          "cooldown_seconds": 0
+        }
+      ]
+    },
+    "pause_ack": false,
+    "before": {
+      "status": "ok",
+      "error": null,
+      "storage": "neon_https",
+      "run_id": "world_20261011_102658_3098da",
+      "tick": 112,
+      "run_status": "running",
+      "updated_at": "2026-10-11T10:42:15.6598054+00:00"
+    }
+  }
+}

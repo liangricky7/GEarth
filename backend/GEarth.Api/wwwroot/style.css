@@ -495,3 +495,14 @@ input,
 .analytics-panel summary {
   cursor: pointer;
 }
+.event-raw summary {
+  font-size: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  margin-top: 4px;
+}
+.event-raw pre {
+  font-size: 10px;
+  max-height: 200px;
+  overflow: auto;
+}

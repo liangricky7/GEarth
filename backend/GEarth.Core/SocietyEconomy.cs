@@ -67,7 +67,7 @@ public static class SocietyEconomy
         ["needs"] = 100 * NeedsWeight * needsMet / 2.0,
         ["health"] = HealthPoints(resident.Health),
         ["comfort"] = 100 * ComfortWeight * Comfort(resident.GoodsBoughtLastWeek, resident.ServicesBoughtLastWeek),
-        ["security"] = 100 * SecurityWeight * Security(resident, SocietyBank.Savings(resident)) * (1 - resident.WarWeariness),
+        ["security"] = 100 * SecurityWeight * Security(resident, SocietyBank.Savings(resident)),
         ["free_time"] = 100 * LeisureWeight * (overtime ? 0.5 : 1)
     };
 

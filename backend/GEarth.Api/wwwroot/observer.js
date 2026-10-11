@@ -154,56 +154,308 @@ function drawMap(snapshot) {
   }
 }
 
+// ---- World events feed: plain sentences instead of raw event types ----
+
+let countryNames = new Map();
+const SECTORS = ["food", "energy", "tools", "medicine", "entertainment", "clinic", "school", "freight", "bank"];
+// Owner/business moves worth reading; everything else an agent does shows up through its own engine event
+// (shipment_dispatched, loan_requested, business_started, policy_enacted, plan_set, enrolled, ...).
+const SHOWN_ACTIONS = new Set(["set_price", "set_wage", "set_headcount", "set_deposit_rate", "set_loan_rate", "set_lending_standard"]);
+const HIDDEN_EVENTS = new Set([
+  "decision_requested", "decision_canceled", "decision_accounting_started", "goods_purchased",
+  "payment_sent", "policy_proposed", "shipment_delivered", "labor_market",
+]);
+
+function newsworthy(event) {
+  if (HIDDEN_EVENTS.has(event.event_type)) return event.event_type === "labor_market"; // kept for the weekly line
+  if (event.event_type === "bank_week") return Number(event.payload?.unmet_withdrawals_minor) > 0;
+  if (event.event_type === "action_accepted")
+    return SHOWN_ACTIONS.has(event.payload?.action?.action_type);
+  if (event.event_type === "action_rejected")
+    return !event.entity_ids?.[0]?.includes("_citizen_");
+  return true;
+}
+
+const wld = (minor) =>
+  `${(Number(minor ?? 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} WLD`;
+const signedWld = (minor) => `${Number(minor) < 0 ? "−" : "+"}${wld(Math.abs(Number(minor)))}`;
+const cap = (text) => (text ? text[0].toUpperCase() + text.slice(1) : "");
+const bare = (verbPhrase) => verbPhrase.replace(/^(\w+)s /, "$1 "); // "raises prices" → "raise prices"
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const countryOf = (id) => String(id ?? "").split(/[_:]/)[0];
+const countryName = (id) => countryNames.get(countryOf(id)) ?? cap(countryOf(id));
+
+// aster_food_2 → "Food firm #2", aster_entertainment_firm151 → "Entertainment startup #151", aster_bank → "Bank".
+function who(id) {
+  if (!id) return "Someone";
+  const rest = String(id).split("_").slice(1);
+  const [kind, suffix] = rest;
+  if (kind === "government") return "Government";
+  if (kind === "journalist") return "Journalist";
+  if (kind === "citizen") return "A resident";
+  if (kind === "bank") return "Bank";
+  if (SECTORS.includes(kind)) {
+    const base = kind === "clinic" || kind === "school" ? cap(kind) : `${cap(kind)} firm`;
+    if (!suffix) return base;
+    return suffix.startsWith("firm") ? `${cap(kind)} startup #${suffix.slice(4)}` : `${base} #${suffix}`;
+  }
+  return String(id);
+}
+const sectorOf = (id) => String(id ?? "").split("_")[1];
+
+function policyText(action, params = {}) {
+  switch (action) {
+    case "adjust_tax":
+      if (params.income_tax_percent !== undefined) return `sets income tax to ${params.income_tax_percent}%`;
+      if (params.change_basis_points !== undefined) {
+        const points = params.change_basis_points / 100;
+        return `${points < 0 ? "cuts" : "raises"} income tax by ${Math.abs(points)} point${Math.abs(points) === 1 ? "" : "s"}`;
+      }
+      return "changes income tax";
+    case "set_sales_tax": return `sets sales tax to ${params.sales_tax_basis_points / 100}%`;
+    case "fund_services": return `sets the services budget to ${wld(params.amount_minor)} per resident a week`;
+    case "set_welfare": return `sets welfare to ${wld(params.amount_minor)} a week`;
+    case "set_unemployment_benefit": return `sets unemployment benefit to ${wld(params.amount_minor)} a week`;
+    case "subsidize_food": return `subsidizes food by ${params.percent}%`;
+    case "subsidize_tuition": return `subsidizes school tuition by ${params.percent}%`;
+    case "student_stipend": return params.on ? "starts paying students a stipend" : "stops the student stipend";
+    case "hiring_bonus": return `offers firms ${wld(params.amount_minor)} for each graduate hired`;
+    case "subsidize_startup": return `pays to start a new ${params.sector} firm`;
+    case "set_border": return `${params.open ? "opens" : "closes"} the ${params.edge_id} border`;
+    case "propose_agreement": return `proposes a trade agreement to ${countryName(params.country_id)}`;
+    case "offer_peace": return `offers peace to ${countryName(params.country_id)}`;
+    case "respond_agreement": return `${params.accept ? "accepts" : "rejects"} ${countryName(params.country_id)}'s offer`;
+    case "declare_conflict": return `DECLARES CONFLICT on ${countryName(params.country_id)}`;
+    case "pay": case "invest": return `${action === "pay" ? "pays" : "invests"} ${wld(params.amount_minor)}`;
+    default: return `enacts ${action}`;
+  }
+}
+
+function actionText(action) {
+  const p = action.params ?? {};
+  switch (action.action_type) {
+    case "set_price": return `${p.change_pct < 0 ? "cuts" : "raises"} prices ${Math.abs(p.change_pct)}%`;
+    case "set_wage": return `${p.change_pct < 0 ? "cuts" : "raises"} wages ${Math.abs(p.change_pct)}%`;
+    case "set_headcount": return `${p.change < 0 ? "cuts" : "adds"} ${plural(Math.abs(p.change), "job")}`;
+    case "set_deposit_rate": return `sets the savings rate to ${p.rate_pct}% a year`;
+    case "set_loan_rate": return `sets the loan rate to ${p.rate_pct}% a year`;
+    case "set_lending_standard": return `makes lending ${p.standard}`;
+    case "import_goods": return `orders ${p.quantity} ${p.good} from ${countryName(p.seller_id)}`;
+    default: return action.action_type;
+  }
+}
+
+// Weekly line per country: economy_cycle plus that week's labor_market for the same country and day.
+function weekText(event, labor) {
+  const p = event.payload;
+  const parts = [];
+  if (p.hungry_residents) parts.push(`${p.hungry_residents} hungry` + (p.priced_out_residents ? ` (${p.priced_out_residents} priced out of food)` : ""));
+  parts.push(`${p.unemployed ?? 0} unemployed`);
+  if (labor?.layoffs) parts.push(`${labor.layoffs} laid off`);
+  if (labor?.hires) parts.push(`${labor.hires} hired`);
+  if (p.sick_residents) parts.push(`${p.sick_residents} too sick to work`);
+  if (p.students) parts.push(`${p.students} studying`);
+  const net = Number(p.government_income_minor ?? 0) - Number(p.government_spending_minor ?? 0);
+  parts.push(`budget ${signedWld(net)} (in ${wld(p.government_income_minor)}, out ${wld(p.government_spending_minor)})`);
+  if (labor?.dividends_minor) parts.push(`owners took ${wld(labor.dividends_minor)} in dividends`);
+  return parts.join(", ");
+}
+
+// Returns { country, text, body?, key?, many?(events), alert? }. key groups same-day repeats into one line.
+function describe(event, labor) {
+  const p = event.payload ?? {};
+  const ids = event.entity_ids ?? [];
+  const place = countryName(ids[0]);
+  switch (event.event_type) {
+    case "economy_cycle":
+      return { country: place, text: `Week ${Math.floor(event.tick / 7) + 1} summary: ${weekText(event, labor)}` };
+    case "action_accepted": {
+      const action = p.action;
+      const firm = (item) => item.payload.action.params?.business_id ?? item.entity_ids?.[0]; // an owner acts for their firm
+      const text = `${who(firm(event))} ${actionText(action)}`;
+      return {
+        country: place, text, body: action.reason ? `“${action.reason}”` : "",
+        key: `${action.action_type}:${JSON.stringify({ ...action.params, business_id: undefined })}`,
+        many: (events) => {
+          const bySector = {};
+          for (const item of events) bySector[sectorOf(firm(item))] = (bySector[sectorOf(firm(item))] ?? 0) + 1;
+          const countries = new Set(events.map((item) => countryName(item.entity_ids?.[0])));
+          return `${events.length} firms in ${countries.size === 1 ? "1 country" : `${countries.size} countries`} ${bare(actionText(action))} (${Object.entries(bySector).map(([s, n]) => `${s} ×${n}`).join(", ")})`;
+        },
+      };
+    }
+    case "action_rejected": {
+      const action = typeof p.action === "string" ? { action_type: p.action } : (p.action ?? {});
+      return {
+        country: place, alert: true,
+        text: `${who(ids[0])} tried to ${actionText(action)}, refused (${(p.code ?? "rejected").toLowerCase().replaceAll("_", " ")})`,
+        key: `rejected:${action.action_type}:${p.code}`,
+        many: (events) => `${events.length} attempts to ${action.action_type?.replaceAll("_", " ")} were refused (${(p.code ?? "").toLowerCase().replaceAll("_", " ")})`,
+      };
+    }
+    case "policy_enacted":
+    case "policy_blocked": {
+      const action = typeof p.action === "string" ? p.action : p.action?.action_type;
+      const params = p.params ?? p.action?.params;
+      const blocked = event.event_type === "policy_blocked";
+      const reason = p.reason && !/^[A-Z_]+$/.test(p.reason) ? p.reason : "";
+      return {
+        country: place, alert: blocked,
+        text: `Government ${blocked ? "was blocked: it tried to " + bare(policyText(action, params)) : policyText(action, params)}`,
+        body: reason,
+      };
+    }
+    case "plan_set":
+      return { country: place, text: `Planner sets weekly quotas: ${Object.entries(p.plan ?? {}).map(([good, n]) => `${good} ${n}`).join(", ")}` };
+    case "public_report":
+      return { country: place, text: "News report", body: p.text };
+    case "shipment_dispatched": {
+      const via = (p.plan?.edge_ids ?? []).map((edge) => countryName(edge.split("_to_")[1])).slice(0, -1);
+      return {
+        country: countryName(ids[1]),
+        text: `${who(ids[1])} imports ${p.quantity} ${p.good} from ${countryName(ids[2])}: arrives in ${plural(p.plan?.travel_ticks ?? 0, "day")}` +
+          (via.length ? ` via ${via.join(", ")}` : ""),
+        body: `Goods ${wld(p.escrow_minor)} + tariff ${wld(p.tariff_minor)} + shipping ${wld(p.shipping_minor)}${p.ordered_by === "agent decision" ? "" : " · automatic order"}`,
+        key: `import:${countryOf(ids[1])}`,
+        many: (events) => {
+          const goods = {};
+          let cost = 0;
+          for (const item of events) {
+            const q = item.payload;
+            const label = `${q.good} from ${countryName(item.entity_ids?.[2])}`;
+            goods[label] = (goods[label] ?? 0) + Number(q.quantity ?? 0);
+            cost += Number(q.escrow_minor ?? 0) + Number(q.tariff_minor ?? 0) + Number(q.shipping_minor ?? 0);
+          }
+          return `${countryName(ids[1])} firms place ${events.length} import orders: ${Object.entries(goods).map(([label, n]) => `${n} ${label}`).join(", ")} (total ${wld(cost)})`;
+        },
+      };
+    }
+    case "shipment_failed":
+      return { country: "", alert: true, text: `A shipment of ${p.quantity} ${p.good} never arrived and was written off` };
+    case "shipment_rerouted":
+      return { country: "", text: `A shipment was rerouted around a closed border` };
+    case "business_started":
+      return {
+        country: place, text: `A resident opens a new ${p.sector} business, investing ${wld(p.invested_minor)}`,
+        body: `Opens at ${wld(p.launch_price_minor)} a unit${p.chosen_by === "agent decision" ? "" : ` · ${p.chosen_by}`}`,
+      };
+    case "business_closed":
+      return {
+        country: countryName(ids[1]), alert: true,
+        text: `${who(ids[0])} closes: ${p.reason}`,
+        body: `${wld(p.invested_minor)} invested, ${wld(p.recovered_minor)} returned to the owner, ${plural(p.workers_laid_off ?? 0, "worker")} laid off`,
+      };
+    case "startup_grant":
+      return { country: countryName(ids[1]), text: `Government pays ${wld(p.grant_minor)} to open a new ${p.sector} firm` };
+    case "enrolled":
+      return {
+        country: place,
+        text: `A resident enrolls in school${p.part_time ? " part-time" : ""}${p.quit_employer ? `, quitting ${who(p.quit_employer)}` : ""}`,
+        body: `Tuition ${wld(p.tuition_minor)} (paid ${wld(p.paid_by_student_minor)} themselves${p.student_loan ? ", rest on a student loan" : ""}) · graduates day ${p.graduates_tick}`,
+      };
+    case "graduated":
+      return { country: place, text: `A ${p.occupation?.replaceAll("_", " ") ?? "resident"} graduates and now produces ${Math.round(((p.output_boost ?? 1) - 1) * 100)}% more` };
+    case "agent_migrated":
+      return { country: countryName(p.from), text: `A ${p.occupation?.replaceAll("_", " ") ?? "resident"} emigrates to ${countryName(p.to)}`, key: `migrate:${p.from}:${p.to}`,
+        many: (events) => `${events.length} residents emigrate to ${countryName(p.to)}` };
+    case "election_result":
+      return {
+        country: place, alert: p.replaced,
+        text: p.replaced ? `Leadership is voted out at ${Math.round(p.approval * 100)}% approval` : `Leadership holds on at ${Math.round(p.approval * 100)}% approval`,
+        body: `Next election day ${p.next_election_tick}`,
+      };
+    case "resource_crisis":
+      return { country: place, alert: true, text: `${(p.reason ?? "crisis").toUpperCase()}: ${p.good} output falls to ${Math.round(p.production_multiplier * 100)}% until day ${p.until_tick}` };
+    case "diplomatic_tension": {
+      const [a, b] = String(ids[0]).split(":");
+      return { country: countryName(a), text: `Tension between ${countryName(a)} and ${countryName(b)} rises to ${p.tension}`, body: p.reason };
+    }
+    case "diplomatic_offer":
+      return { country: place, text: `${countryName(p.proposed_by ?? ids[0])} offers ${p.proposal_kind === "peace" ? "peace" : "a trade agreement"}` };
+    case "diplomatic_response":
+      return { country: "", text: `An offer is ${p.accept ? "accepted" : "rejected"}${p.trade_agreement ? ": trade agreement in force" : ""}${p.at_war ? " (still at war)" : ""}` };
+    case "conflict_started":
+      return { country: countryName(p.first), alert: true, text: `CONFLICT: ${countryName(p.first)} and ${countryName(p.second)} are at war` };
+    case "conflict_costs":
+      return { country: place, alert: true, text: `War costs this week (${plural(p.conflicts ?? 0, "conflict")}), ${p.lost_units ?? 0} units of goods lost so far` };
+    case "border_changed":
+      return { country: "", text: `Border ${p.edge_id} ${p.open ? "opens" : "closes"}` };
+    case "loan_requested":
+      return { country: place, text: `${who(ids[1])} asks the bank for ${wld(p.amount_minor)} to ${p.purpose}` };
+    case "loan_funded":
+      return {
+        country: place, text: `Bank lends ${wld(p.principal_minor)} (${p.kind} loan) at ${p.rate_pct}%`,
+        body: `${wld(p.weekly_payment_minor)} a week for ${p.weeks} weeks`,
+      };
+    case "loan_rejected":
+      return { country: place, alert: true, text: `Bank turns down a ${wld(p.amount_minor)} loan`, body: p.reason };
+    case "loan_settled":
+      return {
+        country: place, alert: p.status === "defaulted",
+        text: p.status === "defaulted" ? `A loan defaults: the bank loses ${wld(p.loss_minor)}` : "A loan is repaid in full",
+        key: `settled:${p.status}`,
+        many: (events) => p.status === "defaulted"
+          ? `${events.length} loans default, the banks lose ${wld(events.reduce((sum, item) => sum + Number(item.payload.loss_minor ?? 0), 0))}`
+          : `${events.length} loans are repaid in full`,
+      };
+    case "loan_guaranteed":
+      return { country: place, text: `Government covers a defaulted student loan: ${wld(p.paid_minor)}` };
+    case "owner_debt":
+      return { country: place, alert: true, text: `A failed firm's owner now personally owes the bank ${wld(p.amount_minor)}`, body: `${wld(p.weekly_payment_minor)} a week` };
+    case "treasury_borrowed":
+      return { country: place, alert: true, text: `Treasury borrows ${wld(p.amount_minor)} from the state bank`, body: `Now owes ${wld(p.owed_minor)}, repaying ${wld(p.weekly_payment_minor)} a week` };
+    case "savings_withdrawn":
+      return {
+        country: place, text: `A resident takes ${wld(p.received_minor)} of savings out of the bank`, key: "withdraw",
+        many: (events) => `${events.length} residents take ${wld(events.reduce((sum, item) => sum + Number(item.payload.received_minor ?? 0), 0))} out of the bank` +
+          (events.some((item) => item.payload.still_owed_minor > 0) ? ", some could not get all of it" : ""),
+      };
+    case "bank_week":
+      return { country: place, alert: true, text: `Bank cannot pay ${wld(p.unmet_withdrawals_minor)} of withdrawals this week`, body: `Reserves ${wld(p.reserves_minor)}, deposits ${wld(p.deposits_minor)}, loans ${wld(p.loans_minor)}` };
+    case "bank_failed":
+      return { country: place, alert: true, text: `BANK FAILURE: the state takes over the bank`, body: `Deposits ${wld(p.deposits_minor)}, equity ${wld(p.equity_minor)}` };
+    default:
+      return { country: "", text: cap(event.event_type.replaceAll("_", " ")), body: p.reason ?? "" };
+  }
+}
+
 function showEvents(snapshot) {
   const list = element("events");
   list.replaceChildren();
   element("event-count").textContent = `${snapshot.seq} events`;
-  const important = displayedEvents.filter(
-    (event) =>
-      event.event_type !== "economy_cycle" &&
-      !(
-        event.event_type === "action_accepted" &&
-        event.entity_ids?.[0]?.includes("_citizen_")
-      ),
+  countryNames = new Map((snapshot.countries ?? []).map((country) => [country.id, country.name]));
+  const labor = new Map(
+    displayedEvents.filter((event) => event.event_type === "labor_market")
+      .map((event) => [`${event.tick}:${event.entity_ids?.[0]}`, event.payload]),
   );
-  for (const event of important.slice(-35).reverse()) {
+  // Newest first; same-day events with the same key collapse into one line.
+  const lines = [];
+  const groups = new Map();
+  for (const event of displayedEvents.filter((item) => item.event_type !== "labor_market").reverse()) {
+    const line = describe(event, labor.get(`${event.tick}:${event.entity_ids?.[0]}`));
+    const groupKey = line.key && `${event.tick}:${event.event_type}:${line.key}`;
+    if (groupKey && groups.has(groupKey)) {
+      groups.get(groupKey).events.push(event);
+      continue;
+    }
+    const entry = { line, events: [event] };
+    if (groupKey) groups.set(groupKey, entry);
+    lines.push(entry);
+    if (lines.length === 60) break;
+  }
+  for (const { line, events } of lines) {
+    const event = events[0];
+    const grouped = events.length > 1;
     const item = document.createElement("li");
     item.append(
-      textNode(
-        "div",
-        `T${event.tick} · #${event.seq} · ${event.source}`,
-        "event-meta",
-      ),
+      textNode("div", `Day ${event.tick}${!grouped && line.country ? ` · ${line.country}` : ""}`, "event-meta"),
+      textNode("div", grouped ? line.many(events) : line.text, line.alert ? "event-title event-rejected" : "event-title"),
     );
-    const payload = event.payload ?? {};
-    const action = payload.action;
-    const actionType =
-      typeof action === "string" ? action : action?.action_type;
-    const title = actionType
-      ? `${event.entity_ids?.[0] ?? "World"} → ${actionType}`
-      : event.event_type.replaceAll("_", " ");
-    item.append(
-      textNode(
-        "div",
-        title,
-        event.event_type === "action_rejected"
-          ? "event-title event-rejected"
-          : "event-title",
-      ),
-    );
-    const detail =
-      action?.params?.text ??
-      action?.reason ??
-      (event.event_type === "border_changed"
-        ? `${payload.edge_id}: ${payload.open ? "open" : "closed"}`
-        : (payload.reason ?? ""));
-    item.append(
-      textNode(
-        "p",
-        `${payload.code && payload.code !== "OK" ? payload.code + ": " : ""}${detail}`,
-        "event-body",
-      ),
-    );
+    if (!grouped && line.body) item.append(textNode("p", line.body, "event-body"));
+    const raw = document.createElement("details");
+    raw.className = "event-raw";
+    raw.append(textNode("summary", "raw"), textNode("pre", JSON.stringify(grouped ? events : event, null, 2)));
+    item.append(raw);
     list.append(item);
   }
 }
@@ -526,7 +778,7 @@ async function refresh() {
 async function loadEvents(path, snapshot, signal) {
   let sequence = lastSequence;
   if (sequence === 0 && snapshot.run.stage === 2)
-    sequence = Math.max(0, snapshot.seq - 200);
+    sequence = Math.max(0, snapshot.seq - 2000); // a few weeks back once the noise is filtered, so the first view has weekly summaries
   let history = displayedEvents.slice();
   let page;
   do {
@@ -537,7 +789,7 @@ async function loadEvents(path, snapshot, signal) {
     page = page.filter(
       (event) => event.seq > sequence && event.seq <= snapshot.seq,
     );
-    history.push(...page);
+    history.push(...page.filter(newsworthy));
     if (page.length) sequence = page.at(-1).seq;
   } while (page.length === 500 && sequence < snapshot.seq);
   return { events: history.slice(-500), sequence };
@@ -724,7 +976,7 @@ function showWorld(snapshot) {
     relations.append(
       textNode(
         "p",
-        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · relations ${relation.score}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
+        `${relation.first} ↔ ${relation.second} · ${relation.at_war ? "conflict" : relation.trade_agreement ? "trade agreement" : "offer pending"} · tension ${relation.tension}${relation.proposal_kind ? ` · ${relation.proposal_kind} offer by ${relation.proposed_by}` : ""}`,
         relation.at_war ? "event-rejected" : "",
       ),
     );

@@ -26,14 +26,12 @@ function fixture(id, tick = 40) {
     },
     {
       run_id: id,
-      event_type: "action_accepted",
+      event_type: "public_report",
       tick,
       seq: data.snapshot.seq,
       source: "model",
-      entity_ids: ["aster_government"],
-      payload: {
-        action: { action_type: "publish", params: { text: "A policy update" } },
-      },
+      entity_ids: ["aster", "aster_journalist"],
+      payload: { text: "A policy update" },
     },
   ];
   data.notes = {
@@ -145,6 +143,42 @@ test("policy strings and action objects render together; optional parameters are
   assert.match(view.element("events").textContent, /A policy update/);
   assert.equal(view.element("message").textContent, "");
   assert.match(view.element("run-notes").textContent, /Observations for first/);
+});
+
+test("feed drops noise, writes sentences and groups same-day repeats", async (t) => {
+  const run = fixture("feed");
+  const seq = run.snapshot.seq;
+  const accepted = (n, id, params) => ({
+    event_type: "action_accepted", tick: 40, seq: seq - 10 + n, source: "model", entity_ids: [id],
+    payload: { action: { action_type: "set_price", params, reason: "More profit" } },
+  });
+  run.events = [
+    { event_type: "decision_requested", tick: 40, seq: seq - 12, source: "rule", entity_ids: ["aster_food"], payload: {} },
+    { event_type: "labor_market", tick: 40, seq: seq - 11, source: "rule", entity_ids: ["aster"], payload: { layoffs: 7, hires: 0 } },
+    accepted(0, "aster_food_2", { change_pct: 10, business_id: "aster_food_2" }),
+    accepted(1, "aster_energy", { change_pct: 10, business_id: "aster_energy" }),
+    accepted(2, "aster_clinic", { change_pct: -5, business_id: "aster_clinic" }),
+    {
+      event_type: "economy_cycle", tick: 40, seq: seq - 5, source: "rule", entity_ids: ["aster"],
+      payload: { unemployed: 13, hungry_residents: 4, priced_out_residents: 4, government_income_minor: 24233, government_spending_minor: 14200 },
+    },
+    {
+      event_type: "policy_enacted", tick: 40, seq, source: "rule", entity_ids: ["aster", "policy_1"],
+      payload: { action: "adjust_tax", params: { change_basis_points: -100 }, reason: "INSTITUTIONAL_APPROVAL_AND_FUNDING" },
+    },
+  ];
+  const view = observer({ feed: run });
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("connection").textContent.startsWith("Connected"));
+  const titles = [...view.element("events").querySelectorAll(".event-title")].map((node) => node.textContent);
+  assert.deepEqual(titles, [
+    "Government cuts income tax by 1 point",
+    "Week 6 summary: 4 hungry (4 priced out of food), 13 unemployed, 7 laid off, budget +100.33 WLD (in 242.33 WLD, out 142.00 WLD)",
+    "Clinic cuts prices 5%",
+    "2 firms in 1 country raise prices 10% (energy ×1, food ×1)",
+  ]);
+  const shown = [...view.element("events").querySelectorAll(".event-title, .event-body")].map((node) => node.textContent).join("\n");
+  assert.doesNotMatch(shown, /decision requested|INSTITUTIONAL/);
 });
 
 test("late run responses cannot overwrite the selected run", async (t) => {

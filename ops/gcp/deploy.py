@@ -51,8 +51,13 @@ def bundle_source(root, destination, base_archive=None):
         if original.hexdigest() != base_source["source_sha256"]:
             raise ValueError("Base source archive hash mismatch")
         for name, content in files:
-            if name.startswith("ops/gcp/") or name in {"ops/check_amd.py", "ops/test_run_collection.py", "docs/faultline/22-google-cloud-deployment.md"}:
+            if name.startswith("ops/gcp/") or name in {"ops/check_amd.py", "ops/test_run_collection.py", "docs/faultline/22-google-cloud-deployment.md", "backend/Faultline.Api/SimulationPause.cs", "backend/Faultline.Api/wwwroot/controls.js", "backend/Faultline.Api/wwwroot/controls.css", "backend/Faultline.Tests/SimulationPauseTests.cs"}:
                 base_files[name] = content
+        # Preserve the running economy/model code and insert only reviewed pause/UI hooks.
+        from ops.gcp.control_patch import pause_hooks, control_panel
+        for name, patch in [("backend/Faultline.Api/Coordinator.cs", pause_hooks), ("backend/Faultline.Api/wwwroot/index.html", control_panel)]:
+            if name in base_files:
+                base_files[name] = patch(base_files[name].decode()).encode()
         files = sorted(base_files.items())
     for name, content in files:
         digest.update(name.encode() + b"\0" + hashlib.sha256(content).digest())

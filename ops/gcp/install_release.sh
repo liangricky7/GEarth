@@ -44,17 +44,28 @@ if [[ "$activation" == after-current ]]; then
 fi
 # Switch only after a successful build. Persistent state survives release changes.
 systemctl stop faultline.service 2>/dev/null || true
+systemctl stop faultline-control.service 2>/dev/null || true
 install -m 600 -o faultline -g faultline "$config" /var/lib/faultline/config.env.new
 mv -f /var/lib/faultline/config.env.new /var/lib/faultline/config.env
 rm "$target/.env.local"
 ln -sfn /var/lib/faultline/config.env "$target/.env.local"
 ln -sfn "$target" /opt/faultline/current
 install -m 644 "$target/ops/gcp/faultline.service" /etc/systemd/system/faultline.service
-install -m 644 "$target/ops/gcp/nginx.conf" /etc/nginx/sites-available/default
+# HTTPS installation owns the Nginx configuration after team controls are enabled.
+if [[ ! -f /var/lib/faultline/control.env ]]; then
+  install -m 644 "$target/ops/gcp/nginx.conf" /etc/nginx/sites-available/default
+else
+  install -m 644 "$target/ops/gcp/faultline-control.service" /etc/systemd/system/faultline-control.service
+  visudo -cf "$target/ops/gcp/control-sudoers"
+  install -m 440 "$target/ops/gcp/control-sudoers" /etc/sudoers.d/faultline-control
+fi
 nginx -t
 systemctl daemon-reload
 systemctl enable faultline.service
 systemctl reload nginx
+if [[ -f /var/lib/faultline/control.env ]]; then
+  systemctl enable --now faultline-control.service
+fi
 if [[ "$start_collector" == true ]]; then
   systemctl start faultline.service
   echo "Release installed; verified collector started."

@@ -51,6 +51,18 @@ First installation also requires approving the VM's Tailscale device sign-in. No
 
 ## Operate
 
+### Shared team controls
+
+The HTTPS observer offers Start, Stop, and Reset after signing in with the shared team password. The generated password is kept in the owner's private local deployment notes; it is never committed. The VM stores a salted password digest and a session signing key in `/var/lib/faultline/control.env` (mode 600). Sessions expire after eight hours, use secure HTTP-only cookies, and controls reject cross-origin requests. Failed sign-ins are rate limited. Only authenticated controls can change the collector; the remaining public API is read-only.
+
+Stop closes new inference admission, finishes in-flight decisions, saves the current checkpoint, and pauses simulated time. The observer remains readable. Start removes the pause request and resumes the same in-memory world. Reset stops the collector gracefully, saves the old run as stopped, and starts the next reserved seed; it does not delete histories or notes. The UI confirms Reset because this is one world shared by the team. Operations are serialized. Closing a browser or locking controls does not stop collection.
+
+`faultline-control.service` runs on loopback port 5090 independently of the engine, and Nginx serves static assets even while Reset restarts the engine. Its sudo permission is limited to starting and stopping `faultline.service`. HTTPS uses a Let's Encrypt certificate for the hostname pointing at the reserved IP; Certbot renews it and reloads Nginx. The VM firewall exposes only web ports 80/443 in addition to existing access. No Netplan configuration is modified.
+
+Pause requests survive controller restarts and VM reboots. An in-memory world resumes after Stop/Start while its engine remains running; after a VM reboot, the existing collector starts a new seed and respects the pause request. Historical checkpoints remain saved, and this feature does not add arbitrary checkpoint replay.
+
+To install controls after obtaining an HTTPS certificate, run `ops/gcp/install_controls.sh HOSTNAME PRIVATE_CONFIG` as root on the VM. The private config contains `CONTROL_ORIGIN` (exact HTTPS origin), `CONTROL_PASSWORD_HASH` (salted PBKDF2 digest), and `CONTROL_SESSION_KEY`. The release must contain the reviewed pause hooks before enabling controls. Subsequent deployments preserve the HTTPS Nginx configuration and restart the independent controller.
+
 ```bash
 # On the VM
 sudo systemctl status faultline.service

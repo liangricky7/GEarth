@@ -1,0 +1,18 @@
+[Unit]
+Description=Faultline HTTPS team simulation controls
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=faultline
+Group=faultline
+WorkingDirectory=/opt/faultline/current
+ExecStart=/opt/faultline/current/.venv/bin/python -m ops.gcp.control_server
+Restart=on-failure
+RestartSec=5
+UMask=0077
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

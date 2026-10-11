@@ -176,6 +176,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         await using var pending = new DecisionQueue(capacity, cancellationToken);
         var dispatched = new Dictionary<string, PendingDecision>();
         var queue = new Queue<string>();
+        var pause = new SimulationPause(Environment.GetEnvironmentVariable("FAULTLINE_CONTROL_DIRECTORY"));
         long revision = world.Revision;
         // Verbose runs also write the day-by-day history file the renderer replays (a fork's file is named after its timeline).
         using var history = Environment.GetEnvironmentVariable("FAULTLINE_VERBOSE") == "true"
@@ -212,6 +213,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
 
         void Dispatch()
         {
+            if (pause.Requested)
+                return;
             var pendingIds = pending.AgentIds;
             queue = new Queue<string>(queue.Where(id => world.Agents.TryGetValue(id, out var agent)
                 && SocietyLabor.DecidesForItself(agent) && !pendingIds.Contains(id)));
@@ -242,11 +245,26 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, DateTimeOffset.UtcNow);
         }
 
+        async Task PauseIfRequested()
+        {
+            await pause.WaitAsync(async () =>
+            {
+                while (pending.Count > 0)
+                {
+                    await pending.WaitForCompletion(cancellationToken);
+                    ApplyCompleted();
+                }
+                await Commit();
+                await notes.Record(current!, "paused");
+            }, cancellationToken);
+        }
+
         async Task DrainWeek()
         {
             while (queue.Count > 0 || pending.Count > 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                await PauseIfRequested();
                 ApplyCompleted();
                 Dispatch();
                 if (pending.Count > 0)
@@ -262,6 +280,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             var firstTick = world.Tick + 1;
             for (var tick = firstTick; tick <= tickLimit; tick++)
             {
+                await PauseIfRequested();
                 var started = DateTimeOffset.UtcNow;
                 ApplyCompleted();
                 if ((world.Tick + 1) % SocietyLabor.DaysPerWeek == 0)

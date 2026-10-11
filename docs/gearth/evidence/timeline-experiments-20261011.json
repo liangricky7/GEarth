@@ -1,0 +1,109 @@
+{
+  "verified_at_utc": "2026-10-11T11:29:00Z",
+  "branch": "feat/timeline-experiments",
+  "scope": "Local first-release RULE experiment implementation; no cloud deployment",
+  "checks": [
+    {
+      "command": "dotnet build GEarth.sln --nologo -v quiet",
+      "result": "passed",
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "command": "dotnet test GEarth.sln --no-restore --nologo --filter 'FullyQualifiedName~ExperimentTests|FullyQualifiedName~ForkTests|FullyQualifiedName~CoordinatorAuditTests|FullyQualifiedName~ContractVersionTests' -v quiet",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": ".venv/bin/python -m pytest ops/test_experiments.py ops/test_experiments_engine.py ops/gcp/test_controls.py ops/test_run_collection.py -q",
+      "passed": 36,
+      "failed": 0,
+      "note": "One dependency deprecation warning from Starlette's TestClient"
+    },
+    {
+      "command": "npm run test:observer",
+      "passed": 16,
+      "failed": 0,
+      "skipped": 1,
+      "note": "Optional existing recorded live/stopped API test is not configured"
+    },
+    {
+      "command": "bash -n ops/gcp/install_controls.sh",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "real_process_integration": {
+    "test": "ops/test_experiments_engine.py",
+    "population": 200,
+    "fork_tick": 6,
+    "end_tick": 14,
+    "path": "Authenticated HTTP -> SQLite queue -> two isolated .NET engines -> complete daily metrics",
+    "provisioning": "Local branch fixture adapter",
+    "parent_file_digest_unchanged": true,
+    "owned_children_released": true
+  },
+  "browser_rehearsal": {
+    "url": "http://127.0.0.1:6182/",
+    "environment": "Temporary local adapter and real .NET engine, no Neon API calls",
+    "target": "cinder_citizen_00001",
+    "edit": {
+      "field": "health",
+      "original": 76,
+      "changed": 10
+    },
+    "fork_tick": 6,
+    "end_tick": 14,
+    "status": "completed",
+    "final_health": {
+      "control": 81,
+      "changed": 30
+    },
+    "final_wellbeing": {
+      "control": 59,
+      "changed": 38
+    },
+    "console_errors_and_warnings": 0,
+    "screenshot": ".data/experiment-comparison-panel.jpg"
+  },
+  "release_requirements": [
+    "Supply server-side NEON_API_KEY and NEON_PROJECT_ID",
+    "Run real Neon staging provisioning, continuation, cancellation and cleanup rehearsal",
+    "Track new source files before packaging a full source release",
+    "Set the HTTPS control proxy timeout to 180 seconds on existing installations",
+    "Explicitly enable GEARTH_EXPERIMENTS_ENABLED after staging verification"
+  ],
+  "future_scope": [
+    "Archived checkpoint durability beyond Neon retention",
+    "Shared compute admission and LIVE inference qualification"
+  ],
+  "main_integration": {
+    "base_commit": "3e662c5",
+    "environment": "Clean isolated worktree based on the latest fetched origin/main",
+    "build": {
+      "warnings": 0,
+      "errors": 0
+    },
+    "csharp": {
+      "command": "dotnet test GEarth.sln --no-build --nologo -v quiet",
+      "passed": 305,
+      "failed": 0,
+      "skipped": 0
+    },
+    "python": {
+      "passed": 36,
+      "failed": 0
+    },
+    "observer": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 1
+    },
+    "design_validation": "passed",
+    "cloud_deployed": false
+  }
+}

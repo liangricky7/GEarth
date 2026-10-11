@@ -6,7 +6,7 @@ namespace GEarth.Api;
 public sealed class RunNotesService(IWorldStore store, ILogger<RunNotesService> logger)
 {
     private readonly SemaphoreSlim gate = new(1);
-    private readonly string directory = Path.GetFullPath(".data/run-notes");
+    private readonly string directory = Path.GetFullPath(Environment.GetEnvironmentVariable("GEARTH_NOTES_DIRECTORY") ?? ".data/run-notes");
 
     public async Task<RunNotes> Record(World world, string? status = null, CancellationToken cancellationToken = default)
     {

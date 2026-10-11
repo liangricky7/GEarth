@@ -2,7 +2,7 @@
   "name": "gearth-observer-checks",
   "private": true,
   "scripts": {
-    "test:observer": "node --test tests/observer.test.cjs tests/controls.test.cjs"
+    "test:observer": "node --test tests/observer.test.cjs tests/controls.test.cjs tests/experiments.test.cjs"
   },
   "devDependencies": {
     "jsdom": "26.1.0"

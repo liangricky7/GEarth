@@ -719,6 +719,7 @@ function selectRun(runId, cancelRefresh = true) {
   if (cancelRefresh) refreshController?.abort();
   viewGeneration += 1;
   selectedRun = runId;
+  document.dispatchEvent(new CustomEvent("gearth-run-selected", {detail:{runId}}));
   selectedAgent = null;
   agentOffset = 0;
   agentTotal = 0;

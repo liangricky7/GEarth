@@ -1,0 +1,16 @@
+.experiments-panel[hidden],.experiments-panel [hidden]{display:none!important}
+.experiments-panel button,.experiments-panel select,.experiments-panel input{font:inherit;padding:.6rem .75rem;border:1px solid #648b7e;border-radius:5px;background:#12211f;color:#dce9e4;max-width:100%}
+.experiments-panel button{cursor:pointer}.experiments-panel button:disabled{opacity:.45;cursor:default}
+.experiments-panel :focus-visible{outline:2px solid #99e6c5;outline-offset:3px}
+.experiments-panel label{display:block;margin:.8rem 0 .3rem;font-size:.85rem}
+.experiments-panel dialog{width:min(620px,calc(100vw - 2rem));max-height:85vh;overflow:auto;border:1px solid #648b7e;border-radius:10px;background:#101d1b;color:#dce9e4;padding:1.4rem;box-sizing:border-box}
+.experiments-panel dialog::backdrop{background:#000b}.experiments-panel dialog h2{font-size:1.1rem}
+.experiments-panel fieldset{margin-top:1rem;padding:1rem;border:1px solid #35554d;border-radius:8px}
+.experiments-panel fieldset:disabled{opacity:.5}.experiments-panel dialog select{width:100%}
+.experiment-inline{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}.experiment-inline select{flex:1;min-width:180px}
+.experiment-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1rem}
+.experiment-chart{margin:0;padding:.8rem;background:#12211f;border:1px solid #35554d;border-radius:8px}
+.experiment-chart figcaption{font-size:.9rem;font-weight:600}.experiment-chart svg{display:block;width:100%;height:auto}.experiment-chart text{fill:#b1c7be;font-size:11px}
+.experiment-legend{font-size:.85rem;margin-top:.8rem}.experiment-legend span{margin-right:1rem}.experiment-control{color:#94baff}.experiment-changed{color:#80e0b2}
+.experiment-table-wrap{overflow:auto}.experiment-table{width:100%;border-collapse:collapse;margin-top:1rem;font-size:.85rem}.experiment-table th,.experiment-table td{padding:.6rem;text-align:left;border-bottom:1px solid #35554d}
+@media(max-width:650px){.experiment-charts{grid-template-columns:1fr}.experiments-panel .panel-heading{align-items:flex-start;flex-direction:column}.experiments-panel button{min-height:44px}}

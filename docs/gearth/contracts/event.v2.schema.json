@@ -85,6 +85,7 @@
         "plan_set",
         "startup_grant",
         "timeline_forked",
+        "experiment_intervention",
         "treasury_borrowed"
       ]
     },

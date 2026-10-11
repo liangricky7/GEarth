@@ -8,6 +8,8 @@
     <script src="/observer.js" defer></script>
   <link rel="stylesheet" href="/controls.css" />
     <script src="/controls.js" defer></script>
+    <link rel="stylesheet" href="/experiments.css" />
+    <script src="/experiments.js" defer></script>
   </head>
   <body>
     <header>
@@ -28,6 +30,41 @@
         <div id="team-actions" hidden><button id="simulation-start" type="button">Start</button><button id="simulation-stop" type="button">Stop</button><button id="simulation-reset" type="button">Reset</button><button id="team-logout" type="button">Lock controls</button></div>
         <p id="simulation-message" role="status" aria-live="polite"></p>
         <dialog id="reset-confirmation"><form method="dialog"><h2>Reset this world?</h2><p>The current run will be saved, and a fresh world will start. Everyone shares this simulation.</p><button value="cancel">Cancel</button><button value="reset">Reset simulation</button></form></dialog>
+      </section>
+
+      <section id="experiments-panel" class="panel experiments-panel" hidden aria-labelledby="experiments-title">
+        <div class="panel-heading"><h2 id="experiments-title">What-if experiments</h2><button id="experiment-create" type="button" disabled>Create experiment from selected run</button></div>
+        <p id="experiments-access" class="scope">Unlock team controls to create an experiment.</p>
+        <p class="scope">Continue a weekly checkpoint with one change. Both the unchanged control and edited timeline use deterministic rule decisions.</p>
+        <label for="experiment-list">Saved experiments</label><select id="experiment-list"><option value="">Select an experiment</option></select>
+        <p id="experiment-progress" role="status" aria-live="polite"></p>
+        <button id="experiment-cancel" type="button" hidden>Cancel experiment</button>
+        <div id="experiment-results"></div>
+        <dialog id="experiment-dialog" aria-labelledby="experiment-dialog-title">
+          <form id="experiment-form">
+            <div class="panel-heading"><h2 id="experiment-dialog-title">Create a what-if experiment</h2><button id="experiment-close" type="button" aria-label="Close experiment editor">Close</button></div>
+            <p id="experiment-source" class="scope"></p>
+            <label for="experiment-checkpoint">Starting checkpoint</label>
+            <div class="experiment-inline"><select id="experiment-checkpoint" required></select><button id="experiment-preview" type="button">Prepare checkpoint</button></div>
+            <p class="scope">Only drained weekly checkpoints can resume. Preparing a checkpoint pins it for one hour; expired Neon history cannot be restored.</p>
+            <fieldset id="experiment-editor" disabled>
+              <legend>One change</legend>
+              <label for="experiment-scope">Change an</label><select id="experiment-scope"><option value="agent">Agent</option><option value="country">Agent country</option></select>
+              <label for="experiment-search">Find a target in this checkpoint</label><input id="experiment-search" type="search" maxlength="100" placeholder="Agent ID, occupation, or country" />
+              <label for="experiment-target">Target</label><select id="experiment-target" required></select>
+              <div class="experiment-inline"><button id="experiment-target-prev" type="button">Previous targets</button><button id="experiment-target-next" type="button">Next targets</button><span id="experiment-target-page"></span></div>
+              <label for="experiment-field">Property</label><select id="experiment-field" required></select>
+              <p id="experiment-original"></p>
+              <label for="experiment-value">New value</label><input id="experiment-value" type="number" required />
+              <select id="experiment-choice" hidden></select>
+              <p id="experiment-effect" class="scope"></p>
+              <label for="experiment-days">Days to simulate forward</label><input id="experiment-days" type="number" min="1" max="365" step="1" value="28" required />
+              <p id="experiment-review" class="scope"></p>
+              <button id="experiment-submit" type="submit">Run control and changed timeline</button>
+            </fieldset>
+            <p id="experiment-editor-message" role="status" aria-live="polite"></p>
+          </form>
+        </dialog>
       </section>
 
       <section class="metrics" aria-label="Simulation metrics">

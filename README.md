@@ -51,6 +51,12 @@ To fork a Neon world run into a what-if timeline on its own Neon branch (needs `
 .venv/bin/python ops/fork_run.py YOUR_RUN_ID --day 14 --country aster --government dictatorship
 ```
 
+The website experiment feature adds checkpoint previews, one agent/country edit,
+queued control/changed timelines, and comparison charts. The first release uses
+deterministic rule decisions. It is disabled by default; see the
+[design and operation guide](docs/gearth/26-timeline-experiments.md) for enabling
+it with server-side Neon branch credentials and for the local verification commands.
+
 ## Verify
 
 For unattended simulation experiments while developing locally, see the [Google Cloud deployment runbook](docs/gearth/22-google-cloud-deployment.md).

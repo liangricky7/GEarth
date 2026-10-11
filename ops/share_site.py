@@ -1,4 +1,5 @@
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -97,6 +98,15 @@ def save_state(state):
 
 
 def reconnect(client, url, key):
+    # The launcher supervisor and a manual recovery must not replace each
+    # other's tunnel or publish a tunnel that the other process just stopped.
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    with (STATE.parent / "share-reconnect.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return reconnect_locked(client, url, key)
+
+
+def reconnect_locked(client, url, key):
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
     upstream = state.get("upstream") or state.get("url", "")
     if not upstream.endswith(".lhr.life") or not healthy(client, upstream):

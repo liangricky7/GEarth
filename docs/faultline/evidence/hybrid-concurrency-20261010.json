@@ -1,0 +1,303 @@
+{
+  "measured_at": "2026-10-11T00:42:59.487416+00:00",
+  "timezone": "America/New_York",
+  "scenario_seed": 20261010,
+  "ticks_per_run": 28,
+  "initial_population": 1000,
+  "tick_interval_seconds": 0,
+  "profiles": [
+    {
+      "profile": "baseline",
+      "run_id": "world_20261011_003144_aa48a3",
+      "status": "completed",
+      "ticks": 28,
+      "initial_population": 1000,
+      "final_agent_records": 1002,
+      "elapsed_seconds": 172.41994,
+      "ticks_per_second": 0.1623942103216136,
+      "accepted_model_decisions": 940,
+      "accepted_model_decisions_per_second": 5.4518056322256,
+      "fallback_decisions": 0,
+      "rejected_decisions": 35,
+      "world_rejections_by_code": {
+        "CURRENT_PRECONDITION_FAILED": 35
+      },
+      "capacity": 25,
+      "max_pending_observed": 25,
+      "model_decisions_by_backend": {
+        "amd": 152,
+        "spark_b": 214,
+        "spark_b_citizen": 193,
+        "spark_a_citizen": 179,
+        "spark_a": 202
+      },
+      "median_latency_ms": 3102.64,
+      "p95_latency_ms": 5111.45,
+      "configured_providers": [
+        {
+          "name": "spark_a",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 4,
+          "decision_group": "institution"
+        },
+        {
+          "name": "spark_b",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 4,
+          "decision_group": "institution"
+        },
+        {
+          "name": "spark_a_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 8,
+          "decision_group": "citizen"
+        },
+        {
+          "name": "spark_b_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 8,
+          "decision_group": "citizen"
+        },
+        {
+          "name": "amd",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 1,
+          "decision_group": "all"
+        }
+      ],
+      "observed_peak_active_by_backend": {
+        "spark_a": 4,
+        "spark_b": 4,
+        "spark_a_citizen": 8,
+        "spark_b_citizen": 8,
+        "amd": 1
+      },
+      "worker_failures_by_backend": {
+        "spark_a": 0,
+        "spark_b": 0,
+        "spark_a_citizen": 0,
+        "spark_b_citizen": 0,
+        "amd": 0
+      },
+      "cash_goods_and_event_sequence_verified": true
+    },
+    {
+      "profile": "concurrency16",
+      "run_id": "world_20261011_003453_2e1ad0",
+      "status": "completed",
+      "ticks": 28,
+      "initial_population": 1000,
+      "final_agent_records": 1002,
+      "elapsed_seconds": 128.156045,
+      "ticks_per_second": 0.21848364624548142,
+      "accepted_model_decisions": 924,
+      "accepted_model_decisions_per_second": 7.209960326100887,
+      "fallback_decisions": 0,
+      "rejected_decisions": 52,
+      "world_rejections_by_code": {
+        "CURRENT_PRECONDITION_FAILED": 52
+      },
+      "capacity": 49,
+      "max_pending_observed": 49,
+      "model_decisions_by_backend": {
+        "amd": 109,
+        "spark_b_citizen": 190,
+        "spark_a_citizen": 180,
+        "spark_a": 221,
+        "spark_b": 224
+      },
+      "median_latency_ms": 3961.6400000000003,
+      "p95_latency_ms": 7424.98,
+      "configured_providers": [
+        {
+          "name": "spark_a",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 8,
+          "decision_group": "institution"
+        },
+        {
+          "name": "spark_b",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 8,
+          "decision_group": "institution"
+        },
+        {
+          "name": "spark_a_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 16,
+          "decision_group": "citizen"
+        },
+        {
+          "name": "spark_b_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 16,
+          "decision_group": "citizen"
+        },
+        {
+          "name": "amd",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 1,
+          "decision_group": "all"
+        }
+      ],
+      "observed_peak_active_by_backend": {
+        "spark_a": 8,
+        "spark_b": 8,
+        "spark_a_citizen": 16,
+        "spark_b_citizen": 16,
+        "amd": 1
+      },
+      "worker_failures_by_backend": {
+        "spark_a": 0,
+        "spark_b": 0,
+        "spark_a_citizen": 0,
+        "spark_b_citizen": 0,
+        "amd": 0
+      },
+      "cash_goods_and_event_sequence_verified": true
+    },
+    {
+      "profile": "concurrency32",
+      "run_id": "world_20261011_003726_eb2c2b",
+      "status": "completed",
+      "ticks": 28,
+      "initial_population": 1000,
+      "final_agent_records": 1001,
+      "elapsed_seconds": 104.097477,
+      "ticks_per_second": 0.2689786612215395,
+      "accepted_model_decisions": 889,
+      "accepted_model_decisions_per_second": 8.54007249378388,
+      "fallback_decisions": 0,
+      "rejected_decisions": 83,
+      "world_rejections_by_code": {
+        "CURRENT_PRECONDITION_FAILED": 83
+      },
+      "capacity": 97,
+      "max_pending_observed": 97,
+      "model_decisions_by_backend": {
+        "amd": 87,
+        "spark_b_citizen": 189,
+        "spark_a_citizen": 183,
+        "spark_a": 215,
+        "spark_b": 215
+      },
+      "median_latency_ms": 5840.23,
+      "p95_latency_ms": 12358.16,
+      "configured_providers": [
+        {
+          "name": "spark_a",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution"
+        },
+        {
+          "name": "spark_b",
+          "model": "Qwen/Qwen3-8B",
+          "capacity": 16,
+          "decision_group": "institution"
+        },
+        {
+          "name": "spark_a_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen"
+        },
+        {
+          "name": "spark_b_citizen",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 32,
+          "decision_group": "citizen"
+        },
+        {
+          "name": "amd",
+          "model": "Qwen/Qwen3-4B",
+          "capacity": 1,
+          "decision_group": "all"
+        }
+      ],
+      "observed_peak_active_by_backend": {
+        "spark_a": 16,
+        "spark_b": 16,
+        "spark_a_citizen": 32,
+        "spark_b_citizen": 32,
+        "amd": 1
+      },
+      "worker_failures_by_backend": {
+        "spark_a": 0,
+        "spark_b": 0,
+        "spark_a_citizen": 0,
+        "spark_b_citizen": 0,
+        "amd": 0
+      },
+      "cash_goods_and_event_sequence_verified": true
+    }
+  ],
+  "local_cpu_profile": {
+    "population": 1000,
+    "ticks": 120,
+    "advance": {
+      "count": 120,
+      "total_ms": 973.1277999999999,
+      "median_ms": 5.3009,
+      "p95_ms": 21.2566
+    },
+    "observe": {
+      "count": 4373,
+      "total_ms": 1199.360800000001,
+      "median_ms": 0.1366,
+      "p95_ms": 0.7597
+    },
+    "serialize_and_copy": {
+      "count": 24,
+      "total_ms": 628.7056999999999,
+      "median_ms": 26.0919,
+      "p95_ms": 30.8996
+    }
+  },
+  "vllm_metrics_sample": [
+    {
+      "name": "spark_a",
+      "metrics": {
+        "vllm:num_requests_running": 16.0,
+        "vllm:num_requests_waiting": 0.0,
+        "vllm:kv_cache_usage_perc": 0.10456037116668548,
+        "vllm:num_preemptions_total": 0.0
+      }
+    },
+    {
+      "name": "spark_b",
+      "metrics": {
+        "vllm:num_requests_running": 16.0,
+        "vllm:num_requests_waiting": 0.0,
+        "vllm:kv_cache_usage_perc": 0.11706373201112585,
+        "vllm:num_preemptions_total": 0.0
+      }
+    },
+    {
+      "name": "spark_a_citizen",
+      "metrics": {
+        "vllm:num_requests_running": 26.0,
+        "vllm:num_requests_waiting": 6.0,
+        "vllm:kv_cache_usage_perc": 0.11125684746547337,
+        "vllm:num_preemptions_total": 0.0
+      }
+    },
+    {
+      "name": "spark_b_citizen",
+      "metrics": {
+        "vllm:num_requests_running": 29.0,
+        "vllm:num_requests_waiting": 3.0,
+        "vllm:kv_cache_usage_perc": 0.07799659615852172,
+        "vllm:num_preemptions_total": 0.0
+      }
+    }
+  ],
+  "selected_capacity": 97,
+  "limitations": [
+    "Short live qualification, not sustained capacity maximum.",
+    "Worlds evolve differently with decision ordering, model choices and changing preconditions; these are not identical fixed workloads.",
+    "Caches are warmer in later runs.",
+    "Higher concurrency increased individual response latency and world precondition rejections.",
+    "Transport/schema failures and world precondition rejections are reported separately."
+  ]
+}

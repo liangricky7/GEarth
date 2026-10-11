@@ -72,7 +72,7 @@ async function until(predicate) {
   throw new Error("Observer did not reach the expected state");
 }
 
-function observer(data, intercept) {
+function observer(data, intercept, { manualTimeouts = false } = {}) {
   const dom = new JSDOM(html, {
     url: "http://localhost",
     runScripts: "outside-only",
@@ -81,6 +81,15 @@ function observer(data, intercept) {
   const window = dom.window;
   const current = Object.keys(data)[0];
   window.setInterval = () => 0;
+  const requestTimers = new Map();
+  if (manualTimeouts) {
+    let timerId = 0;
+    window.setTimeout = (callback) => {
+      requestTimers.set(++timerId, callback);
+      return timerId;
+    };
+    window.clearTimeout = (id) => requestTimers.delete(id);
+  }
   window.fetch = async (path, options) => {
     requests.push({ path, signal: options.signal });
     const overridden = intercept?.(path, options);
@@ -124,7 +133,14 @@ function observer(data, intercept) {
     element("runs").value = id;
     element("runs").dispatchEvent(new window.Event("change"));
   };
-  return { dom, window, element, requests, changeRun };
+  return {
+    dom, window, element, requests, changeRun,
+    expireRequests: () => {
+      const callbacks = [...requestTimers.values()];
+      requestTimers.clear();
+      for (const callback of callbacks) callback();
+    },
+  };
 }
 
 test("policy strings and action objects render together; optional parameters are safe", async (t) => {
@@ -169,7 +185,9 @@ test("late run responses cannot overwrite the selected run", async (t) => {
         (request) => request.path === "/api/runs/first/notes",
       ).length === 2,
   );
-  const pending = view.requests.at(-1);
+  const pending = view.requests.filter(
+    (request) => request.path === "/api/runs/first/notes",
+  ).at(-1);
   view.changeRun("second");
   assert.equal(view.element("tick").textContent, "—");
   assert.equal(view.element("run-notes").textContent, "");
@@ -183,7 +201,7 @@ test("late run responses cannot overwrite the selected run", async (t) => {
   assert.doesNotMatch(view.element("run-notes").textContent, /first/);
 });
 
-test("failed run loading clears previous panels and recovers on refresh", async (t) => {
+test("a failed secondary panel does not hide a newly selected world", async (t) => {
   let fail = true;
   const view = observer(
     { first: fixture("first"), second: fixture("second", 80) },
@@ -194,23 +212,111 @@ test("failed run loading clears previous panels and recovers on refresh", async 
   await until(() => view.element("run-notes").textContent.includes("first"));
   view.changeRun("second");
   await until(
-    () => view.element("connection").textContent === "Connection interrupted",
+    () => view.element("connection").textContent.includes("panels retrying"),
   );
-  for (const id of [
-    "events",
-    "nations",
-    "shipments",
-    "relations",
-    "agents",
-    "run-notes",
-  ])
-    assert.equal(view.element(id).textContent, "");
+  assert.equal(view.element("tick").textContent, "80");
+  assert.notEqual(view.element("events").textContent, "");
+  assert.notEqual(view.element("nations").textContent, "");
+  assert.notEqual(view.element("agents").textContent, "");
+  assert.equal(view.element("run-notes").textContent, "");
+  assert.doesNotMatch(view.element("run-notes").textContent, /first/);
   assert.equal(view.element("notes-download").hidden, true);
-  assert.equal(view.element("tick").textContent, "—");
   fail = false;
   await view.window.eval("refresh()");
   assert.equal(view.element("tick").textContent, "80");
   assert.match(view.element("run-notes").textContent, /second/);
+});
+
+test("a connection outage retains the world and recovers without resetting the event cursor", async (t) => {
+  let fail = false;
+  const run = fixture("first");
+  const view = observer({ first: run }, (path) =>
+    fail && path === "/api/health" ? response({}, 503) : null,
+  );
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("run-notes").textContent.includes("first"));
+  const panels = ["events", "nations", "agents", "run-notes"].map(
+    (id) => view.element(id).textContent,
+  );
+  fail = true;
+  await view.window.eval("refresh()");
+  assert.equal(view.element("tick").textContent, "40");
+  assert.deepEqual(
+    ["events", "nations", "agents", "run-notes"].map((id) => view.element(id).textContent),
+    panels,
+  );
+  assert.match(view.element("connection").textContent, /Reconnecting/);
+  assert.match(view.element("message").textContent, /last loaded state/);
+  fail = false;
+  run.snapshot.tick = 41;
+  await view.window.eval("refresh()");
+  assert.equal(view.element("tick").textContent, "41");
+  assert.match(view.element("connection").textContent, /Connected/);
+  assert.equal(view.element("message").textContent, "");
+  const eventRequest = view.requests.filter((request) => request.path.includes("/events?")).at(-1);
+  assert.match(eventRequest.path, new RegExp(`after_seq=${run.snapshot.seq}&`));
+});
+
+test("metrics render while a panel hangs, and its timeout allows the next refresh", async (t) => {
+  const slow = deferred();
+  let hang = false;
+  const run = fixture("first");
+  const view = observer({ first: run }, (path) =>
+    hang && path.includes("/agents?") ? slow.promise : null,
+    { manualTimeouts: true },
+  );
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("run-notes").textContent.includes("first"));
+  hang = true;
+  run.snapshot.tick = 41;
+  const pendingRefresh = view.window.eval("refresh()");
+  await until(() => view.element("tick").textContent === "41");
+  await until(() => view.requests.filter((request) => request.path.includes("/agents?")).length === 2);
+  const pending = view.requests.filter((request) => request.path.includes("/agents?")).at(-1);
+  view.expireRequests();
+  await pendingRefresh;
+  assert.equal(pending.signal.aborted, true);
+  assert.notEqual(view.element("agents").textContent, "");
+  assert.match(view.element("message").textContent, /Retrying agents/);
+  hang = false;
+  run.snapshot.tick = 42;
+  await view.window.eval("refresh()");
+  assert.equal(view.element("tick").textContent, "42");
+  assert.equal(view.element("message").textContent, "");
+});
+
+test("a hung health request times out without locking future refreshes", async (t) => {
+  const slow = deferred();
+  let hang = false;
+  const view = observer({ first: fixture("first") }, (path) =>
+    hang && path === "/api/health" ? slow.promise : null,
+    { manualTimeouts: true },
+  );
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("run-notes").textContent.includes("first"));
+  hang = true;
+  const pendingRefresh = view.window.eval("refresh()");
+  await until(() => view.requests.filter((request) => request.path === "/api/health").length === 2);
+  view.expireRequests();
+  await pendingRefresh;
+  assert.equal(view.element("tick").textContent, "40");
+  assert.match(view.element("message").textContent, /timed out/);
+  hang = false;
+  await view.window.eval("refresh()");
+  assert.match(view.element("connection").textContent, /Connected/);
+});
+
+test("long disconnections catch up only the recent event window", async (t) => {
+  const run = fixture("first");
+  const view = observer({ first: run });
+  t.after(() => view.dom.window.close());
+  await until(() => view.element("run-notes").textContent.includes("first"));
+  run.snapshot.seq += 10000;
+  run.events = [{ ...run.events[0], seq: run.snapshot.seq }];
+  await view.window.eval("refresh()");
+  const eventRequest = view.requests.filter((request) => request.path.includes("/events?")).at(-1);
+  assert.match(eventRequest.path, new RegExp(`after_seq=${run.snapshot.seq - 500}&`));
+  assert.equal(view.requests.filter((request) => request.path.includes("/events?")).length, 2);
 });
 
 test("stale agent profiles are discarded and decision age uses committed time", async (t) => {

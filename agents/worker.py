@@ -133,7 +133,7 @@ def model_request_settings(model: str) -> dict:
     name = model.rsplit("/", 1)[-1].lower()
     if "gpt-oss" in name:
         return {"reasoning_effort": "low"}
-    if name.startswith("qwen3"):
+    if name.startswith(("qwen3", "gemma-4")):
         return {"chat_template_kwargs": {"enable_thinking": False}}
     return {}
 

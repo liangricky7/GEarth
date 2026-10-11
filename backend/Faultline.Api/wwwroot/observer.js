@@ -12,11 +12,37 @@ let analyticsReport = null;
 let refreshController = null;
 let profileController = null;
 let viewGeneration = 0;
+const REQUEST_TIMEOUT_MS = 10000;
+const EVENT_WINDOW = 500;
 
 async function getJson(path, signal) {
-  const response = await fetch(path, { signal });
-  if (!response.ok) throw new Error(`Request failed (${response.status}).`);
-  return response.json();
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error("Request timed out. Retrying automatically."));
+    }, REQUEST_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(path, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status}).`);
+        return response.json();
+      })(),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+  }
 }
 
 function textNode(tag, text, className = "") {
@@ -425,6 +451,31 @@ function requestRefresh() {
   return refresh();
 }
 
+function showSnapshot(snapshot, health, currentRunId) {
+  const paused = health.run_id === snapshot.run.id && health.status === "paused";
+  element("tick").textContent = snapshot.tick;
+  element("population").textContent = snapshot.agents_summary.spawned;
+  element("coverage").textContent =
+    `${snapshot.agents_summary.unique_model_deciding}/${snapshot.agents_summary.spawned}`;
+  element("decisions").textContent = snapshot.metrics.model_decision_count;
+  element("failures").textContent =
+    `${snapshot.metrics.fallback_decision_count} / ${snapshot.metrics.rejected_decision_count}`;
+  element("mode").textContent =
+    `${snapshot.run.status !== "running" || snapshot.run.id !== currentRunId ? "SAVED · " : ""}${snapshot.run.mode} · ${snapshot.run.status.toUpperCase()}`;
+  element("connection").textContent =
+    paused ? "Paused" : `Connected · ${health.storage}`;
+  element("connection").dataset.state = paused ? "stale" : "live";
+  element("updated").textContent =
+    `Last commit ${new Date(snapshot.updated_at).toLocaleTimeString()}`;
+  const plan = snapshot.shipments[0]?.plan;
+  element("route-plan").textContent = plan
+    ? `${plan.objective} plan · ${plan.travel_ticks} travel ticks · ${(plan.cost_minor / 100).toFixed(2)} WLD`
+    : "No active medicine route plan.";
+  element("message").textContent = paused ? health.error ?? "" : "";
+  drawMap(snapshot);
+  showWorld(snapshot);
+}
+
 async function refresh() {
   if (busy) return;
   busy = true;
@@ -462,6 +513,8 @@ async function refresh() {
     const path = `/api/runs/${encodeURIComponent(runId)}`;
     const snapshot = await getJson(`${path}/snapshot`, controller.signal);
     if (!isCurrent()) return;
+    // The committed world is useful even if a secondary panel is unavailable.
+    showSnapshot(snapshot, health, runs.current_run_id);
     const query = new URLSearchParams({
       country: element("country-filter").value,
       role: element("role-filter").value,
@@ -469,51 +522,49 @@ async function refresh() {
       offset: agentOffset,
       limit: 50,
     });
-    const [history, notes, page, analysis] = await Promise.all([
+    const [history, notes, page, analysis] = await Promise.allSettled([
       loadEvents(path, snapshot, controller.signal),
       loadRunNotes(path, snapshot, health, controller.signal),
       getJson(`${path}/agents?${query}`, controller.signal),
       loadAnalyticsReport(path, snapshot, controller.signal),
     ]);
     if (!isCurrent()) return;
-    displayedEvents = history.events;
-    lastSequence = history.sequence;
-    notesCache = notes;
-    analyticsReport = analysis.report;
-    showAnalyticsReport(runId, analysis);
-    element("tick").textContent = snapshot.tick;
-    element("population").textContent = snapshot.agents_summary.spawned;
-    element("coverage").textContent =
-      `${snapshot.agents_summary.unique_model_deciding}/${snapshot.agents_summary.spawned}`;
-    element("decisions").textContent = snapshot.metrics.model_decision_count;
-    element("failures").textContent =
-      `${snapshot.metrics.fallback_decision_count} / ${snapshot.metrics.rejected_decision_count}`;
-    element("mode").textContent =
-      `${snapshot.run.status !== "running" || runId !== runs.current_run_id ? "SAVED · " : ""}${snapshot.run.mode} · ${snapshot.run.status.toUpperCase()}`;
-    const paused = health.run_id === runId && health.status === "paused";
-    element("connection").textContent =
-      paused ? "Paused" : `Connected · ${health.storage}`;
-    element("updated").textContent =
-      `Last commit ${new Date(snapshot.updated_at).toLocaleTimeString()}`;
-    const plan = snapshot.shipments[0]?.plan;
-    element("route-plan").textContent = plan
-      ? `${plan.objective} plan · ${plan.travel_ticks} travel ticks · ${(plan.cost_minor / 100).toFixed(2)} WLD`
-      : "No active medicine route plan.";
-    element("message").textContent = paused ? health.error ?? "" : "";
-    drawMap(snapshot);
-    showEvents(snapshot);
-    showWorld(snapshot);
-    showRunNotes(runId, notes);
-    showAgentPage(snapshot, page);
+    const unavailable = [];
+    if (history.status === "fulfilled") {
+      displayedEvents = history.value.events;
+      lastSequence = history.value.sequence;
+      showEvents(snapshot);
+    } else unavailable.push("events");
+    if (notes.status === "fulfilled") {
+      notesCache = notes.value;
+      showRunNotes(runId, notes.value);
+    } else {
+      unavailable.push("run observations");
+      element("notes-status").textContent =
+        "Run observations temporarily unavailable. Retrying automatically.";
+    }
+    if (page.status === "fulfilled") showAgentPage(snapshot, page.value);
+    else unavailable.push("agents");
+    if (analysis.status === "fulfilled") {
+      analyticsReport = analysis.value.report;
+      showAnalyticsReport(runId, analysis.value);
+    } else unavailable.push("analytics");
+    if (unavailable.length) {
+      element("connection").textContent = "Connected · some panels retrying";
+      element("connection").dataset.state = "stale";
+      element("message").textContent =
+        `${health.error ? health.error + " " : ""}Retrying ${unavailable.join(", ")}. Previously loaded data stays visible.`;
+    }
     showProfile();
   } catch (error) {
     if (isCurrent()) {
-      clearRunView();
-      lastSequence = 0;
-      displayedEvents = [];
-      notesCache = null;
-      element("connection").textContent = "Connection interrupted";
-      element("message").textContent = error.message;
+      const hasData = element("tick").textContent !== "—";
+      element("connection").textContent = hasData
+        ? "Reconnecting · showing last loaded data"
+        : "Reconnecting";
+      element("connection").dataset.state = "stale";
+      element("message").textContent =
+        `${error.message} ${hasData ? "Showing the last loaded state. " : ""}Updates resume automatically when the connection returns.`;
     }
   } finally {
     if (refreshController === controller) {
@@ -525,9 +576,14 @@ async function refresh() {
 
 async function loadEvents(path, snapshot, signal) {
   let sequence = lastSequence;
-  if (sequence === 0 && snapshot.run.stage === 2)
-    sequence = Math.max(0, snapshot.seq - 200);
   let history = displayedEvents.slice();
+  // This is a recent-events feed. Catch up within one window after an outage
+  // instead of replaying every archived page before displaying the world.
+  const windowStart = Math.max(0, snapshot.seq - EVENT_WINDOW);
+  if (snapshot.run.stage === 2 && sequence < windowStart) {
+    sequence = windowStart;
+    history = [];
+  }
   let page;
   do {
     page = await getJson(
@@ -540,7 +596,7 @@ async function loadEvents(path, snapshot, signal) {
     history.push(...page);
     if (page.length) sequence = page.at(-1).seq;
   } while (page.length === 500 && sequence < snapshot.seq);
-  return { events: history.slice(-500), sequence };
+  return { events: history.slice(-EVENT_WINDOW), sequence };
 }
 
 element("runs").addEventListener("change", () => {

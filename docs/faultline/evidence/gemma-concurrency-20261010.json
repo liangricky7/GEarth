@@ -1,0 +1,203 @@
+{
+  "measured_at": "2026-10-11T00:04:09.696322+00:00",
+  "runtime": {
+    "vllm": "0.19.1.dev6+g6d4a8e6d2",
+    "gpu": "NVIDIA GB10"
+  },
+  "image": "vllm/vllm-openai@sha256:2970dd3c8fd00bccbc663345f9b4d87b35c491f4b13a2a4cdef60fe5c015f6e2",
+  "gemma_revision": "ee0ef6023621cff504d758262d4e04895a5af4a2",
+  "qwen_revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+  "total_gpu_memory_budget": 0.6,
+  "prompt_count": 32,
+  "prompt_source": "fresh citizen observations generated from the saved 1000-agent world",
+  "trials": [
+    {
+      "model": "Qwen/Qwen3-4B",
+      "replicas": 1,
+      "results": [
+        {
+          "concurrency": 1,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 68.452,
+          "valid_per_second": 0.935,
+          "p50_seconds": 1.072,
+          "p95_seconds": 1.433,
+          "errors": []
+        },
+        {
+          "concurrency": 4,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 17.981,
+          "valid_per_second": 3.559,
+          "p50_seconds": 1.081,
+          "p95_seconds": 1.492,
+          "errors": []
+        },
+        {
+          "concurrency": 8,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 9.312,
+          "valid_per_second": 6.873,
+          "p50_seconds": 1.151,
+          "p95_seconds": 1.494,
+          "errors": []
+        },
+        {
+          "concurrency": 16,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 5.59,
+          "valid_per_second": 11.449,
+          "p50_seconds": 1.315,
+          "p95_seconds": 1.611,
+          "errors": []
+        },
+        {
+          "concurrency": 32,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 3.721,
+          "valid_per_second": 17.199,
+          "p50_seconds": 1.646,
+          "p95_seconds": 1.969,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "model": "google/gemma-4-E4B-it",
+      "replicas": 1,
+      "results": [
+        {
+          "concurrency": 1,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 76.668,
+          "valid_per_second": 0.835,
+          "p50_seconds": 1.174,
+          "p95_seconds": 1.376,
+          "errors": []
+        },
+        {
+          "concurrency": 4,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 20.28,
+          "valid_per_second": 3.156,
+          "p50_seconds": 1.166,
+          "p95_seconds": 2.046,
+          "errors": []
+        },
+        {
+          "concurrency": 8,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 9.971,
+          "valid_per_second": 6.419,
+          "p50_seconds": 1.187,
+          "p95_seconds": 1.384,
+          "errors": []
+        },
+        {
+          "concurrency": 16,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 6.165,
+          "valid_per_second": 10.381,
+          "p50_seconds": 1.336,
+          "p95_seconds": 2.129,
+          "errors": []
+        },
+        {
+          "concurrency": 32,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 3.437,
+          "valid_per_second": 18.622,
+          "p50_seconds": 1.584,
+          "p95_seconds": 1.882,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "model": "google/gemma-4-E4B-it",
+      "replicas": 2,
+      "results": [
+        {
+          "concurrency": 1,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 76.271,
+          "valid_per_second": 0.839,
+          "p50_seconds": 1.178,
+          "p95_seconds": 1.384,
+          "errors": []
+        },
+        {
+          "concurrency": 4,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 38.99,
+          "valid_per_second": 1.641,
+          "p50_seconds": 2.345,
+          "p95_seconds": 2.831,
+          "errors": []
+        },
+        {
+          "concurrency": 8,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 19.73,
+          "valid_per_second": 3.244,
+          "p50_seconds": 2.349,
+          "p95_seconds": 2.736,
+          "errors": []
+        },
+        {
+          "concurrency": 16,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 10.243,
+          "valid_per_second": 6.248,
+          "p50_seconds": 2.441,
+          "p95_seconds": 2.836,
+          "errors": []
+        },
+        {
+          "concurrency": 32,
+          "attempts": 64,
+          "valid": 64,
+          "elapsed_seconds": 6.384,
+          "valid_per_second": 10.025,
+          "p50_seconds": 2.981,
+          "p95_seconds": 3.675,
+          "errors": []
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Short load sweep; not sustained capacity qualification.",
+    "Measures inference and output validity, not decision quality or end-to-end simulation speed.",
+    "Does not measure energy consumption. Other users on this Spark can affect results.",
+    "Qwen baseline is re-served in the same runtime and memory budget as Gemma."
+  ],
+  "restoration_verification": {
+    "verified_at": "2026-10-11T00:28:23.215894+00:00",
+    "original_qwen_servers_restored": true,
+    "models": [
+      "Qwen/Qwen3-8B",
+      "Qwen/Qwen3-4B"
+    ],
+    "experiment_ports_closed": [
+      8002,
+      8003
+    ],
+    "benchmark_process_finished": true,
+    "simulation_restarted": false
+  }
+}

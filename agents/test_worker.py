@@ -30,6 +30,15 @@ def make_job():
     )
 
 
+@pytest.mark.parametrize("model", ["Qwen/Qwen3-4B", "google/gemma-4-E4B-it"])
+def test_small_model_prompts_disable_thinking(model):
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    assert worker.build_prompt(job, model)["chat_template_kwargs"] == {
+        "enable_thinking": False
+    }
+
+
 def test_action_rejects_unknown_fields():
     action = {
         "action_type": "hold",

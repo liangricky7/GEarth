@@ -114,6 +114,7 @@
     state.run = run; resetRunViews(); renderCatalog();
     const url = new URL(location.href); url.searchParams.set("run_id", run); history.replaceState(null, "", url);
     $("observer-link").href = `/?run_id=${encodeURIComponent(run)}`;
+    $("rewind-lab-link").href = `/rewind.html?run_id=${encodeURIComponent(run)}`;
     loadManifest(true);
   }
   function renderManifest(manifest) {

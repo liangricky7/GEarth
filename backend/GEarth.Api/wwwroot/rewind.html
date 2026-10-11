@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GEarth · Rewind lab</title>
+  <link rel="stylesheet" href="/rewind.css"><script src="/rewind.js" defer></script>
+</head>
+<body>
+  <header class="lab-header">
+    <a class="brand" href="/" aria-label="GEarth world observer"><span class="brand-mark">G</span>GEarth<span class="brand-divider">/</span><span class="brand-section">Rewind lab</span></a>
+    <nav aria-label="GEarth pages"><a href="/">World observer</a><a href="/data.html" id="saved-data-link">Saved data ↗</a><span class="preview-badge">UI preview</span></nav>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">A different choice. A different world.</p><h1>What if you could<br><em>start again?</em></h1><p class="intro-copy">Return to a saved week. Choose a country.<br>Change the conditions and explore your next scenario.</p></div>
+      <div class="intro-note"><span class="orbit-icon" aria-hidden="true">↶</span><p><strong>Your original world stays intact.</strong><br>This lab previews a separate timeline. It does not create a Neon branch or run a simulation.</p></div>
+    </section>
+
+    <section class="source-panel" aria-labelledby="source-heading">
+      <div class="section-title"><h2 id="source-heading"><span class="step">01</span>Choose your starting point</h2><button id="demo-toggle" type="button">Use sample world</button></div>
+      <div class="source-controls"><label>Saved simulation<select id="rewind-run"><option value="">Loading saved simulations…</option></select></label><button id="refresh-runs" type="button">Refresh</button><button id="older-runs" type="button" hidden>Older simulations</button><span id="source-badge" class="source-badge">Checking source</span></div>
+      <p id="source-status" class="muted" role="status" aria-live="polite">Reading saved simulations…</p>
+      <div class="week-heading"><div><span class="eyebrow">Rewind to</span><strong id="week-title">Choose a saved week</strong><span id="week-description" class="muted"></span></div><div class="week-arrows"><button id="week-prev" type="button" aria-label="Previous saved checkpoint" disabled>←</button><button id="week-next" type="button" aria-label="Next saved checkpoint" disabled>→</button></div></div>
+      <input id="week-slider" type="range" min="0" max="0" value="0" aria-label="Saved checkpoint" disabled>
+      <div id="week-list" class="week-list" aria-label="Saved weekly checkpoints"></div>
+      <p id="checkpoint-status" class="muted" role="status" aria-live="polite">Only saved checkpoints appear here.</p>
+    </section>
+
+    <div class="lab-layout">
+      <section class="country-panel" aria-labelledby="country-heading">
+        <div class="section-title"><h2 id="country-heading"><span class="step">02</span>Choose a country</h2><span id="country-count" class="muted"></span></div>
+        <p class="muted">Select the society whose conditions you want to change.</p>
+        <div id="country-grid" class="country-grid"><p class="empty-state">Choose a saved checkpoint or use the sample world.</p></div>
+      </section>
+
+      <aside class="editor-panel" aria-labelledby="editor-heading">
+        <div class="editor-top"><span class="eyebrow">Scenario editor</span><span class="preview-badge">Draft only</span></div>
+        <h2 id="editor-heading">Choose your country</h2><p id="editor-description" class="muted">Its saved conditions will be your starting point.</p>
+        <form id="scenario-form">
+          <fieldset id="scenario-fields" disabled>
+            <label class="government-label">Government<select id="government"></select></label>
+            <div class="presets" aria-label="Scenario presets"><span class="eyebrow">Quick experiment</span><div><button type="button" data-preset="wages">Higher wages</button><button type="button" data-preset="costs">Resource shock</button><button type="button" data-preset="credit">Cheaper credit</button></div></div>
+            <div class="editor-tabs" role="tablist" aria-label="Economic controls"><button id="tab-labor" type="button" role="tab" aria-selected="true" aria-controls="controls-labor" data-group="labor">Labor & goods</button><button id="tab-credit" type="button" role="tab" aria-selected="false" aria-controls="controls-credit" data-group="credit" tabindex="-1">Banking</button><button id="tab-policy" type="button" role="tab" aria-selected="false" aria-controls="controls-policy" data-group="policy" tabindex="-1">Public policy</button></div>
+            <div id="controls-labor" class="control-group" role="tabpanel" aria-labelledby="tab-labor"></div>
+            <div id="controls-credit" class="control-group" role="tabpanel" aria-labelledby="tab-credit" hidden></div>
+            <div id="controls-policy" class="control-group" role="tabpanel" aria-labelledby="tab-policy" hidden></div>
+            <div class="horizon"><label>Continue for<select id="scenario-days"><option value="28">4 weeks · 28 days</option><option value="91">13 weeks · 91 days</option><option value="182">26 weeks · 182 days</option><option value="365">1 year · 365 days</option></select></label><label>Scenario name<input id="scenario-name" type="text" maxlength="80" placeholder="My alternate timeline"></label></div>
+            <div class="change-heading"><h3>Your changes</h3><button id="reset-draft" type="button">Reset</button></div><ul id="draft-changes" class="draft-changes"></ul>
+            <button id="preview-scenario" class="primary-action" type="submit" disabled>Preview new timeline <span aria-hidden="true">↗</span></button>
+          </fieldset>
+        </form>
+        <p class="editor-footnote">These are proposed overrides. Wages affect existing pay and offers; prices affect sellers; bank rates affect new loans. Engine behavior may change them later.</p>
+      </aside>
+    </div>
+
+    <section id="scenario-preview" class="scenario-preview" hidden aria-labelledby="preview-heading" tabindex="-1">
+      <div class="section-title"><div><p class="eyebrow">Alternate timeline · UI preview</p><h2 id="preview-heading">Your scenario is ready to review</h2></div><span class="preview-badge">No simulation started</span></div>
+      <p id="preview-summary"></p><div class="branch-diagram" aria-label="Original timeline and proposed alternate timeline"><div class="branch-parent"><span>Saved world</span><strong id="branch-parent-label"></strong></div><div class="branch-lines"><div><i></i><strong>Original timeline</strong><span>Unchanged</span></div><div><i></i><strong id="branch-draft-label">Your alternate timeline</strong><span id="branch-draft-duration"></span></div></div></div>
+      <div class="preview-columns"><div><h3>Proposed changes</h3><ul id="preview-changes"></ul></div><div><h3>What to compare after a real run</h3><ul id="research-metrics"></ul></div></div>
+      <p id="preview-limit" class="muted">This is a configuration preview. No Neon branch, simulation results, or Databricks report has been created.</p>
+      <div class="preview-actions"><button id="download-scenario" type="button">Download scenario JSON</button><a id="real-experiments-link" href="/#experiments-panel">Open existing real experiments ↗</a><button id="edit-scenario" type="button">Keep editing</button></div>
+      <p class="muted">The existing experiment tool supports one government, income-tax, agent-health, or agent-productivity change. Broader overrides in this lab still need engine integration.</p>
+    </section>
+  </main>
+  <footer><span>GEarth / Rewind lab</span><span>Saved evidence → proposed change → a new question.</span></footer>
+</body>
+</html>

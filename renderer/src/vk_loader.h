@@ -36,6 +36,9 @@ struct LoadedGLTF : public IRenderable {
     std::unordered_map<std::string, std::shared_ptr<GLTFMaterial>> materials;
     std::vector<std::shared_ptr<Node>> topNodes;
     std::vector<VkSampler> samplers;
+    std::vector<SceneLight> lights;
+    std::optional<glm::mat4> camera;
+    std::optional<glm::vec3> sunDirection;
 
     DescriptorAllocatorGrowable descriptorPool;
     AllocatedBuffer materialDataBuffer{};

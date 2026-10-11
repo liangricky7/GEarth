@@ -7,6 +7,7 @@
 #include <stb_image.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/constants.hpp>
 #include <algorithm>
 #include <climits>
 #include <cstring>
@@ -126,7 +127,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(
     VulkanEngine* engine, std::filesystem::path filePath, bool bakeOcclusion) {
     fastgltf::GltfDataBuffer input;
     if (!input.loadFromFile(filePath)) return {};
-    fastgltf::Parser parser;
+    fastgltf::Parser parser(fastgltf::Extensions::MSFT_texture_dds | fastgltf::Extensions::KHR_materials_pbrSpecularGlossiness |
+        fastgltf::Extensions::KHR_lights_punctual | fastgltf::Extensions::KHR_materials_transmission);
     constexpr auto options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
         fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers;
     auto type = fastgltf::determineGltfFileType(&input);
@@ -170,6 +172,11 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(
         if (auto* uri = std::get_if<fastgltf::sources::URI>(&source.data)) {
             if (uri->fileByteOffset == 0 && uri->uri.isLocalPath()) {
                 auto path = filePath.parent_path() / std::string(uri->uri.path());
+                if (path.extension() == ".dds") {
+                    cached = engine->load_dds(path, srgb);
+                    scene->images[std::to_string(index * 2 + srgb)] = cached;
+                    return cached;
+                }
                 decoded = stbi_load(path.string().c_str(), &width, &height, &channels, 4);
             }
         } else {
@@ -197,14 +204,15 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(
     auto bindTexture = [&](const auto& reference, bool srgb, AllocatedImage& image, VkSampler& sampler) {
         if (!reference) return;
         const auto& texture = gltf.textures.at(reference->textureIndex);
-        if (texture.imageIndex) image = imageFor(*texture.imageIndex, srgb);
+        if (texture.ddsImageIndex) image = imageFor(*texture.ddsImageIndex, srgb);
+        else if (texture.imageIndex) image = imageFor(*texture.imageIndex, srgb);
         if (texture.samplerIndex) sampler = scene->samplers.at(*texture.samplerIndex);
     };
 
     using Material = GLTFMetallic_Roughness;
     const size_t materialCount = gltf.materials.size() + 1;
     std::array ratios{DescriptorAllocatorGrowable::PoolSizeRatio{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-        DescriptorAllocatorGrowable::PoolSizeRatio{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3}};
+        DescriptorAllocatorGrowable::PoolSizeRatio{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4}};
     scene->descriptorPool.init(engine->_device, uint32_t(materialCount), ratios);
     scene->materialDataBuffer = engine->create_buffer(materialCount * sizeof(Material::MaterialConstants),
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -232,6 +240,23 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(
             bindTexture(m.pbrData.baseColorTexture, true, r.colorImage, r.colorSampler);
             bindTexture(m.pbrData.metallicRoughnessTexture, false, r.metalRoughImage, r.metalRoughSampler);
             bindTexture(m.normalTexture, false, r.normalImage, r.normalSampler);
+            if (m.emissiveTexture) {
+                c.extra[1].x = 1;
+                bindTexture(m.emissiveTexture, true, r.emissiveImage, r.emissiveSampler);
+            }
+            if (m.specularGlossiness) {
+                const auto& sg = *m.specularGlossiness;
+                for (int k=0;k<4;++k) c.colorFactors[k]=sg.diffuseFactor[k];
+                c.extra[0]={sg.specularFactor[0],sg.specularFactor[1],sg.specularFactor[2],sg.glossinessFactor};
+                c.extra[1].y=1;
+                r.colorImage=r.metalRoughImage=engine->_whiteImage;
+                bindTexture(sg.diffuseTexture,true,r.colorImage,r.colorSampler);
+                bindTexture(sg.specularGlossinessTexture,true,r.metalRoughImage,r.metalRoughSampler);
+            }
+            if (m.transmission && m.transmission->transmissionFactor > 0) {
+                // shortcut: thin blended glass, replace with refracted scene sampling for accurate transmission.
+                pass=MaterialPass::Transparent; c.extra[1].z=m.transmission->transmissionFactor;
+            }
         }
         materials[i] = std::make_shared<GLTFMaterial>();
         materials[i]->data = engine->metalRoughMaterial.write_material(engine->_device, pass, r, scene->descriptorPool);
@@ -326,6 +351,22 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(
         node->refreshTransform(glm::mat4(1));
     }
     fmt::print("Loaded {} meshes, {} indices from {}\n", meshes.size(), totalIndices, filePath.string());
+    for (size_t i=0;i<nodes.size();++i) {
+        const auto& source=gltf.nodes[i]; const auto& transform=nodes[i]->worldTransform;
+        if (source.cameraIndex && !scene->camera) scene->camera=transform;
+        if (!source.lightIndex) continue;
+        const auto& light=gltf.lights.at(*source.lightIndex);
+        glm::vec3 direction=glm::normalize(glm::vec3(transform*glm::vec4(0,0,-1,0)));
+        if (light.type==fastgltf::LightType::Directional) { scene->sunDirection=-direction; continue; }
+        if (scene->lights.size()==128) throw std::runtime_error("Scene exceeds 128 local lights");
+        SceneLight gpu;
+        gpu.positionRange=glm::vec4(glm::vec3(transform[3]),light.range.value_or(0));
+        gpu.colorIntensity={light.color[0],light.color[1],light.color[2],light.intensity};
+        gpu.directionOuter=glm::vec4(direction,std::cos(light.outerConeAngle.value_or(glm::quarter_pi<float>())));
+        gpu.innerType={std::cos(light.innerConeAngle.value_or(0)),light.type==fastgltf::LightType::Spot ? 1.f : 0.f,0,0};
+        scene->lights.push_back(gpu);
+    }
+    fmt::print("Scene: {} local lights; authored camera {}; DDS GPU memory {:.1f} MiB\n",scene->lights.size(),bool(scene->camera),engine->_ddsBytes/1048576.);
     if (bakeOcclusion) {
         size_t vertexCount = 0;
         for (const auto& item : pending) vertexCount += item.vertices.size();

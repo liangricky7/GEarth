@@ -33,6 +33,7 @@ struct GLTFMetallic_Roughness {
         AllocatedImage colorImage; VkSampler colorSampler{};
         AllocatedImage metalRoughImage; VkSampler metalRoughSampler{};
         AllocatedImage normalImage; VkSampler normalSampler{};
+        AllocatedImage emissiveImage; VkSampler emissiveSampler{};
         VkBuffer dataBuffer{}; uint32_t dataBufferOffset{};
     };
     DescriptorWriter writer;
@@ -54,7 +55,7 @@ public:
     // planeModel / shipModel = glTF cockpit and ship carried with the plane and ship cameras.
     void init(const std::optional<std::filesystem::path>& model, bool smoke, const std::optional<std::filesystem::path>& replay = {},
         std::optional<OceanView> ocean = {}, const std::optional<std::filesystem::path>& planeModel = {},
-        const std::optional<std::filesystem::path>& shipModel = {}, const std::optional<std::filesystem::path>& events = {});
+        const std::optional<std::filesystem::path>& shipModel = {}, const std::optional<std::filesystem::path>& events = {}, bool environment = false);
     void run(int frameLimit = 0, const std::optional<std::filesystem::path>& capture = {});
     void load_events(const std::filesystem::path& path);
     void load_stream(const std::filesystem::path& path, std::optional<PipelineReplay> prepared = std::nullopt);
@@ -63,7 +64,8 @@ public:
     AllocatedBuffer create_buffer(size_t, VkBufferUsageFlags, VmaMemoryUsage);
     void destroy_buffer(const AllocatedBuffer&);
     GPUMeshBuffers uploadMesh(std::span<uint32_t>, std::span<Vertex>);
-    AllocatedImage create_image(VkExtent3D, VkFormat, VkImageUsageFlags, bool mipmapped = false);
+    AllocatedImage create_image(VkExtent3D, VkFormat, VkImageUsageFlags, bool mipmapped = false, uint32_t levels = 0);
+    AllocatedImage load_dds(const std::filesystem::path&, bool srgb);
     AllocatedImage create_image(void*, VkExtent3D, VkFormat, VkImageUsageFlags, bool mipmapped = false);
     void destroy_image(const AllocatedImage&);
     void immediate_submit(std::function<void(VkCommandBuffer)>&&);
@@ -161,5 +163,11 @@ private:
     float _yaw{.65f}, _pitch{.3f}, _distance{4.5f}, _exposure{1.f}, _bloom{.06f}, _sunIntensity{3.f}, _ambient{.2f};
     bool _shadows{true}, _fxaa{true}, _showGround{true}, _smoke{}, _imguiInitialized{}, _resize{};
     bool _samplerAnisotropySupported{}; float _maxSamplerAnisotropy{1};
+    bool _textureCompressionBC{}; size_t _ddsBytes{};
+    bool _environment{};
+    glm::vec3 _cameraPosition{}, _cameraStart{};
+    glm::vec2 _cameraAngles{}, _cameraStartAngles{};
+    float _cameraSpeed{5}, _lightExposure{.01f};
+    size_t _visibleSurfaces{};
     uint64_t _frameNumber{};
 };

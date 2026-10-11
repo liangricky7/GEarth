@@ -5,7 +5,7 @@
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     DescriptorLayoutBuilder descriptors;
     descriptors.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    for (int i = 1; i <= 3; ++i) descriptors.add_binding(i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    for (int i = 1; i <= 4; ++i) descriptors.add_binding(i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     materialLayout = descriptors.build(engine->_device, VK_SHADER_STAGE_FRAGMENT_BIT);
     VkDescriptorSetLayout sets[] = {engine->_gpuSceneDataDescriptorLayout, materialLayout};
     VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants)};
@@ -60,6 +60,8 @@ void GLTFMetallic_Roughness::write_material_set(VkDevice device, const MaterialR
     writer.write_image(1, r.colorImage.imageView, r.colorSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     writer.write_image(2, r.metalRoughImage.imageView, r.metalRoughSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     writer.write_image(3, r.normalImage.imageView, r.normalSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    writer.write_image(4, r.emissiveImage.imageView ? r.emissiveImage.imageView : r.colorImage.imageView,
+        r.emissiveSampler ? r.emissiveSampler : r.colorSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     writer.update_set(device, set);
 }
 

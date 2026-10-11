@@ -29,8 +29,39 @@ The bundled cockpit and ship models load on first use. `--plane-model PATH` and
 `--ship-model PATH` accept replacement GLB/glTF assets. Keep the copied `models`,
 `assets`, `shaders` and SDL DLL beside the executable. Model scale, offset and yaw
 can be adjusted in the lighting panel. Mesh inspection supports static indexed
-GLB/glTF with standard PNG/JPEG materials, alpha masks and blending. Skinning,
-animation, sparse geometry, Draco/KTX2 and glTF material extensions are unsupported.
+GLB/glTF with PNG/JPEG or BC7 DDS materials, alpha masks, blending, emissive maps,
+and metallic/roughness or specular/glossiness materials. Skinning, animation,
+sparse geometry, Draco/KTX2 and other material extensions remain unsupported.
+
+## Bistro environment
+
+From the repository root, fetch the pinned Niagara Bistro assets once, then open
+the scene at its original scale with its authored camera:
+
+```powershell
+node renderer/tools/fetch_bistro.mjs
+renderer/build/Release/renderer.exe --environment artifacts/local/bistro/bistro.gltf
+```
+
+The download is about 2.15 GB. Each file is checked against its pinned Git blob
+hash; rerunning the command verifies and reuses completed downloads. The large
+assets stay under ignored `artifacts/local/`; source and license notices accompany
+them. Build the renderer again after updating to the Bistro branch.
+
+Hold the right mouse button to look around and use WASD to move, Q/E to descend
+or ascend, and Shift to move faster. Release the button to use lighting controls;
+R restores the authored camera. H hides controls. This is a static environment
+preview, independent of the simulation replay.
+
+DDS textures remain GPU-compressed, select existing mip levels up to 2048 pixels,
+and have a combined 1.5 GiB upload budget. Only 2D BC7/DX10 DDS is supported; other
+formats fail explicitly. The GPU must support BC compression. Camera and shadow
+visibility tests avoid drawing surfaces wholly outside their respective views.
+Sun shadows follow the camera; point/spot lights use imported positions and
+ranges but do not yet cast shadows. Glass uses approximate alpha blending;
+indirect lighting and environment reflections are analytic approximations,
+not ray tracing or HDR image-based lighting. Animated props remain in their
+static pose. Scene lights and exposure can be adjusted in the lighting panel.
 
 ## Legacy replay inputs
 

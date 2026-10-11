@@ -9,7 +9,7 @@ int main(int argc, char** argv) {
     bool checkStream=false;
     int checkTick=0;
     int frames = 0;
-    bool smoke = false;
+    bool smoke = false, environment = false;
     std::optional<VulkanEngine::OceanView> ocean;
     try {
         for (int i = 1; i < argc; ++i) {
@@ -17,6 +17,7 @@ int main(int argc, char** argv) {
             if (arg == "--self-test") { VulkanEngine::self_test(); return 0; }
             if (arg == "--smoke") smoke = true;
             else if (arg == "--mesh" && i + 1 < argc) mesh = argv[++i];
+            else if (arg == "--environment" && i + 1 < argc) { mesh = argv[++i]; environment = true; }
             else if (arg == "--capture" && i + 1 < argc) capture = argv[++i];
             else if (arg == "--replay" && i + 1 < argc) replay = argv[++i];
             else if (arg == "--events" && i + 1 < argc) events = argv[++i];
@@ -41,7 +42,7 @@ int main(int argc, char** argv) {
                 if (parsed.ec != std::errc{} || parsed.ptr != number.data() + number.size() || frames < 1)
                     throw std::runtime_error("--frames requires a positive integer");
             } else if (arg != "--smoke") {
-                throw std::runtime_error("Usage: renderer [--stream DIRECTORY | --replay run.replay | --events run.events.json | --mesh model.glb] [--smoke] [--frames N] [--capture image.ppm] [--scene globe|plane|ship] [--plane-model cockpit.gltf] [--ship-model ship.gltf] [--self-test | --check-stream DIRECTORY --tick DAY]");
+                throw std::runtime_error("Usage: renderer [--stream DIRECTORY | --replay run.replay | --events run.events.json | --mesh model.glb | --environment scene.gltf] [--smoke] [--frames N] [--capture image.ppm] [--scene globe|plane|ship] [--plane-model cockpit.gltf] [--ship-model ship.gltf] [--self-test | --check-stream DIRECTORY --tick DAY]");
             }
         }
         if (stream && (mesh || replay || events || ocean || planeModel || shipModel)) throw std::runtime_error("--stream requires the globe without other replay/model options");
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
             [path=*stream] { return PipelineReplay::load(path,generate_world(64,32)); });
         VulkanEngine engine;
         if (ocean && mesh) throw std::runtime_error("Plane and ship views cannot be combined with --mesh");
-        engine.init(mesh, smoke, replay, ocean, planeModel, shipModel, events);
+        engine.init(mesh, smoke, replay, ocean, planeModel, shipModel, events, environment);
         if (stream) engine.load_stream(*stream,recording.valid() ? std::optional(recording.get()) : std::nullopt);
         engine.run(frames, capture);
         engine.cleanup();

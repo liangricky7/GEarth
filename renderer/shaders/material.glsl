@@ -13,3 +13,4 @@ layout(set = MATERIAL_SET, binding = 0, std140) uniform MaterialData {
 layout(set = MATERIAL_SET, binding = 1) uniform sampler2D colorTex;
 layout(set = MATERIAL_SET, binding = 2) uniform sampler2D metalRoughTex;
 layout(set = MATERIAL_SET, binding = 3) uniform sampler2D normalTex;
+layout(set = MATERIAL_SET, binding = 4) uniform sampler2D emissiveTex;

@@ -4,6 +4,7 @@
 #include "vk_images.h"
 #include "ocean_waves.h"
 #include "ao_bake.h"
+#include "dds.h"
 #include <VkBootstrap.h>
 #include <SDL_vulkan.h>
 #include <imgui.h>
@@ -20,6 +21,20 @@
 
 namespace {
 constexpr uint32_t ShadowResolution = 2048;
+bool surface_visible(const glm::mat4& matrix, const Bounds& bounds) {
+    unsigned outside = 63;
+    for (int i=0;i<8;++i) {
+        glm::vec3 sign{i&1 ? 1.f:-1.f,i&2 ? 1.f:-1.f,i&4 ? 1.f:-1.f};
+        glm::vec4 p=matrix*glm::vec4(bounds.origin+sign*bounds.extents,1);
+        unsigned planes=(p.x < -p.w ? 1:0)|(p.x > p.w ? 2:0)|(p.y < -p.w ? 4:0)|
+            (p.y > p.w ? 8:0)|(p.z < 0 ? 16:0)|(p.z > p.w ? 32:0);
+        outside &= planes;
+    }
+    return outside==0;
+}
+glm::vec3 view_forward(glm::vec2 angles) {
+    return {std::cos(angles.y)*std::sin(angles.x),std::sin(angles.y),-std::cos(angles.y)*std::cos(angles.x)};
+}
 DemoRoute cargo_route(const ProceduralWorld& world,int from,int to,int ticks,const std::string& name) {
     glm::vec3 a=world.countries[from].center, b=world.countries[to].center;
     // shortcut: the data has no transport mode; use a ship on mostly sea routes, otherwise a plane.
@@ -79,6 +94,12 @@ glm::vec3 sea_displacement(glm::vec2 xz, float time) {
 }
 
 void VulkanEngine::self_test() {
+    dds_self_test();
+    Bounds box{}; box.origin={0,0,.5f}; box.extents={.1f,.1f,.1f};
+    check(surface_visible(glm::mat4(1),box),"Visible box culled");
+    box.origin.x=2; check(!surface_visible(glm::mat4(1),box),"Offscreen box retained");
+    box.origin={0,0,-.05f}; check(surface_visible(glm::mat4(1),box),"Near-plane intersection culled");
+    box.origin.z=-1; check(!surface_visible(glm::mat4(1),box),"Box behind camera retained");
     auto gaze = [](glm::vec2 angles, glm::vec3 up = glm::vec3(0,1,0)) {
         return glm::vec3(glm::inverse(head_view({0,0,1}, up, angles)) * glm::vec4(0,0,-1,0));
     };
@@ -271,7 +292,8 @@ std::string VulkanEngine::shader_path(const char* name) const {
 
 void VulkanEngine::init(const std::optional<std::filesystem::path>& model, bool smoke, const std::optional<std::filesystem::path>& replay,
     std::optional<OceanView> ocean, const std::optional<std::filesystem::path>& planeModel, const std::optional<std::filesystem::path>& shipModel,
-    const std::optional<std::filesystem::path>& events) {
+    const std::optional<std::filesystem::path>& events, bool environment) {
+    _environment=environment;
     _smoke = smoke; _replayPath = replay;
     if (ocean) { _scene = Scene::Ocean; _oceanView = *ocean; }
     if (!model) _worldFuture = std::async(std::launch::async, [] { return generate_world(8192, 4096); });
@@ -284,6 +306,7 @@ void VulkanEngine::init(const std::optional<std::filesystem::path>& model, bool 
     _window = SDL_CreateWindow("GEarth Renderer", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1280, 800, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (smoke ? SDL_WINDOW_HIDDEN : 0));
     check(_window != nullptr, SDL_GetError());
+    if (_environment) SDL_SetWindowTitle(_window,"GEarth Renderer - Environment");
     init_vulkan(); init_commands(); init_sync_structures();
     create_swapchain();
     VkFormatFeatureFlags2 depthRequired = VK_FORMAT_FEATURE_2_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_2_SAMPLED_IMAGE_BIT |
@@ -530,7 +553,19 @@ void VulkanEngine::init_scene(const std::optional<std::filesystem::path>& model)
         float longest = std::max({extent.x,extent.y,extent.z});
         check(std::isfinite(longest) && longest > .000001f, "Model has empty or invalid bounds");
         _modelTransform = glm::scale(glm::mat4(1),glm::vec3(2.f/longest)) * glm::translate(glm::mat4(1),-(minimum+maximum)*.5f);
-        fmt::print("Imported model centered and fitted to a two-unit box\n");
+        if (_environment) {
+            _modelTransform=glm::mat4(1); _showGround=false; _ambient=.35f; _sunIntensity=4; _exposure=.8f;
+            _cameraPosition=(minimum+maximum)*.5f+glm::vec3(0,0,longest*.6f);
+            if (_model->camera) {
+                _cameraPosition=glm::vec3((*_model->camera)[3]);
+                glm::vec3 forward=glm::normalize(glm::vec3(*_model->camera*glm::vec4(0,0,-1,0)));
+                _cameraAngles={std::atan2(forward.x,-forward.z),std::asin(std::clamp(forward.y,-1.f,1.f))};
+            }
+            _cameraStart=_cameraPosition; _cameraStartAngles=_cameraAngles;
+            if (_model->sunDirection) _sunDirection=*_model->sunDirection;
+            std::copy(_model->lights.begin(),_model->lights.end(),_sceneData.lights.begin());
+            fmt::print("Environment at original scale; camera {:.2f}, {:.2f}, {:.2f}\n",_cameraPosition.x,_cameraPosition.y,_cameraPosition.z);
+        } else fmt::print("Imported model centered and fitted to a two-unit box\n");
     }
 }
 
@@ -820,6 +855,11 @@ void VulkanEngine::update_scene() {
     glm::vec3 eye = _target + _distance * glm::vec3(std::cos(_pitch)*std::sin(_yaw),std::sin(_pitch),std::cos(_pitch)*std::cos(_yaw));
     auto view = glm::lookAt(eye,_target,glm::vec3(0,1,0));
     auto projection = glm::perspective(glm::radians(45.f),float(_swapchainExtent.width)/_swapchainExtent.height,100.f,.05f);
+    if (_environment) {
+        eye=_cameraPosition;
+        view=glm::lookAt(eye,eye+view_forward(_cameraAngles),glm::vec3(0,1,0));
+        projection=glm::perspective(glm::radians(60.f),float(_swapchainExtent.width)/_swapchainExtent.height,1000.f,.05f);
+    }
     projection[1][1] *= -1; _sceneData.viewproj = projection * view;
     // Globe: the sun is fixed relative to the camera (x right, y up, z toward viewer), so the same side stays lit while orbiting.
     glm::vec3 toCamera = glm::normalize(eye-_target), right = glm::normalize(glm::cross(glm::vec3(0,1,0),toCamera));
@@ -835,6 +875,18 @@ void VulkanEngine::update_scene() {
     auto lightView = glm::lookAt(light * 6.f,glm::vec3(0),up);
     auto lightProjection = glm::ortho(-3.5f,3.5f,-3.5f,3.5f,.1f,14.f); lightProjection[1][1] *= -1;
     _sceneData.sunViewProjection = lightProjection * lightView;
+    if (_environment) {
+        glm::vec3 center=eye+view_forward(_cameraAngles)*15.f;
+        float texel=70.f/ShadowResolution;
+        glm::mat4 rotation=glm::lookAt(light*100.f,glm::vec3(0),up);
+        glm::vec3 snapped=glm::vec3(rotation*glm::vec4(center,1));
+        snapped.x=std::floor(snapped.x/texel)*texel; snapped.y=std::floor(snapped.y/texel)*texel;
+        center=glm::vec3(glm::inverse(rotation)*glm::vec4(snapped,1));
+        auto projection=glm::ortho(-35.f,35.f,-35.f,35.f,.1f,220.f); projection[1][1]*=-1;
+        _sceneData.sunViewProjection=projection*glm::lookAt(center+light*110.f,center,up);
+        _oceanPush.inverseViewProj=glm::inverse(_sceneData.viewproj);
+        _oceanPush.viewport={float(_swapchainExtent.width),float(_swapchainExtent.height),0,0};
+    }
     _sceneData.cameraPosition = glm::vec4(eye,1); _sceneData.sunlightDirection = glm::vec4(light,0);
     float sun = _sunIntensity;
     _sceneData.sunlightColor = glm::vec4(sun);
@@ -868,6 +920,8 @@ void VulkanEngine::update_scene() {
         }
     }
     _sceneData.shadowSettings = {_shadows ? 1.f : 0.f,1.f/ShadowResolution,.0006f,.004f};
+    _sceneData.lightInfo=_environment ? glm::vec4(float(_model->lights.size()),_lightExposure,1,0) : glm::vec4(0);
+    if (_environment) _sceneData.shadowSettings.w=.02f;
     std::sort(_drawContext.TransparentSurfaces.begin(),_drawContext.TransparentSurfaces.end(),[&](const auto& a,const auto& b) {
         glm::vec3 pa(a.transform*glm::vec4(a.bounds.origin,1)), pb(b.transform*glm::vec4(b.bounds.origin,1));
         return glm::dot(pa-eye,pa-eye) > glm::dot(pb-eye,pb-eye);
@@ -883,6 +937,7 @@ void VulkanEngine::draw_shadow(VkCommandBuffer cmd) {
     if (_shadows) {
         vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_shadowPipeline.pipeline);
         for (const auto& object : _drawContext.OpaqueSurfaces) {
+            if (_environment && !surface_visible(_sceneData.sunViewProjection*object.transform,object.bounds)) continue;
             vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_shadowPipeline.layout,0,1,&object.material->materialSet,0,nullptr);
             vkCmdBindIndexBuffer(cmd,object.indexBuffer,0,VK_INDEX_TYPE_UINT32);
             GPUDrawPushConstants push{_sceneData.sunViewProjection*object.transform,object.vertexBufferAddress};
@@ -903,9 +958,18 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     auto rendering = vkinit::rendering_info(_swapchainExtent,&color,&depth);
     vkCmdBeginRendering(cmd,&rendering); set_viewport(cmd,_swapchainExtent);
     if (_scene == Scene::Ocean) draw_ocean(cmd);
+    else if (_environment) {
+        vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_skyPipeline.pipeline);
+        vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,_skyPipeline.layout,0,1,&_frames[_frameNumber%FRAME_OVERLAP].sceneDescriptor,0,nullptr);
+        vkCmdPushConstants(cmd,_skyPipeline.layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(_oceanPush),&_oceanPush);
+        vkCmdDraw(cmd,3,1,0,0);
+    }
     else if (_globe && _spaceBackground) draw_space(cmd);
+    _visibleSurfaces=0;
     auto draw = [&](const auto& objects) {
         for (const auto& object : objects) {
+            if (_environment && !surface_visible(_sceneData.viewproj*object.transform,object.bounds)) continue;
+            ++_visibleSurfaces;
             auto& pipeline = *object.material->pipeline;
             vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline.pipeline);
             VkDescriptorSet sets[] = {_frames[_frameNumber%FRAME_OVERLAP].sceneDescriptor,object.material->materialSet};
@@ -1009,8 +1073,18 @@ void VulkanEngine::frame_ui() {
             ImGui::SetNextWindowPos(ImVec2(18,365),ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(260,std::max(180.f,ImGui::GetIO().DisplaySize.y-383)),ImGuiCond_Always);
         }
+        if (_environment) ImGui::SetNextWindowSize(ImVec2(320,std::min(520.f,ImGui::GetIO().DisplaySize.y-36)),ImGuiCond_FirstUseEver);
         ImGui::Begin("Lighting",nullptr,_globe ? ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize : 0);
         ImGui::PushItemWidth(115);
+        if (_environment) {
+            ImGui::TextUnformatted("Environment preview");
+            ImGui::TextWrapped("Hold right mouse: look and WASD move. Q/E down/up. Shift: faster. R: reset camera.");
+            ImGui::SliderFloat("Movement speed",&_cameraSpeed,.5f,30.f);
+            ImGui::SliderFloat("Local lights",&_lightExposure,0.f,.1f,"%.3f");
+            ImGui::Text("%zu / %zu surfaces | %.0f MiB textures",_visibleSurfaces,
+                _drawContext.OpaqueSurfaces.size()+_drawContext.TransparentSurfaces.size(),_ddsBytes/1048576.);
+            ImGui::TextWrapped("Static scene; glass and indirect lighting approximate.");
+        }
         if (_globe) {
             int scene = int(_scene);
             ImGui::RadioButton("Globe",&scene,0); ImGui::SameLine(); ImGui::RadioButton("Plane / ship",&scene,1);
@@ -1057,7 +1131,7 @@ void VulkanEngine::frame_ui() {
                 ImGui::SliderFloat("Model yaw",&vehicle->yaw,-180.f,180.f);
                 ImGui::TextWrapped("offset %.2f %.2f %.2f  scale %.3f  yaw %.0f",vehicle->offset.x,vehicle->offset.y,vehicle->offset.z,vehicle->scale,vehicle->yaw);
             } else if (vehicle) ImGui::TextWrapped(_oceanView == OceanView::Ship ? "Add a ship with --ship-model" : "Add a cockpit with --plane-model");
-        } else ImGui::TextWrapped("Drag left mouse to orbit; wheel to zoom.");
+        } else if (!_environment) ImGui::TextWrapped("Drag left mouse to orbit; wheel to zoom.");
         ImGui::SliderFloat("Exposure",&_exposure,.1f,3.f);
         ImGui::SliderFloat("Bloom",&_bloom,0.f,.3f);
         if (_globe && _scene == Scene::Globe) {
@@ -1182,6 +1256,7 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
     bool quit=false;
     bool resizedDown=false, resizedBack=false;
     uint64_t lastTime=SDL_GetPerformanceCounter();
+    const uint64_t started=lastTime;
     while (!quit && (!frameLimit || _frameNumber < uint64_t(frameLimit))) {
         uint64_t now=SDL_GetPerformanceCounter();
         float elapsed=_smoke ? .1f : std::min(.1f,float(double(now-lastTime)/SDL_GetPerformanceFrequency()));
@@ -1213,12 +1288,19 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
                 if (!ImGui::GetIO().WantTextInput) {
                     if (event.key.keysym.sym == SDLK_h) _showPanels=!_showPanels;
                     if (event.key.keysym.sym == SDLK_r && _scene == Scene::Ocean) _headAngles = {};
+                    if (event.key.keysym.sym == SDLK_r && _environment) { _cameraPosition=_cameraStart; _cameraAngles=_cameraStartAngles; }
                 }
             }
             if (event.type == SDL_WINDOWEVENT && (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED || event.window.event == SDL_WINDOWEVENT_RESTORED)) _resize=true;
             if ((event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) ||
                 (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)) set_mouse_look(false);
-            if (_scene == Scene::Ocean) {
+            if (_environment) {
+                if (event.type==SDL_MOUSEBUTTONDOWN && event.button.button==SDL_BUTTON_RIGHT && !ImGui::GetIO().WantCaptureMouse) set_mouse_look(true);
+                if (event.type==SDL_MOUSEMOTION && _mouseLook) {
+                    _cameraAngles.x+=event.motion.xrel*.003f;
+                    _cameraAngles.y=std::clamp(_cameraAngles.y-event.motion.yrel*.003f,-1.5f,1.5f);
+                }
+            } else if (_scene == Scene::Ocean) {
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT && !ImGui::GetIO().WantCaptureMouse)
                     set_mouse_look(true);
                 if (event.type == SDL_MOUSEMOTION && _mouseLook)
@@ -1231,6 +1313,13 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
             }
         }
         int width,height; SDL_Vulkan_GetDrawableSize(_window,&width,&height);
+        if (_environment && _mouseLook && !ImGui::GetIO().WantTextInput) {
+            const auto* keys=SDL_GetKeyboardState(nullptr);
+            glm::vec3 forward=view_forward(_cameraAngles), right=glm::normalize(glm::cross(forward,glm::vec3(0,1,0)));
+            glm::vec3 movement=forward*float(keys[SDL_SCANCODE_W]-keys[SDL_SCANCODE_S])+right*float(keys[SDL_SCANCODE_D]-keys[SDL_SCANCODE_A])+
+                glm::vec3(0,float(keys[SDL_SCANCODE_E]-keys[SDL_SCANCODE_Q]),0);
+            if (glm::dot(movement,movement)>0) _cameraPosition+=glm::normalize(movement)*_cameraSpeed*elapsed*(keys[SDL_SCANCODE_LSHIFT] ? 4.f:1.f);
+        }
         if (width==0 || height==0 || (SDL_GetWindowFlags(_window)&SDL_WINDOW_MINIMIZED)) { SDL_Delay(20); continue; }
         if (_resize) resize_swapchain();
         // Switching to the plane or ship view loads its model on first use (a one-off pause of about a second).
@@ -1240,7 +1329,8 @@ void VulkanEngine::run(int frameLimit, const std::optional<std::filesystem::path
     set_mouse_look(false);
     VK_CHECK(vkDeviceWaitIdle(_device));
     if (capture && _frameNumber) capture_frame(*capture);
-    fmt::print("Rendered {} frames\n",_frameNumber);
+    double seconds=double(SDL_GetPerformanceCounter()-started)/SDL_GetPerformanceFrequency();
+    fmt::print("Rendered {} frames in {:.2f} s ({:.1f} average FPS, including capture/resizes)\n",_frameNumber,seconds,_frameNumber/std::max(seconds,.0001));
 }
 void VulkanEngine::capture_frame(const std::filesystem::path& path) {
     size_t bytes=size_t(_swapchainExtent.width)*_swapchainExtent.height*4;

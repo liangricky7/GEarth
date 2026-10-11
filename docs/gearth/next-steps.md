@@ -14,6 +14,7 @@ finished and its fix is known, so each starts from the last analyzed state.
 | 0 | `main` (91a6f68) | Public services batch, banks paused | Spark rebuild, then run 0 |
 | 1 | `ricky/banks-on` (staged, uncommitted) | Run 0 fixes + banks back on | Run 0 analysis |
 | 2 | `gearth/phase-1-resources` | Run 1 fixes + Phase 1 (resources and trading) | Run 1 analysis |
+| 2a | `gearth/post-resource-patch-1` | Every sim patch and fix after Phase 1 until infrastructure goes in (starts with the run-speed changes P1–P2) | Resource run analysis |
 | 3 | `gearth/phase-2-infrastructure` | Run 2 fixes + Phase 2 (infrastructure, builders) | Run 2 analysis |
 | 4 | `gearth/phase-3-war` | Run 3 fixes + Phase 3 (war, unrest, relations); set x, y, n, m from runs | Run 3 analysis |
 
@@ -182,6 +183,26 @@ Existing: `declare_conflict` (tension >= 60, costs 5000 + 1000 a week, closes bo
 | G7 | Branch base | One branch per major change, chained (see Pipeline) | agreed: see Pipeline |
 | G8 | Knock-on work | Population minimum rises again (new extraction and construction firms per country); RulesNote, worker prompt, observer and analytics need the new events; design doc update; one rule-mode year per phase before Spark | noted |
 | N1 | Numbers x (unrest QoL), n (unrest ticks), y (soldiers to stop revolution), m (soldiers per missile) | Set after Phase 1 and 2 runs | later |
+
+## Run speed: lock and scheduler review (Oct 11, branch `gearth/post-resource-patch-1`)
+
+Run b0315c took about 41 minutes for 365 ticks (about 47 s per simulated week). With inference stubbed, the
+C# engine, locks and scheduler finish the same 1,100-agent year in 22 s, so they are not the bottleneck. The
+time goes to the 8B institution pool (66% of decisions, 32 slots) before each weekly barrier; the 4B citizen
+pool finishes in one wave. Tick pacing (2 s) already overlaps inference.
+
+| # | Change | Status |
+|---|---|---|
+| P1 | Upload the Neon week-boundary checkpoint in the background while the next tick dispatches decisions | built |
+| P2 | World-run worker timeout 60 s -> 20 s; run notes report worker latency p50/p95/max and timeouts per backend | built |
+| P3 | Raise 8B concurrency (16 -> 24-32 per Spark) | rejected: serving frozen |
+| P4 | FP8 8B weights | rejected: serving frozen |
+| P5 | Move entrepreneurs to 4B | rejected: entrepreneurs keep 8B |
+| P6 | Entrepreneurs decide every 2 weeks (rotation like citizens) | open |
+| P7 | Let stragglers spill past the weekly barrier | rejected |
+
+Check after the next run: the latency note's p95 for spark_a/spark_b against the 20 s timeout. Planner and
+ranged-value turns make 2-3 model calls inside that budget.
 
 ## Deferred
 

@@ -298,7 +298,7 @@ def main():
                 {
                     "WORKER_TOKEN": token,
                     "WORKER_CAPACITY": str(live_capacity),
-                    "WORKER_TIMEOUT_SECONDS": str(60 if options.world else 13),
+                    "WORKER_TIMEOUT_SECONDS": str(20 if options.world else 13),
                 }
             )
 

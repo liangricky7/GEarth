@@ -132,6 +132,16 @@ public static class RunAnalysis
                 .Select(group => $"{group.Key}: {group.Count()}");
             observations.Add(new("reliability", $"{fallback.Length} inference fallback results and {rejected.Length} rejected decisions were recorded{(rejected.Length > 0 ? $" ({string.Join(", ", codes)})" : "")}. They do not count toward accepted model coverage.", Evidence(rejected.Concat(fallback))));
         }
+        // Worker latency per backend, for tuning the decision timeout (a timed-out decision becomes a fallback hold).
+        foreach (var group in events.Where(item => item.EventType is "action_accepted" or "action_rejected" && item.Source is "model" or "rule_fallback")
+            .GroupBy(item => item.Payload["backend"]?.GetValue<string>() ?? "unrecorded").OrderBy(group => group.Key))
+        {
+            var seconds = group.Select(item => (item.Payload["latency_ms"]?.GetValue<double>() ?? 0) / 1000).Order().ToArray();
+            var timeouts = group.Count(item => item.Payload["error_category"]?.GetValue<string>() is "model_timeout" or "worker_timeout");
+            observations.Add(new("latency", string.Create(CultureInfo.InvariantCulture,
+                $"{group.Key}: worker latency p50 {seconds[(seconds.Length - 1) / 2]:0.0}s, p95 {seconds[(int)Math.Ceiling(seconds.Length * 0.95) - 1]:0.0}s, max {seconds[^1]:0.0}s over {seconds.Length} decisions; {timeouts} timed out."),
+                Evidence(group.Where(item => item.Payload["error_category"]?.GetValue<string>() is "model_timeout" or "worker_timeout"))));
+        }
         foreach (var group in events.Where(item => item.EventType is "action_accepted" or "action_rejected").GroupBy(item => Role(world, item)))
         {
             var holds = group.Count(item => item.Source == "rule_fallback");

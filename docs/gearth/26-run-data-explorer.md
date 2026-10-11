@@ -29,7 +29,7 @@ Older reports remain readable. Runs without a new browse bundle show report-only
 - The original report's agent list is a preview; use cached datasets for rows beyond that preview.
 - Neither synthetic checks nor this browser qualify a 50,000-agent, 365-day workload. Bundle generation, import, disk usage and query performance require separate measurement.
 
-Implementation and acceptance checks follow the Astra plan prepared on October 11, 2026. Production deployment and an actual Databricks browse-bundle import are separate from local verification.
+Implementation and acceptance checks follow the Astra plan prepared on October 11, 2026. Production deployment remains separate from verification.
 
 ## Local verification — October 11, 2026
 
@@ -39,4 +39,14 @@ Implementation and acceptance checks follow the Astra plan prepared on October 1
 - A local RULE simulation verified all daily records for days 1–14 across 20 bounded pages, retained weekly frames, and a separate final frame. A second local run was discovered without replacing the selected older run.
 - A clearly synthetic Python-generated bundle was accepted by C# publication and row pagination, including explicit nulls. This checks format compatibility, not actual Databricks execution.
 
-For actual finished runs, use the existing operator command with `--analytics-browse`, and publish on the observer host with its persistent browse directory configured. Verify one real import and its website datasets before declaring production readiness. A full-scale 50,000-agent run remains unmeasured.
+For actual finished runs, use the existing operator command with `--analytics-browse`, and publish on the observer host with its persistent browse directory configured. A full-scale 50,000-agent run remains unmeasured.
+
+## Actual Databricks pilot — October 11, 2026
+
+The captured local RULE run `world_20261011_111421_045575` completed 15 days, starting with 200 agents and ending with 201. Its 7,436 original records were imported successfully in [Databricks job run 457214739825810](https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/534785166979170/run/457214739825810).
+
+Actual Bronze/Silver qualification passed, and all 19 run-filtered datasets were exported and validated. The published cache includes 3,209 agent observations, 885 transfers, 512 decision results and 43 bank-ledger records. The API returned every agent observation across 17 pages; all days 1–15 were present. Chrome displayed full schemas and actual rows 101–200 without horizontal overflow.
+
+The [saved verification evidence](evidence/run-data-explorer-pilot-20261011.json) records source hashes, actual dataset counts, table qualification and API/browser results.
+
+The report's five applicable integrity/accounting checks passed. Daily aggregate flow reconciliation remains unknown because that aggregate is outside audit.v1; individual transfers are retained. This pilot used a genuine local engine run, not synthetic rows. It verifies actual Databricks execution and publication, but does not qualify production Neon wiring, a 365-day history or the 50,000-agent target. Existing production histories with capture disabled cannot satisfy the complete export contract.

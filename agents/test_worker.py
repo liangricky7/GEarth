@@ -269,6 +269,25 @@ def test_world_rules_form_a_shared_prefix_and_menus_stay_compact():
     assert user["available_actions"] == ["0: hold", "1: set_price change_pct=10"]
 
 
+def test_fixed_numeric_choice_only_accepts_exact_copies_of_menu_parameters():
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    job.candidates.append({"action_type": "household_policy", "params": {"target_stock": 2}})
+    action = worker.validate_action({"choice": 1, "reason": "Build a buffer"}, job)
+    assert action["params"] == {"target_stock": 2}
+    assert worker.render_action(1, job.candidates[1]) == "1: household_policy target_stock=2"
+    for values in ({}, {"target_stock": 2}):
+        repeated = worker.validate_action(
+            {"choice": 1, "reason": "Build a buffer", "values": values}, job
+        )
+        assert repeated == action
+    for values in ({"target_stock": 999}, {"target_stock": True}, {"target_stock": "2"}, {"target_stock": 2.0}, {"cash": 999}, []):
+        with pytest.raises(ValueError, match="INVALID_SCHEMA"):
+            worker.validate_action(
+                {"choice": 1, "reason": "Build a buffer", "values": values}, job
+            )
+
+
 def test_free_numbers_fill_ranged_fields_within_bounds():
     job = make_job()
     job.observation = {"world_stage": 2}

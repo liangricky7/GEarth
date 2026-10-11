@@ -64,7 +64,17 @@ def fill_values(candidate: dict, values) -> dict:
     # Free numeric fields ({"min","max"}) take the model's integers; every other parameter is fixed.
     ranges = {key for key, value in candidate["params"].items() if is_range(value)}
     if not ranges:
-        if values is not None:
+        # Some servers echo displayed fixed parameters in values. These may be
+        # redundant, but they cannot supply unknown fields or change the menu.
+        if values is not None and (
+            not isinstance(values, dict)
+            or any(
+                key not in candidate["params"]
+                or type(value) is not type(candidate["params"][key])
+                or value != candidate["params"][key]
+                for key, value in values.items()
+            )
+        ):
             raise ValueError("INVALID_SCHEMA")
         return candidate["params"]
     if not isinstance(values, dict) or set(values) != ranges:
@@ -146,7 +156,12 @@ WORLD_INSTRUCTIONS = (
     'Return only JSON: {"choice":0,"reason":"short explanation"}. '
     "choice is the number of one available action. reason is at most 100 characters. "
     'If the chosen action has fields shown as <integer MIN-MAX, now N>, also return "values" '
-    'with an integer for each, for example {"choice":1,"reason":"...","values":{"food":700}}.'
+    'with an integer for each, for example {"choice":1,"reason":"...","values":{"food":700}}. '
+    'Include "values" ONLY for fields displayed with <integer MIN-MAX, now N>. '
+    "Ordinary numbers are fixed parameters: do not repeat or override them. "
+    'When the chosen action has no <integer ...> fields, omit "values" entirely. '
+    'For example, selecting "1: household_policy target_stock=2" returns '
+    '{"choice":1,"reason":"Build a buffer"} without values.'
 )
 
 

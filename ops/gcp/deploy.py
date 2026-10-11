@@ -19,7 +19,7 @@ from ops.compute_config import compute_environment
 
 def bundle_source(root, destination, base_archive=None):
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode().split("\0")
-    additions = ["ops/run_collection.py", "ops/test_run_collection.py", "docs/faultline/22-google-cloud-deployment.md"]
+    additions = ["ops/run_collection.py", "ops/test_run_collection.py", "docs/gearth/22-google-cloud-deployment.md"]
     additions += [str(path.relative_to(root)) for path in (root / "ops/gcp").glob("*") if path.is_file()]
     names = sorted({name for name in tracked + additions if name and (root / name).is_file()
                     and not any(part in {".git", ".data", ".logs", ".venv", "node_modules", "bin", "obj", "__pycache__"}
@@ -51,11 +51,11 @@ def bundle_source(root, destination, base_archive=None):
         if original.hexdigest() != base_source["source_sha256"]:
             raise ValueError("Base source archive hash mismatch")
         for name, content in files:
-            if name.startswith("ops/gcp/") or name in {"ops/check_amd.py", "ops/test_run_collection.py", "docs/faultline/22-google-cloud-deployment.md", "backend/Faultline.Api/SimulationPause.cs", "backend/Faultline.Api/wwwroot/controls.js", "backend/Faultline.Api/wwwroot/controls.css", "backend/Faultline.Tests/SimulationPauseTests.cs"}:
+            if name.startswith("ops/gcp/") or name in {"ops/check_amd.py", "ops/test_run_collection.py", "docs/gearth/22-google-cloud-deployment.md", "backend/GEarth.Api/SimulationPause.cs", "backend/GEarth.Api/wwwroot/controls.js", "backend/GEarth.Api/wwwroot/controls.css", "backend/GEarth.Tests/SimulationPauseTests.cs"}:
                 base_files[name] = content
         # Preserve the running economy/model code and insert only reviewed pause/UI hooks.
         from ops.gcp.control_patch import pause_hooks, control_panel
-        for name, patch in [("backend/Faultline.Api/Coordinator.cs", pause_hooks), ("backend/Faultline.Api/wwwroot/index.html", control_panel)]:
+        for name, patch in [("backend/GEarth.Api/Coordinator.cs", pause_hooks), ("backend/GEarth.Api/wwwroot/index.html", control_panel)]:
             if name in base_files:
                 base_files[name] = patch(base_files[name].decode()).encode()
         files = sorted(base_files.items())
@@ -117,7 +117,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     parser.add_argument("--zone", default="us-central1-a")
-    parser.add_argument("--instance", default="faultline-sim")
+    parser.add_argument("--instance", default="gearth-sim")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--config", type=Path, default=ROOT / ".env.local")
     parser.add_argument("--base-archive", type=Path, help="Preserve this engine release; replace cloud operations only")
@@ -143,7 +143,7 @@ def main():
     command = "sudo bash ~/install_release.sh ~/source.tar.gz ~/config.env " + source["source_sha256"]
     if options.after_current:
         # The VM owns the wait, even if the uploading laptop disconnects.
-        command = ("sudo systemd-run --unit=faultline-deploy-" + source["source_sha256"][:12]
+        command = ("sudo systemd-run --unit=gearth-deploy-" + source["source_sha256"][:12]
                    + " --wait --collect /bin/bash ~/install_release.sh ~/source.tar.gz ~/config.env "
                    + source["source_sha256"] + " after-current")
     if options.start:

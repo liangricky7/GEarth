@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
-FORMAT = "faultline.run-export.v1"
+FORMAT = "gearth.run-export.v1"
 TERMINAL = {"completed", "stopped", "failed"}
 MAX_ROW_BYTES = 2 * 1024 * 1024
 DEFAULT_CHUNK_BYTES = 64 * 1024 * 1024
@@ -40,7 +40,7 @@ def record_check(record, run_id, revision, through_sequence):
     if record.get("kind") not in KINDS or not isinstance(record.get("payload"), dict):
         raise ValueError("unsupported record kind or payload")
     if record["kind"] == "event" and record["payload"].get("event_type") == "timeline_forked":
-        raise ValueError("faultline.run-export.v1 does not support Neon fork timelines; stable branch/timeline identity is required")
+        raise ValueError("gearth.run-export.v1 does not support Neon fork timelines; stable branch/timeline identity is required")
     # Reject lossy floating money at all nesting depths; money can be negative in deltas.
     def monetary_leaves(node, key):
         if node is None:
@@ -53,15 +53,20 @@ def record_check(record, run_id, revision, through_sequence):
                 monetary_leaves(value, key)
         elif isinstance(node, bool) or not isinstance(node, int):
             raise ValueError(f"{key} must contain integer minor units")
-    def money_check(node):
+    def money_check(node, path=()):
         if isinstance(node, dict):
             for key, value in node.items():
-                if key.lower().endswith("minor") and value is not None:
+                # These two metadata keys describe the accounting basis. They
+                # are definitions, not cash amounts; actual agent claims still
+                # require integer minor units everywhere else.
+                definition = (record["kind"] == "run_metadata" and path == ("economy_configuration", "accounting")
+                              and key in {"deposit_minor", "in_kind_minor"} and isinstance(value, str) and bool(value))
+                if key.lower().endswith("minor") and value is not None and not definition:
                     monetary_leaves(value, key)
-                money_check(value)
+                money_check(value, path + (key,))
         elif isinstance(node, list):
             for value in node:
-                money_check(value)
+                money_check(value, path)
     money_check(record["payload"])
 
 
@@ -169,7 +174,7 @@ def export_run(base_url, run_id, destination, *, token=None, page_size=1000, chu
     unknown = metadata.get("metadata_unknown", [])
     missing = ["audit_before_capture_start"] if metadata.get("audit_from_tick_zero") is False else []
     fixture = metadata.get("source", {}).get("fixture")
-    manifest = {"schema_version": FORMAT, "record_schema_version": "faultline.audit.v1", "run": metadata,
+    manifest = {"schema_version": FORMAT, "record_schema_version": "gearth.audit.v1", "run": metadata,
                 "created_at": dt.datetime.now(dt.timezone.utc).isoformat(), "files": files,
                 "record_count": after, "counts_by_kind": dict(sorted(counts.items())),
                 "completeness": {"snapshot_complete": True, "run_complete": metadata["status"] == "completed",

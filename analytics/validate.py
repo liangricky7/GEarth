@@ -10,8 +10,9 @@ import sqlite3
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check
+from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check, canonical
 from .transform import typed_record
+from .contracts import contract_matches
 
 
 def file_sha256(path):
@@ -41,7 +42,7 @@ def read_manifest(path):
     manifest_path = Path(path)
     with manifest_path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
-    if manifest.get("schema_version") != FORMAT or manifest.get("record_schema_version") != "faultline.audit.v1":
+    if not contract_matches(manifest.get("schema_version"), FORMAT) or not contract_matches(manifest.get("record_schema_version"), "gearth.audit.v1"):
         raise ValueError("unsupported export schema")
     run = manifest.get("run", {})
     if not isinstance(run.get("run_id"), str) or not run["run_id"] or run.get("status") not in TERMINAL:
@@ -136,7 +137,7 @@ def iter_records(manifest_path, manifest=None):
 def validate(manifest_path):
     manifest = read_manifest(manifest_path)
     run = manifest["run"]
-    with tempfile.TemporaryDirectory(prefix="faultline-validate-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="gearth-validate-") as temporary:
         db = sqlite3.connect(str(Path(temporary) / "coverage.sqlite"))
         db.executescript("""PRAGMA journal_mode=OFF;
             CREATE TABLE opening(id TEXT PRIMARY KEY, kind TEXT);
@@ -147,9 +148,20 @@ def validate(manifest_path):
             CREATE TABLE country_days(id TEXT,tick INTEGER,frame TEXT,PRIMARY KEY(id,tick,frame));
             CREATE TABLE event(seq INTEGER PRIMARY KEY, event_id TEXT UNIQUE);
             CREATE TABLE transactions(id TEXT PRIMARY KEY);
+            CREATE TABLE account_activity(id TEXT PRIMARY KEY,sequence INTEGER);
             CREATE TABLE decisions(id TEXT,kind TEXT,PRIMARY KEY(id,kind));
         """)
         metadata_count = 0
+
+        def creation(account_id, tick, sequence):
+            prior = db.execute("SELECT tick,sequence FROM creations WHERE id=?", (account_id,)).fetchone()
+            if prior is not None and prior[0] != tick:
+                raise ValueError("conflicting agent creation tick")
+            if prior is None:
+                db.execute("INSERT INTO creations VALUES (?,?,?)", (account_id, tick, sequence))
+            elif sequence < prior[1]:
+                db.execute("UPDATE creations SET sequence=? WHERE id=?", (sequence, account_id))
+
         try:
             for record in iter_records(manifest_path, manifest):
                 kind = record["kind"]
@@ -158,8 +170,20 @@ def validate(manifest_path):
                     metadata_count += 1
                     if record["sequence"] != 1:
                         raise ValueError("run_metadata must be first and unique")
+                    payload = record["payload"]
+                    for key in ("capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration"):
+                        if canonical(payload.get(key)) != canonical(run.get(key)):
+                            raise ValueError("source metadata differs from pinned manifest: " + key)
                 elif kind == "opening_balance":
                     db.execute("INSERT INTO opening VALUES (?,?)", (row["account_id"], row["account_type"]))
+                    if row["account_type"] == "created_agent":
+                        creation_tick = integer(record["payload"].get("creation_tick"), "creation_tick")
+                        if creation_tick != row["tick"] or creation_tick > run["tick"] or row["balance_minor"] != 0:
+                            raise ValueError("invalid created-agent opening balance/tick")
+                        if (db.execute("SELECT 1 FROM account_activity WHERE id=?", (row["account_id"],)).fetchone()
+                                or db.execute("SELECT 1 FROM days WHERE id=?", (row["account_id"],)).fetchone()):
+                            raise ValueError("created-agent opening must precede transfers and state snapshots")
+                        creation(row["account_id"], creation_tick, row["sequence"])
                     country_id = record["payload"].get("agent", {}).get("country_id")
                     if isinstance(country_id, str) and country_id:
                         db.execute("INSERT OR IGNORE INTO countries VALUES (?)", (country_id,))
@@ -185,9 +209,11 @@ def validate(manifest_path):
                         account_id = event_payload.get("account_id")
                         if not isinstance(account_id, str) or not account_id:
                             raise ValueError("creation event missing authoritative account ID")
-                        db.execute("INSERT INTO creations VALUES (?,?,?)", (account_id, row["tick"], row["sequence"]))
+                        creation(account_id, row["tick"], row["sequence"])
                 elif kind == "transaction":
                     db.execute("INSERT INTO transactions VALUES (?)", (row["transaction_id"],))
+                    for account_id in (row["sender_account_id"], row["recipient_account_id"]):
+                        db.execute("INSERT OR IGNORE INTO account_activity VALUES (?,?)", (account_id, row["sequence"]))
                 elif kind in {"decision_request", "decision_result"}:
                     db.execute("INSERT INTO decisions VALUES (?,?)", (row["decision_id"], kind))
             if metadata_count != 1:
@@ -211,7 +237,7 @@ def validate(manifest_path):
             if db.execute(f"SELECT COUNT(*) FROM ({known}) a WHERE NOT EXISTS (SELECT 1 FROM days d WHERE d.id=a.id AND frame='end')").fetchone()[0]:
                 raise ValueError("known agent absent from final end snapshots")
             # Initial agents require every daily tick; new agents require every tick
-            # from their first state row onward. Defunct firms remain explicit rows.
+            # from their authoritative creation boundary. Defunct firms stay explicit.
             for agent_id, in db.execute(known):
                 initial = db.execute("SELECT 1 FROM opening WHERE id=? AND kind='agent'", (agent_id,)).fetchone() is not None
                 first_expected = 1

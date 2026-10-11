@@ -16,7 +16,7 @@ from ops.spark_gemma_experiment import GEMMA, validate_samples
 
 
 PROGRAM = """using System.Text.Json;
-using Faultline.Core;
+using GEarth.Core;
 var world = JsonSerializer.Deserialize<World>(File.ReadAllText(args[0]), Wire.Json)!;
 var groups = world.Agents.Values.Where(agent => agent.Role == "citizen"
     && SocietyLabor.DecidesForItself(agent))
@@ -34,9 +34,9 @@ Console.WriteLine($"Generated {jobs.Length} decision jobs at day {world.Tick}");
 
 def export(world_file, output, count=32):
     world_file = Path(world_file).resolve()
-    with tempfile.TemporaryDirectory(prefix="faultline-prompts-") as directory:
+    with tempfile.TemporaryDirectory(prefix="gearth-prompts-") as directory:
         project = Path(directory)
-        core = escape(str(ROOT / "backend/Faultline.Core/Faultline.Core.csproj"), {'"': "&quot;"})
+        core = escape(str(ROOT / "backend/GEarth.Core/GEarth.Core.csproj"), {'"': "&quot;"})
         (project / "Exporter.csproj").write_text(
             '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
             '<OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>'

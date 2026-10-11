@@ -17,7 +17,7 @@ from agents.providers import ProviderPool, load_providers
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_SCHEMA = json.loads(
-    (ROOT / "docs/faultline/contracts/action.schema.json").read_text()
+    (ROOT / "docs/gearth/contracts/action.schema.json").read_text()
 )
 TOKEN = os.environ.get("WORKER_TOKEN", "")
 CAPACITY = int(os.environ.get("WORKER_CAPACITY", "4"))

@@ -116,7 +116,7 @@ def main():
         signal.signal(signum, lambda *_: stop.set())
 
     if not options.skip_build:
-        subprocess.run(["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"], cwd=ROOT, check=True)
+        subprocess.run(["dotnet", "build", "GEarth.sln", "--nologo", "-v", "quiet"], cwd=ROOT, check=True)
 
     attempts = failures = 0
     while not stop.is_set() and (not options.max_runs or attempts < options.max_runs):

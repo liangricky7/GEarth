@@ -8,13 +8,13 @@
 # COMMAND ----------
 dbutils.widgets.text("run_id", "")
 dbutils.widgets.text("export_directory", "", "Optional manifest/export directory for qualification JSON")
-dbutils.widgets.text("library_zip", "/Volumes/workspace/faultline_bronze/run_exports/_code/faultline-analytics.zip")
+dbutils.widgets.text("library_zip", "/Volumes/workspace/gearth_bronze/run_exports/_code/gearth-analytics.zip")
 from pyspark.sql import functions as F, Window
 run_id = dbutils.widgets.get("run_id")
 if not run_id:
     raise ValueError("Set run_id")
 def table(name):
-    return spark.table("workspace.faultline_silver." + name).where(F.col("run_id") == run_id)
+    return spark.table("workspace.gearth_silver." + name).where(F.col("run_id") == run_id)
 
 opening = table("opening_balances").select("account_id", F.col("balance_minor").alias("opening_minor"))
 transactions = table("transactions")
@@ -38,8 +38,8 @@ display(checks.where("status != 'pass'").limit(100))
 display(checks.agg(F.sum("opening_minor").alias("opening_cash_plus_escrow_minor"), F.sum("latest_minor").alias("final_cash_plus_escrow_minor"), F.sum("net_minor").alias("net_transfers_minor")))
 
 # COMMAND ----------
-bronze = spark.table("workspace.faultline_bronze.audit").where(F.col("run_id") == run_id)
-receipts = spark.table("workspace.faultline_gold.import_receipts").where(F.col("run_id") == run_id)
+bronze = spark.table("workspace.gearth_bronze.audit").where(F.col("run_id") == run_id)
+receipts = spark.table("workspace.gearth_gold.import_receipts").where(F.col("run_id") == run_id)
 display(receipts)
 display(bronze.agg(F.count("*").alias("rows"), F.countDistinct("sequence").alias("unique_sequences"), F.min("sequence").alias("first_sequence"), F.max("sequence").alias("last_sequence")))
 duplicates = transactions.groupBy("transaction_id").count().where("count > 1")
@@ -80,8 +80,8 @@ if export_directory:
         raise ValueError("Selected run differs from source manifest")
     qualification = qualify_delta(spark, manifest, integrity["source_manifest_sha256"])
     qualification["gold"] = {}
-    for name in ("import_receipts", "agent_days", "agent_latest", "country_days", "agent_timeline"):
-        target_table = "workspace.faultline_gold." + name
+    for name in ("import_receipts", "agent_days", "agent_latest", "country_days", "agent_timeline", "public_service_days", "public_service_transfers"):
+        target_table = "workspace.gearth_gold." + name
         qualification["gold"][name] = {"available": spark.catalog.tableExists(target_table)}
         if qualification["gold"][name]["available"]:
             qualification["gold"][name]["rows"] = spark.table(target_table).where(F.col("run_id") == run_id).count()

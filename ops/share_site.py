@@ -136,10 +136,10 @@ def main():
     parser.add_argument("--once", action="store_true")
     options = parser.parse_args()
     values = dotenv_values(ROOT / ".env.local")
-    url = str(values.get("FAULTLINE_SHARE_URL") or "").rstrip("/")
-    key = values.get("FAULTLINE_SHARE_KEY")
+    url = str(values.get("GEARTH_SHARE_URL") or "").rstrip("/")
+    key = values.get("GEARTH_SHARE_KEY")
     if not url.startswith("https://") or not key:
-        raise SystemExit("Set FAULTLINE_SHARE_URL and FAULTLINE_SHARE_KEY in .env.local")
+        raise SystemExit("Set GEARTH_SHARE_URL and GEARTH_SHARE_KEY in .env.local")
     if not options.once:
         if supervisor_running():
             raise SystemExit("The share supervisor is already running")

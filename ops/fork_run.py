@@ -63,12 +63,12 @@ def main():
     if not (database_url and key and project):
         raise RuntimeError("Save DATABASE_URL, NEON_API_KEY and NEON_PROJECT_ID in .env.local.")
 
-    sql(database_url, """CREATE TABLE IF NOT EXISTS faultline.timelines (
+    sql(database_url, """CREATE TABLE IF NOT EXISTS gearth.timelines (
         timeline text PRIMARY KEY, branch_id text NOT NULL, parent_run_id text NOT NULL,
         fork_tick bigint NOT NULL, fork_lsn pg_lsn NOT NULL, change jsonb,
         created_at timestamptz NOT NULL DEFAULT now())""")
     if options.list:
-        for row in sql(database_url, "SELECT timeline, branch_id, parent_run_id, fork_tick, change, created_at FROM faultline.timelines ORDER BY created_at"):
+        for row in sql(database_url, "SELECT timeline, branch_id, parent_run_id, fork_tick, change, created_at FROM gearth.timelines ORDER BY created_at"):
             print(" | ".join(str(value) for value in row))
         return
     if not options.run_id:
@@ -79,7 +79,7 @@ def main():
         parser.error("--ticks must be after --day.")
 
     # B2: only week-boundary checkpoints (and day 0) have no decision in flight.
-    rows = sql(database_url, """SELECT tick, lsn::text FROM faultline.checkpoints
+    rows = sql(database_url, """SELECT tick, lsn::text FROM gearth.checkpoints
         WHERE run_id=$1 AND tick<=$2 AND (tick=0 OR (tick+1)%7=0) ORDER BY tick DESC, revision LIMIT 1""",
         (options.run_id, options.day))
     if not rows:
@@ -104,11 +104,11 @@ def main():
     pooled = endpoint.replace(".", "-pooler.", 1) if "-pooler." in httpx.URL(database_url).host else endpoint
     branch_url = database_url.replace(httpx.URL(database_url).host, pooled, 1)
 
-    sql(database_url, "INSERT INTO faultline.timelines VALUES($1,$2,$3,$4,$5::pg_lsn,$6::jsonb)",
+    sql(database_url, "INSERT INTO gearth.timelines VALUES($1,$2,$3,$4,$5::pg_lsn,$6::jsonb)",
         (timeline, created["branch"]["id"], options.run_id, tick, lsn, json.dumps(change)))
     print(f"Timeline {timeline}: Neon branch {created['branch']['id']} at LSN {lsn} (day {tick}); change: {change or 'none (control)'}", flush=True)
 
-    environment = {**os.environ, "FAULTLINE_BRANCH_DATABASE_URL": branch_url}
+    environment = {**os.environ, "GEARTH_BRANCH_DATABASE_URL": branch_url}
     command = [sys.executable, str(ROOT / "ops/run_stage1.py"), "--world", "--resume", options.run_id,
                "--timeline", timeline, "--ticks", str(options.ticks), *passthrough]
     if change:

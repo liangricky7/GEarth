@@ -16,7 +16,7 @@ def pause_hooks(source):
     if "new SimulationPause(" in source:
         return source
     replacements = [
-        ("var queue = new Queue<string>();", 'var queue = new Queue<string>();\n        var pause = new SimulationPause(Environment.GetEnvironmentVariable("FAULTLINE_CONTROL_DIRECTORY"));'),
+        ("var queue = new Queue<string>();", 'var queue = new Queue<string>();\n        var pause = new SimulationPause(Environment.GetEnvironmentVariable("GEARTH_CONTROL_DIRECTORY"));'),
         ("void Dispatch()\n        {", "void Dispatch()\n        {\n            if (pause.Requested)\n                return;"),
         ("        async Task DrainWeek()", '''        async Task PauseIfRequested()
         {

@@ -10,10 +10,11 @@ import tempfile
 from pathlib import Path
 
 from .export import canonical
-from .transform import typed_record
+from .transform import typed_record, agent_facts
+from .choice import candidate_matches, matching_indices, parameter_contract
 from .validate import file_sha256, iter_records, read_manifest, validate
 
-ANALYSIS_VERSION = "1.1.0"
+ANALYSIS_VERSION = "1.2.0"
 
 
 def build_report(manifest_path, *, max_agents=100, work_directory=None):
@@ -32,19 +33,24 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
     missing_context = 0
     choice_errors = 0
     accepted_without_offered_index = 0
+    bounded_choices = 0
+    ambiguous_choices = 0
+    transfer_kinds = {}
+    feature_metadata = {}
+    services_snapshots = 0
     countries = {}
     evidence = []
     daily_counts = {"agent_snapshots": 0, "escrow_snapshots": 0, "mismatches": 0, "unknown_openings": 0}
     daily_examples = []
     daily_evidence = []
-    with tempfile.TemporaryDirectory(prefix="faultline-analysis-", dir=work_directory) as temp:
+    with tempfile.TemporaryDirectory(prefix="gearth-analysis-", dir=work_directory) as temp:
         db = sqlite3.connect(str(Path(temp) / "checks.sqlite"))
         db.executescript("""
         PRAGMA journal_mode=OFF;
         CREATE TABLE accounts(id TEXT PRIMARY KEY, opening INTEGER, net INTEGER NOT NULL DEFAULT 0,
                               latest INTEGER, sequence INTEGER, account_type TEXT);
         CREATE TABLE agents(id TEXT PRIMARY KEY, sequence INTEGER, tick INTEGER, role TEXT, country TEXT,
-                            cash INTEGER, health REAL, wellbeing REAL, eligible INTEGER);
+                            cash INTEGER, health REAL, wellbeing REAL, eligible INTEGER, facts TEXT);
         CREATE TABLE decisions(id TEXT PRIMARY KEY, request TEXT, result TEXT, request_seq INTEGER, result_seq INTEGER);
         CREATE TABLE transactions(id TEXT PRIMARY KEY, hash TEXT);
         """)
@@ -75,7 +81,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             counts[kind] += 1
             if len(evidence) < 20:
                 evidence.append({"run_id": run["run_id"], "sequence": record["sequence"], "kind": kind})
-            if kind == "opening_balance":
+            if kind == "run_metadata":
+                feature_metadata = {key: payload.get(key) for key in ("capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration")}
+            elif kind == "opening_balance":
                 account(row["account_id"])
                 existing = db.execute("SELECT opening FROM accounts WHERE id=?", (row["account_id"],)).fetchone()[0]
                 if existing is not None:
@@ -83,10 +91,10 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 db.execute("UPDATE accounts SET opening=?,account_type=? WHERE id=?", (row["balance_minor"], row["account_type"], row["account_id"]))
                 agent = payload.get("agent")
                 if isinstance(agent, dict):
-                    # Opening balances supply the exact tick-zero latest state for a zero-day run.
-                    db.execute("INSERT OR IGNORE INTO agents VALUES (?,?,?,?,?,?,?,?,?)", (row["account_id"], record["sequence"], 0,
+                    # Initial/created openings preserve the actual recorded boundary.
+                    db.execute("INSERT OR IGNORE INTO agents VALUES (?,?,?,?,?,?,?,?,?,?)", (row["account_id"], record["sequence"], record["tick"],
                                agent.get("role"), agent.get("country_id", agent.get("countryId")), row["balance_minor"],
-                               agent.get("health"), agent.get("wellbeing"), agent.get("decision_maker", agent.get("decisionMaker"))))
+                               agent.get("health"), agent.get("wellbeing"), agent.get("decision_maker", agent.get("decisionMaker")), canonical(agent_facts(agent)).decode()))
                     db.execute("UPDATE accounts SET latest=?,sequence=? WHERE id=?", (row["balance_minor"], record["sequence"], row["account_id"]))
             elif kind == "event" and payload.get("event_type") == "business_started":
                 creation = payload.get("payload", {})
@@ -103,18 +111,26 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                     db.execute("UPDATE accounts SET net=net+? WHERE id=?", (amount, account_id))
                 total_transfer += row["amount_minor"]
                 transaction_count += 1
+                transfer_kind = row["transfer_kind"] or "unknown"
+                bucket = transfer_kinds.setdefault(transfer_kind, {"kind": transfer_kind, "count": 0, "amount_minor": 0, "evidence_refs": []})
+                bucket["count"] += 1
+                bucket["amount_minor"] += row["amount_minor"]
+                if len(bucket["evidence_refs"]) < 2:
+                    bucket["evidence_refs"].append({"run_id": run["run_id"], "sequence": row["sequence"], "kind": "transaction"})
             elif kind == "agent_day":
                 account(row["agent_id"])
                 daily_check(row["agent_id"], row["cash_minor"], record, "agent")
                 db.execute("UPDATE accounts SET latest=?,sequence=? WHERE id=?", (row["cash_minor"], row["sequence"], row["agent_id"]))
-                db.execute("INSERT OR REPLACE INTO agents VALUES (?,?,?,?,?,?,?,?,?)", (row["agent_id"], row["sequence"], row["tick"], row["role"],
-                           row["country_id"], row["cash_minor"], row["health"], row["wellbeing"], row["decision_maker"]))
+                db.execute("INSERT OR REPLACE INTO agents VALUES (?,?,?,?,?,?,?,?,?,?)", (row["agent_id"], row["sequence"], row["tick"], row["role"],
+                           row["country_id"], row["cash_minor"], row["health"], row["wellbeing"], row["decision_maker"], canonical(agent_facts(payload)).decode()))
+                services_snapshots += int("is_student" in payload and "hungry" in payload and "qol_parts_points" in payload)
             elif kind == "nation_day":
                 country = row["country_id"]
                 if country:
                     # A finite country-day map (5*365 expected), selecting final same-tick revision.
                     countries[(country, row["tick"])] = {"country_id": country, "tick": row["tick"], "sequence": row["sequence"],
                         "metrics": {key: value for key, value in payload.items() if isinstance(value, (int, float, bool)) or value is None},
+                        "public_services": {key: payload.get(key) for key in ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params")},
                         "evidence_ref": {"run_id": run["run_id"], "sequence": row["sequence"], "kind": kind}}
                 for escrow in payload.get("escrow_accounts", []):
                     account(escrow["account_id"])
@@ -146,6 +162,10 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             if result:
                 index = result.get("selected_option_index")
                 options = request["job"]["candidates"]
+                action = (result.get("result") or {}).get("action") or {}
+                matches = matching_indices(options, action)
+                if len(matches) > 1:
+                    ambiguous_choices += 1
                 if index is None and result.get("accepted") is True:
                     accepted_without_offered_index += 1
                 if index is not None:
@@ -153,9 +173,18 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                         choice_errors += 1
                     else:
                         selected = options[index]
-                        action = (result.get("result") or {}).get("action") or {}
-                        if not isinstance(selected, dict) or selected.get("action_type") != action.get("action_type") or selected.get("params") != action.get("params"):
+                        if not candidate_matches(selected, action):
                             choice_errors += 1
+                        elif parameter_contract(selected) == "bounded_integer":
+                            bounded_choices += 1
+                if "selected_params" in result and canonical(result["selected_params"]) != canonical(action.get("params")):
+                    choice_errors += 1
+                if "selection_match_count" in result:
+                    match_count = result["selection_match_count"]
+                    if isinstance(match_count, bool) or not isinstance(match_count, int) or match_count != len(matches):
+                        choice_errors += 1
+                if request.get("menu_parameter_contract") == "fixed_or_bounded_integer.v1" and index is not None and len(matches) != 1:
+                    choice_errors += 1
 
         # New escrow accounts have an authoritative zero opening balance. This is an
         # engine contract, not guessed from an agent's missing opening endowment.
@@ -170,9 +199,21 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                       for account_id, opening, net, latest in db.execute("SELECT id,opening,net,latest FROM accounts WHERE opening IS NOT NULL AND latest IS NOT NULL AND latest != opening+net LIMIT 20")]
         agents = [{"agent_id": agent_id, "tick": tick, "role": role, "country_id": country, "cash_minor": cash,
                    "health": health, "wellbeing": wellbeing, "decision_maker": bool(eligible) if eligible is not None else None,
+                   "public_services": json.loads(facts) if facts else {},
                    "evidence_ref": {"run_id": run["run_id"], "sequence": sequence, "kind": "agent_day" if tick else "opening_balance"}}
-                  for agent_id, sequence, tick, role, country, cash, health, wellbeing, eligible in db.execute("SELECT * FROM agents ORDER BY id LIMIT ?", (max_agents,))]
+                  for agent_id, sequence, tick, role, country, cash, health, wellbeing, eligible, facts in db.execute("SELECT * FROM agents ORDER BY id LIMIT ?", (max_agents,))]
         agent_count = db.execute("SELECT COUNT(*) FROM agents").fetchone()[0]
+        resident_count = db.execute("SELECT COUNT(*) FROM agents WHERE role IN ('citizen','entrepreneur','planner')").fetchone()[0]
+        services_summary = {"latest_agent_count": agent_count, "resident_count": resident_count,
+                            "denominator": "resident agents with role citizen, entrepreneur or planner"}
+        for name, field in (("students", "is_student"), ("graduates", "graduated"), ("job_seekers", "seeking_better_job"), ("hungry", "hungry")):
+            known = observed = 0
+            for facts, in db.execute("SELECT facts FROM agents WHERE role IN ('citizen','entrepreneur','planner')"):
+                value = (json.loads(facts) if facts else {}).get(field)
+                if isinstance(value, bool):
+                    known += 1
+                    observed += int(value)
+            services_summary[name] = {"observed_count": observed, "eligible_known_count": known, "missing_count": resident_count - known}
         decision_pending = db.execute("SELECT COUNT(*) FROM decisions WHERE result IS NULL").fetchone()[0]
         check_status = "fail" if mismatch else "unknown" if missing_opening or missing_final else "pass"
         checks = [
@@ -188,7 +229,8 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             {"name": "offered_choice_index", "status": "fail" if choice_errors else "unknown" if missing_context or decision_pending or accepted_without_offered_index or not counts["decision_request"] else "pass",
              "details": {"invalid_indices": choice_errors, "missing_context": missing_context, "unfinished_requests": decision_pending,
                          "accepted_without_offered_index": accepted_without_offered_index, "request_count": counts["decision_request"],
-                         "result_count": counts["decision_result"]}, "evidence_refs": []},
+                         "result_count": counts["decision_result"], "bounded_integer_choices": bounded_choices, "ambiguous_matches": ambiguous_choices,
+                         "matching_rule": "exact fixed JSON params and inclusive int32 bounded values; original menu unchanged"}, "evidence_refs": []},
             {"name": "daily_flow_reconciliation", "status": "unknown", "details": {"reason": "Daily aggregate flow records are not part of audit.v1; individual transfers retained."}, "evidence_refs": []},
         ]
         db.close()
@@ -199,7 +241,7 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
         missing.append("opening_account_balances")
     if missing_context:
         missing.append("decision_context")
-    return {"schema_version": "faultline.analytics-report.v1", "analysis_version": ANALYSIS_VERSION,
+    return {"schema_version": "gearth.analytics-report.v1", "analysis_version": ANALYSIS_VERSION,
             "run_id": run["run_id"], "through_revision": run["through_revision"], "through_sequence": run["through_sequence"],
             "source_manifest_sha256": file_sha256(manifest_path), "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "completeness": {"snapshot_complete": True, "run_complete": run["status"] == "completed", "run_status": run["status"],
@@ -211,6 +253,10 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                         "fallback_count": fallback_count, "agent_preview_limit": max_agents},
             "checks": checks, "agents": agents, "countries": [countries[key] for key in sorted(countries)],
             "government_comparison": {"status": "insufficient_evidence", "reason": "A single run cannot establish matched-seed government comparisons.", "sample_count": 1},
+            "public_services": {"metadata": feature_metadata, "snapshot_summary": services_summary,
+                "coverage": {"agent_snapshot_count": counts["agent_day"], "agent_snapshots_with_public_services_fields": services_snapshots,
+                             "status": "pass" if services_snapshots == counts["agent_day"] and services_snapshots else "partial" if services_snapshots else "unknown"},
+                "transfers_by_kind": [transfer_kinds[key] for key in sorted(transfer_kinds)]},
             "evidence_refs": evidence}
 
 

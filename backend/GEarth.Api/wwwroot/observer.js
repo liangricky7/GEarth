@@ -3,6 +3,9 @@ let selectedRun = null;
 let selectedAgent = null;
 let lastSequence = 0;
 let displayedEvents = [];
+let routineEvents = [];
+let eventSnapshot = null;
+let hiddenEventTypes = new Set();
 let busy = false;
 let agentOffset = 0;
 let agentTotal = 0;
@@ -164,6 +167,7 @@ const SHOWN_ACTIONS = new Set(["set_price", "set_wage", "set_headcount", "set_de
 const HIDDEN_EVENTS = new Set([
   "decision_requested", "decision_canceled", "decision_accounting_started", "goods_purchased",
   "payment_sent", "policy_proposed", "shipment_delivered", "labor_market",
+  "bank_ledger",
 ]);
 
 function newsworthy(event) {
@@ -414,15 +418,22 @@ function describe(event, labor) {
       return { country: place, alert: true, text: `Bank cannot pay ${wld(p.unmet_withdrawals_minor)} of withdrawals this week`, body: `Reserves ${wld(p.reserves_minor)}, deposits ${wld(p.deposits_minor)}, loans ${wld(p.loans_minor)}` };
     case "bank_failed":
       return { country: place, alert: true, text: `BANK FAILURE: the state takes over the bank`, body: `Deposits ${wld(p.deposits_minor)}, equity ${wld(p.equity_minor)}` };
+    case "bank_ledger":
+      return {
+        country: place, text: `Bank records ${wld(p.amount_minor)}: ${(p.kind ?? "transfer").replaceAll("_", " ")}`,
+        body: `${p.from ?? "Bank"} → ${p.to ?? "Bank"}`,
+        key: `${countryOf(p.bank_id)}:${p.kind}`,
+        many: (events) => `${countryName(p.bank_id)} bank records ${events.length} ${(p.kind ?? "transfer").replaceAll("_", " ")} entries totaling ${wld(events.reduce((sum, item) => sum + Number(item.payload?.amount_minor ?? 0), 0))}`,
+      };
     default:
       return { country: "", text: cap(event.event_type.replaceAll("_", " ")), body: p.reason ?? "" };
   }
 }
 
 function showEvents(snapshot) {
+  eventSnapshot = snapshot;
   const list = element("events");
   list.replaceChildren();
-  element("event-count").textContent = `${snapshot.seq} events`;
   countryNames = new Map((snapshot.countries ?? []).map((country) => [country.id, country.name]));
   const labor = new Map(
     displayedEvents.filter((event) => event.event_type === "labor_market")
@@ -431,8 +442,19 @@ function showEvents(snapshot) {
   // Newest first; same-day events with the same key collapse into one line.
   const lines = [];
   const groups = new Map();
-  for (const event of displayedEvents.filter((item) => item.event_type !== "labor_market").reverse()) {
+  const country = element("event-country").value;
+  const search = element("event-search").value.trim().toLowerCase();
+  const showRoutine = element("event-routine").checked;
+  const history = [...displayedEvents, ...routineEvents].sort((a, b) => b.seq - a.seq);
+  let matching = 0;
+  for (const event of history) {
+    if ((!showRoutine && !newsworthy(event)) || hiddenEventTypes.has(event.event_type)
+        || (!showRoutine && event.event_type === "labor_market")) continue;
+    if (country && !(event.entity_ids ?? []).some((id) => countryOf(id) === country)
+        && ![event.payload?.from, event.payload?.to, event.payload?.country_id].some((id) => countryOf(id) === country)) continue;
     const line = describe(event, labor.get(`${event.tick}:${event.entity_ids?.[0]}`));
+    if (search && !`${line.text} ${line.body ?? ""} ${JSON.stringify(event)}`.toLowerCase().includes(search)) continue;
+    matching += 1;
     const groupKey = line.key && `${event.tick}:${event.event_type}:${line.key}`;
     if (groupKey && groups.has(groupKey)) {
       groups.get(groupKey).events.push(event);
@@ -441,9 +463,11 @@ function showEvents(snapshot) {
     const entry = { line, events: [event] };
     if (groupKey) groups.set(groupKey, entry);
     lines.push(entry);
-    if (lines.length === 60) break;
   }
-  for (const { line, events } of lines) {
+  element("event-count").textContent = `${matching} matching · ${snapshot.seq.toLocaleString()} recorded`;
+  element("event-scope").textContent = `Recent history: ${displayedEvents.filter((event) => event.event_type !== "labor_market").length} highlights and ${routineEvents.length} routine events retained. Showing up to 60 grouped entries. Routine activity includes bank ledger entries and decision bookkeeping.`;
+  if (!lines.length) list.append(textNode("li", "No events match these filters in the retained recent history.", "muted"));
+  for (const { line, events } of lines.slice(0, 60)) {
     const event = events[0];
     const grouped = events.length > 1;
     const item = document.createElement("li");
@@ -458,6 +482,46 @@ function showEvents(snapshot) {
     item.append(raw);
     list.append(item);
   }
+}
+
+function showEventFilters(snapshot) {
+  const select = element("event-country");
+  const country = select.value;
+  select.replaceChildren(textNode("option", "All countries"));
+  select.firstChild.value = "";
+  for (const nation of snapshot.countries ?? []) {
+    const option = textNode("option", nation.name);
+    option.value = nation.id;
+    select.append(option);
+  }
+  select.value = country;
+  const counts = new Map();
+  for (const event of [...displayedEvents, ...routineEvents]) counts.set(event.event_type, (counts.get(event.event_type) ?? 0) + 1);
+  const types = element("event-types");
+  types.replaceChildren();
+  for (const [type, count] of [...counts].sort(([a], [b]) => a.localeCompare(b))) {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = type;
+    checkbox.checked = !hiddenEventTypes.has(type);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) hiddenEventTypes.delete(type); else hiddenEventTypes.add(type);
+      saveEventFilters();
+      showEvents(eventSnapshot);
+    });
+    label.append(checkbox, textNode("span", `${cap(type.replaceAll("_", " "))} (${count})`));
+    types.append(label);
+  }
+}
+
+function saveEventFilters() {
+  try {
+    localStorage.setItem("gearth.eventFilters", JSON.stringify({
+      hidden: [...hiddenEventTypes], routine: element("event-routine").checked,
+      search: element("event-search").value,
+    }));
+  } catch { /* Filtering still works when browser storage is unavailable. */ }
 }
 
 function showAgents(agents) {
@@ -660,6 +724,11 @@ function selectRun(runId, cancelRefresh = true) {
   agentTotal = 0;
   lastSequence = 0;
   displayedEvents = [];
+  routineEvents = [];
+  eventSnapshot = null;
+  element("event-country").value = "";
+  element("event-types").replaceChildren();
+  element("event-scope").textContent = "";
   notesCache = null;
   analyticsReport = null;
   element("country-filter").value = "";
@@ -729,6 +798,7 @@ async function refresh() {
     ]);
     if (!isCurrent()) return;
     displayedEvents = history.events;
+    routineEvents = history.routine;
     lastSequence = history.sequence;
     notesCache = notes;
     analyticsReport = analysis.report;
@@ -753,6 +823,7 @@ async function refresh() {
       : "No active medicine route plan.";
     element("message").textContent = paused ? health.error ?? "" : "";
     drawMap(snapshot);
+    showEventFilters(snapshot);
     showEvents(snapshot);
     showWorld(snapshot);
     showRunNotes(runId, notes);
@@ -763,6 +834,10 @@ async function refresh() {
       clearRunView();
       lastSequence = 0;
       displayedEvents = [];
+      routineEvents = [];
+      eventSnapshot = null;
+      element("event-types").replaceChildren();
+      element("event-scope").textContent = "";
       notesCache = null;
       element("connection").textContent = "Connection interrupted";
       element("message").textContent = error.message;
@@ -780,6 +855,7 @@ async function loadEvents(path, snapshot, signal) {
   if (sequence === 0 && snapshot.run.stage === 2)
     sequence = Math.max(0, snapshot.seq - 2000); // a few weeks back once the noise is filtered, so the first view has weekly summaries
   let history = displayedEvents.slice();
+  let routine = routineEvents.slice();
   let page;
   do {
     page = await getJson(
@@ -790,10 +866,34 @@ async function loadEvents(path, snapshot, signal) {
       (event) => event.seq > sequence && event.seq <= snapshot.seq,
     );
     history.push(...page.filter(newsworthy));
+    routine.push(...page.filter((event) => !newsworthy(event)));
     if (page.length) sequence = page.at(-1).seq;
   } while (page.length === 500 && sequence < snapshot.seq);
-  return { events: history.slice(-500), sequence };
+  return { events: history.slice(-500), routine: routine.slice(-2000), sequence };
 }
+
+try {
+  const filters = JSON.parse(localStorage.getItem("gearth.eventFilters") ?? "null");
+  if (filters) {
+    hiddenEventTypes = new Set(Array.isArray(filters.hidden) ? filters.hidden.filter((type) => typeof type === "string") : []);
+    element("event-routine").checked = filters.routine === true;
+    element("event-search").value = typeof filters.search === "string" ? filters.search : "";
+  }
+} catch { /* Ignore missing or invalid saved preferences. */ }
+for (const id of ["event-country", "event-search", "event-routine"]) {
+  element(id).addEventListener(id === "event-search" ? "input" : "change", () => {
+    saveEventFilters();
+    if (eventSnapshot) showEvents(eventSnapshot);
+  });
+}
+element("event-reset").addEventListener("click", () => {
+  hiddenEventTypes.clear();
+  element("event-country").value = "";
+  element("event-search").value = "";
+  element("event-routine").checked = false;
+  saveEventFilters();
+  if (eventSnapshot) { showEventFilters(eventSnapshot); showEvents(eventSnapshot); }
+});
 
 element("runs").addEventListener("change", () => {
   followCurrent = false;

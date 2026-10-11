@@ -48,6 +48,8 @@ Omit the two model flags for rule mode. The checker reconciles cash and goods fr
 
 ## Automatic run notes
 
+The observer's World events feed hides routine activity, including bank ledger entries, by default. Use its country and text filters together, or uncheck individual event types to hide them. Show routine activity restores bookkeeping for inspection; repeated bank entries are grouped by day, country and transaction kind. Browser preferences retain the type exclusions, search and routine toggle across refreshes. Filtering affects only the display, and the counter identifies matches within the retained recent history rather than claiming to search the whole run.
+
 Completed and gracefully stopped runs automatically export `.data/run-notes/{run_id}.md` and `.json`, and save structured notes with the run’s storage. Paused runs export a checkpoint report with an explicit partial-history label. A forced process kill cannot run finalization; inspect its saved checkpoint to generate notes for the recorded portion.
 
 Notes summarize role-specific choices, work effort, trade, policy changes, crises, migration, elections, diplomacy, credit, country outcomes and inference failures. Examples quote recorded model explanations without treating them as proven motives. Event references make findings traceable. Download the Markdown report from the observer; older runs are analyzed when inspected without using the Spark.

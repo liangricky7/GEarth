@@ -76,6 +76,14 @@
             <h2>World events</h2>
             <span id="event-count" class="muted">0 events</span>
           </div>
+          <div class="event-filters">
+            <select id="event-country" aria-label="Filter events by country"><option value="">All countries</option></select>
+            <input id="event-search" type="search" placeholder="Search events or agent IDs" aria-label="Search world events" />
+            <label><input id="event-routine" type="checkbox" /> Show routine activity</label>
+            <details><summary>Event types</summary><div id="event-types"></div></details>
+            <button id="event-reset" type="button">Reset filters</button>
+            <p id="event-scope" class="muted"></p>
+          </div>
           <ol id="events" aria-live="polite"></ol>
         </section>
       </div>

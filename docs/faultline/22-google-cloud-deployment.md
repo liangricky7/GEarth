@@ -2,6 +2,8 @@
 
 The CPU VM runs the .NET world engine, Python decision worker, and observer. Both Sparks run the existing Qwen inference services. Neon stores world checkpoints, ordered events, and run reports. The deployment does not use Gemini API credits or require a GPU VM.
 
+AMD can supplement both Sparks in the same collector through its existing authenticated HTTPS endpoint. The service uses `--compute auto`: enabled AMD configuration selects hybrid mode, which keeps all four Spark providers active and adds AMD to their shared provider pool. Disabled AMD keeps Spark-only mode. All enabled model catalogs are checked before startup; AMD must also reject unauthenticated catalog requests. The existing AMD Qwen3-4B server is configured for resident decisions at capacity one. Keep the AMD instance and its tunnel online.
+
 ## Current deployment
 
 - Project: `project-73e10704-566a-4d04-886` (My First Project).
@@ -40,6 +42,10 @@ gcloud compute ssh faultline-sim --project=project-73e10704-566a-4d04-886 \
   --zone=us-central1-a \
   --command='sudo systemctl start faultline.service'
 ```
+
+To activate between experiments, add `--after-current`. The installer builds and preflights the new release with staged private configuration, waits for a terminal collector manifest, then stops the collector during its pause. The current world and its source remain intact while waiting. Add `--start` to start the verified service automatically after installation. This transition runs as a VM-owned systemd job and survives a laptop disconnection. Without `--start`, start the service with the command above; its startup preflight checks providers again.
+
+For a compute-only change, `--base-archive /path/to/source.tar.gz` preserves the exact engine, worker, observer and runner from that verified source archive. Only cloud operations, the AMD connection checker, collector tests and this runbook are overlaid. The archive hash is checked before packaging; metadata records the base engine commit, base source hash, operations commit and new source hash. Use `--config /path/to/private.env` to supply credentials from outside the checkout; the file is not included in source.
 
 First installation also requires approving the VM's Tailscale device sign-in. No Spark model containers, model weights, Netplan settings, or GPU drivers are changed by this deployment.
 

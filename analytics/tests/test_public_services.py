@@ -174,7 +174,7 @@ class PublicServicesReportTests(unittest.TestCase):
         self.records[9]["payload"]["kind"] = "hiring_bonus"
         report = self.report()
         services = report["public_services"]
-        self.assertEqual(report["analysis_version"], "1.2.0")
+        self.assertEqual(report["analysis_version"], "1.4.0")
         self.assertEqual(services["metadata"]["economy_configuration"], features["economy_configuration"])
         self.assertEqual(services["coverage"]["status"], "pass")
         self.assertEqual(services["snapshot_summary"]["students"], {"observed_count": 1, "eligible_known_count": 1, "missing_count": 0})

@@ -17,6 +17,33 @@ def comparison_conditions(metadata):
     features = metadata.get("features")
     if not isinstance(features, dict) or any(not isinstance(features.get(key), str) or not features[key] for key in ("public_services", "bounded_integer_choices")):
         unknown.append("feature_versions")
+    capture_version = metadata.get("capture_contract_version")
+    if capture_version in ("gearth.economy_capture.v2", "gearth.economy_capture.v3", "gearth.economy_capture.v4"):
+        war = capture_version in ("gearth.economy_capture.v3", "gearth.economy_capture.v4")
+        if not isinstance(features, dict) or any(not isinstance(features.get(key), str) or not features[key]
+                for key in ("infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade") + (("war_diplomacy",) if war else ())):
+            unknown.append("economy_v2_feature_versions")
+        expanded = metadata.get("economy_configuration")
+        if not isinstance(expanded, dict) or any(not isinstance(expanded.get(key), dict) or not expanded[key]
+                for key in ("labor", "infrastructure", "currency_trade") + (("war_diplomacy",) if war else ())):
+            unknown.append("economy_v2_configuration_sections")
+        if not isinstance(expanded, dict) or not isinstance(expanded.get("school"), dict) or expanded["school"].get("part_time_course_days") is None:
+            unknown.append("part_time_course_configuration")
+    if capture_version == "gearth.economy_capture.v4":
+        if not isinstance(features, dict) or any(not isinstance(features.get(key), str) or not features[key]
+                for key in ("nutrition_recovery", "clinic_feedback", "loan_provisions", "infrastructure_repairs")):
+            unknown.append("economy_v4_feature_versions")
+        expanded = metadata.get("economy_configuration")
+        if not isinstance(expanded, dict) or any(not isinstance(expanded.get(key), dict) or not expanded[key]
+                for key in ("nutrition_recovery", "clinic_feedback", "loan_provisions")):
+            unknown.append("economy_v4_configuration_sections")
+        if not isinstance(expanded, dict) or not isinstance(expanded.get("health"), dict) or expanded["health"].get("starvation_days") is None:
+            unknown.append("starvation_days_configuration")
+        infrastructure = expanded.get("infrastructure") if isinstance(expanded, dict) else None
+        if not isinstance(infrastructure, dict) or any(infrastructure.get(key) is None for key in (
+                "maintenance_basis", "repair_max_condition_per_week", "repair_builders_required",
+                "repair_cost_fraction_per_condition", "repair_materials_basis")):
+            unknown.append("infrastructure_repairs_configuration")
     active = metadata.get("active_features")
     if not isinstance(active, list) or not active or any(not isinstance(value, str) or not value for value in active):
         unknown.append("active_feature_set")

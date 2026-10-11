@@ -37,7 +37,7 @@ Review before executing; the code creates managed Delta tables/views.
    Validates hashes, row/sequence coverage, opening/day/final state coverage and
    duplicate semantic identities; inserts Bronze and typed Silver; writes
    `report-<first12charactersofmanifestSHA256>.json` beside the export and a Gold
-   `import_receipts` row last. A receipt certifies import coverage, not that every
+   `import_receipts` row before optional actual-row export. A receipt certifies import coverage, not that every
    economic check passed. Reconciliation failures and unknown checks remain visible.
    Before emitting report/receipt, scalar Delta aggregates verify stored Bronze
    count/distinct sequence/range and kind counts against the manifest; every Silver
@@ -64,7 +64,7 @@ and the exact source `manifest.json`. Publication validates the checkpoint and
 manifest hash; website clients only read the cached report. `ops/analyze_run.py`
 provides orchestration when available. Local report generation is deterministic
 in facts/provenance; `generated_at` varies with execution time.
-The current analysis version is `1.2.0`. A changed analysis version may replace the
+The current analysis version is `1.4.0`. A changed analysis version may replace the
 derived current report alias only for identical manifest/run pins; the previous
 report is preserved as `report-<manifestprefix>-<analysisversion>.json`. Conflicting
 facts at the same analysis version and conflicting archives are refused. Export
@@ -217,3 +217,143 @@ opening/final snapshots, decisions, effects, events and every transfer leg.
 Measure a short pilot's compressed bytes, import/query time and memory before a
 full-year batch. Databricks Free Edition quotas are not assumed sufficient.
 Tests are labeled synthetic and do not prove a real Neon or Databricks import.
+
+## Run-data explorer and actual Databricks rows
+
+Open `/data.html` on the observer to browse committed runs, saved checkpoints,
+daily audit records, complete cached report sections and published Databricks rows.
+New run discovery refreshes while the page is visible. It never starts an import.
+Tick 0 is the opening; days 1–7 are Week 1. A save marker is not a replayable world:
+weekly renderer frames and daily audit records are shown as different evidence.
+
+To publish full actual-row data, run the existing operator workflow **on the target
+observer host**, with its persistent `.data` directory and operational storage
+configuration, adding:
+
+```sh
+python3 ops/analyze_run.py RUN_ID /tmp/gearth-export-RUN_ID \
+  --api http://localhost:5080 --storage neon --analytics-browse
+```
+
+This explicit command submits Databricks work and may use workspace compute.
+The notebook widget `publish_browse` defaults to `false`, preserving old report-only
+workflows. With `true`, actual run-filtered Delta schemas, non-null counts, original
+payload field presence and complete table/view rows are exported after Delta
+qualification and the actual Gold import receipt write. Offline `build_report()`
+does not claim actual Delta evidence. Older imports need an explicit new import /
+publication to gain this cache; a missing cache is labelled unavailable.
+
+Browse output is `browse-<manifestprefix>/browse-manifest.json` beside the finished
+export, with relative gzip NDJSON chunks. It covers Bronze audit, every Silver audit
+kind plus options/event edges, and available Gold daily/latest/service views and
+import receipts. Missing tables are `availability=unavailable`, `row_count=null`;
+a verified typed empty table is `availability=available`, `row_count=0`.
+All queries filter `run_id` and reject conflicting source-manifest identities.
+Schemas come from Spark, not current Python projection defaults. Original payload
+JSON remains accessible, including new fields without typed columns.
+
+Spark writes distributed JSON staging; the driver streams one bounded row at a
+time into chunks of at most 2,000 rows / 4 MiB. One larger row may use its own chunk,
+up to **8,000,000 bytes**, reserving API envelope space. Larger rows fail explicitly.
+The manifest is capped at 16 MiB; actual schemas at 2,048 columns. JSON Pointer
+inventory examines objects to depth 4, at most 4,096 paths; arrays are leaves.
+Limits and any truncation are explicit. Absent, explicit null, zero/false and
+nonzero counts are separate; incomplete inventory cannot prove a missing feature.
+
+UC Volume output uses immutable content-addressed chunk files and writes the
+current manifest last, after copy verification. Prior manifests / chunks remain
+available; no atomic Volume directory rename is assumed. A failed job never
+publishes an observer cache. Driver FUSE and Spark Volume staging still need a
+live workspace pilot; fixture tests do not qualify Free Edition or 50,000-agent
+full-year capacity. See [Databricks Volume requirements](https://docs.databricks.com/aws/en/volumes/).
+
+`ops/analyze_run.py` downloads the manifest first, validates paths, downloads listed
+chunks, checks complete gzip contents/schema/payload counts and exact report
+receipt agreement, then invokes the optional publication flag:
+
+```sh
+dotnet run --project backend/GEarth.Api --no-build -- \
+  --publish-analytics-report REPORT.json --source-manifest MANIFEST.json \
+  --analytics-browse BUNDLE_DIRECTORY
+```
+
+Publication uses `GEARTH_ANALYTICS_BROWSE_DIRECTORY` (default
+`.data/analytics-browse`) **on that machine**. The observer must read the same
+persistent cache volume; publishing on a laptop does not update a remote VM.
+The workflow verifies both `/analytics/report` and `/analytics/datasets` on the
+specified observer API; provenance disagreement or a missing remote cache fails
+verification. Browser reads are cache-only and never connect to Databricks.
+The report stays small: optional `dataset_catalog` holds schemas/coverage,
+not full rows. All existing report sections are inspectable; its agent list
+remains a capped preview.
+
+
+## Economy capture v2 and v3
+
+Runs using `gearth.economy_capture.v2` retain part-time schooling, wage arrears,
+insured balances, price response, infrastructure/maintenance, currency/trade,
+resource endowment/imports, inventory, and bank failure/default/insurance totals.
+Agent and country tables add nullable scalar or `_json` columns. No historical
+values are fabricated: missing JSON keys remain SQL null; an explicitly recorded
+JSON null is the literal `null` in a newly introduced JSON column. Existing JSON
+columns retain their prior SQL-null semantics; original payload coverage preserves
+the distinction. Zero and false remain values.
+The report's `economy_capture` section measures actual daily/end key presence.
+A v2 run missing its required keys is rejected before Delta import.
+
+`workspace.gearth_silver.infrastructure_daily` contains one recorded project per
+country/day/frame (`run_id,country_id,tick,frame_kind,project_id`), including status,
+level, condition, payments, dates, and engine-derived progress with its named basis.
+Every row retains the nation payload, project JSON, source audit sequence/revision,
+record hash, and source manifest hash. Empty project arrays create zero rows;
+legacy missing arrays remain unknown in country payload coverage. Qualification
+checks child counts, unique keys, source identity, and typed values against Bronze.
+New browse bundles include this twentieth dataset; verified older 19-table bundles
+continue to work. Reimport adds nullable columns but never overwrites old evidence.
+
+Schema enrichment fills only this migration's new SQL-null columns from each
+stored row's own `payload_json`; it never changes non-null facts, raw payloads,
+hashes or source identity. It runs once per import/table even when an earlier job
+stopped after `ADD COLUMNS`, making retries idempotent. Previously captured
+inventories/bank totals therefore become searchable columns without manufacturing
+any missing past fields. Qualification independently rebuilds all agent/country
+scalar and JSON projections from Bronze and requires null-safe equality in both
+directions, plus the fresh manifest hash on every Bronze/Silver dataset.
+
+
+Runs using `gearth.economy_capture.v3`, adding war weariness and military pay
+for agents; missiles, war duration/readiness, political leadership/elections and
+war accounting for countries. Country `relationships_json` preserves each
+relationship's score, war/trade state, proposals and delivery totals;
+`military_json` and `mission_json` preserve compact observed strength/pay/security
+and quality-of-life/unrest facts. These are bounded daily country payloads, not a
+new relationship table. Military projects use the same infrastructure dataset.
+The existing v2 contract and metadata signatures remain valid; report required
+field coverage follows each run's original contract. No v2 run is retroactively
+required to contain v3 war history. The capture version and war feature/config
+are explicit comparison conditions for new v3 runs.
+
+
+Current new runs use `gearth.economy_capture.v4`. Agent columns add nutrition
+recovery debt, fractional production carry, food spoilage carry and recorded
+`loan_loss_provisions_minor` (actual active provisions for bank agents; explicitly
+null for nonbanks). Country columns add this week's clinic capacity and untreated
+patient-days. `clinic_last_week_json`, `clinic_funding_history_json` and
+`clinic_funding_json` preserve measured completed weeks, the retained three funding
+changes and current clinic feedback. Descriptive before/after outcomes do not
+establish causation. `credit_positions_json` retains complete original loan terms,
+status, remaining principal, impairment provision and lender/borrower country
+identity for every status. Cross-country credit positions deliberately appear in
+both countries; these repeated observations must not be summed as global assets.
+
+Required field coverage and comparison gates are selected by each original capture
+version. Previously imported v3 runs do not require v4 clinic, nutrition or credit
+history. New nullable columns may recover only already recorded original payload
+fields; old missing fields remain unknown. The analysis report is now `1.4.0` so
+source-preserving report upgrades do not conflict with prior `1.3.0` evidence.
+
+`repair_orders_json` retains the selected project IDs for manual restoration;
+empty arrays represent no queued repairs, while older missing keys remain unknown.
+V4 metadata names the repair feature and distinguishes funded upkeep (prevents
+ordinary wear) from ordered repair (restores damage using workers/materials/cost).
+The existing project schema stays unchanged for older v3 infrastructure history.

@@ -1,5 +1,7 @@
 const element = (id) => document.getElementById(id);
-let selectedRun = null;
+const requestedRunId = new URLSearchParams(location.search).get("run_id");
+const initialRunId = requestedRunId && /^[A-Za-z0-9_-]{1,100}$/.test(requestedRunId) ? requestedRunId : null;
+let selectedRun = initialRunId;
 let selectedAgent = null;
 let lastSequence = 0;
 let displayedEvents = [];
@@ -9,7 +11,7 @@ let hiddenEventTypes = new Set();
 let busy = false;
 let agentOffset = 0;
 let agentTotal = 0;
-let followCurrent = true;
+let followCurrent = !initialRunId;
 let notesCache = null;
 let analyticsReport = null;
 let refreshController = null;
@@ -744,6 +746,7 @@ function selectRun(runId, cancelRefresh = true) {
   if (cancelRefresh) refreshController?.abort();
   viewGeneration += 1;
   selectedRun = runId;
+  element("data-explorer-link").href = `/data.html?run_id=${encodeURIComponent(runId)}`;
   document.dispatchEvent(new CustomEvent("gearth-run-selected", {detail:{runId}}));
   selectedAgent = null;
   agentOffset = 0;
@@ -794,8 +797,10 @@ async function refresh() {
       selectRun(target, false);
       generation = viewGeneration;
     }
+    element("data-explorer-link").href = selectedRun ? `/data.html?run_id=${encodeURIComponent(selectedRun)}` : "/data.html";
     element("runs").replaceChildren();
-    for (const id of runs.run_ids) {
+    const selectableIds = selectedRun && !runs.run_ids.includes(selectedRun) ? [selectedRun, ...runs.run_ids] : runs.run_ids;
+    for (const id of selectableIds) {
       const option = textNode("option", id);
       option.value = id;
       element("runs").append(option);

@@ -1,0 +1,276 @@
+{
+  "status": "verified_small_real_runs",
+  "reviewed_main_commit": "19dd280be5dd1177e8c221d9d365eadda608067e",
+  "capture_source_commit": "4152d991114f06aca6febdaa6489879f2cd2676b",
+  "capture_contract": "gearth.economy_capture.v4",
+  "neon_project_id": "hidden-night-95238449",
+  "databricks_catalog": "workspace",
+  "tests": {
+    "csharp_passed": 377,
+    "analytics_python_passed": 107,
+    "analytics_subtests_passed": 191,
+    "worker_python_passed": 92,
+    "ui_passed": 40,
+    "ui_existing_live_skip": 1,
+    "docs_validated": true
+  },
+  "real_v3_35_day_run": {
+    "status": "pass",
+    "run_id": "world_20261011_122824_e54641",
+    "source_manifest_sha256": "05121a3fe546417820335dce087e1a095b8dcad70ab285abfd73e5b99316802d",
+    "capture_contract": "gearth.economy_capture.v3",
+    "datasets": 20,
+    "all_agent_and_country_projected_values_match_originals": true,
+    "agent_rows": 7296,
+    "country_rows": 360,
+    "agent_api_pages": 37,
+    "infrastructure_rows": 53,
+    "infrastructure_api_pages": 1,
+    "all_infrastructure_project_values_and_api_rows_match_originals": true,
+    "verification_scope": {
+      "population_target": 200,
+      "tick": 35,
+      "capacity_test": false
+    },
+    "all_required_fields_present": true,
+    "report_checks": [
+      [
+        "manifest_integrity",
+        "pass"
+      ],
+      [
+        "ledger_account_reconciliation",
+        "pass"
+      ],
+      [
+        "daily_account_reconciliation",
+        "pass"
+      ],
+      [
+        "cash_plus_escrow_conservation",
+        "pass"
+      ],
+      [
+        "offered_choice_index",
+        "pass"
+      ],
+      [
+        "daily_flow_reconciliation",
+        "unknown"
+      ]
+    ]
+  },
+  "real_v4_8_day_run": {
+    "status": "pass",
+    "run_id": "world_20261011_125651_21e23e",
+    "source_manifest_sha256": "84e720b65d4ea08deffd53c5f6cd0bbcd8b8a36a0a545b06dadb02e99c8f0ebd",
+    "capture_contract": "gearth.economy_capture.v4",
+    "datasets": 20,
+    "all_agent_and_country_projected_values_match_originals": true,
+    "agent_rows": 1800,
+    "country_rows": 90,
+    "agent_api_pages": 9,
+    "infrastructure_rows": 3,
+    "infrastructure_api_pages": 1,
+    "all_infrastructure_project_values_and_api_rows_match_originals": true,
+    "verification_scope": {
+      "population_target": 200,
+      "tick": 8,
+      "capacity_test": false
+    },
+    "all_required_fields_present": true,
+    "report_checks": [
+      [
+        "manifest_integrity",
+        "pass"
+      ],
+      [
+        "ledger_account_reconciliation",
+        "pass"
+      ],
+      [
+        "daily_account_reconciliation",
+        "pass"
+      ],
+      [
+        "cash_plus_escrow_conservation",
+        "pass"
+      ],
+      [
+        "offered_choice_index",
+        "pass"
+      ],
+      [
+        "daily_flow_reconciliation",
+        "unknown"
+      ]
+    ]
+  },
+  "v4_databricks_job": {
+    "run_id": 925328502729128,
+    "simulation_run_id": "world_20261011_125651_21e23e"
+  },
+  "v4_job_url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/1067648161640193/run/925328502729128",
+  "actual_databricks_schema_changes": {
+    "agent_daily": {
+      "columns": 84,
+      "added_columns": [
+        "arrears_minor",
+        "arrears_weeks",
+        "estate_unreported_payout_minor",
+        "food_spoilage_remainder",
+        "insured_minor",
+        "inventory_json",
+        "loan_loss_provisions_minor",
+        "military_paid_tick",
+        "military_pay_minor",
+        "nutrition_debt_days",
+        "part_time_student",
+        "price_before_price_change_minor",
+        "price_change_pct",
+        "price_change_tick",
+        "production_remainder",
+        "profit_before_price_change_minor",
+        "units_before_price_change",
+        "unpaid_hungry_weeks",
+        "war_weariness",
+        "week_disposable_income_minor",
+        "week_work_days"
+      ]
+    },
+    "country_daily": {
+      "columns": 99,
+      "added_columns": [
+        "bank_failures",
+        "borrowed_builders_json",
+        "clinic_capacity_this_week",
+        "clinic_funding_history_json",
+        "clinic_funding_json",
+        "clinic_last_week_json",
+        "construction_materials_used_json",
+        "credit_positions_json",
+        "crisis_good",
+        "crisis_until_tick",
+        "currency_index",
+        "defaulted_loans",
+        "deposit_insurance_paid_minor",
+        "endowment_json",
+        "government_id",
+        "infrastructure_json",
+        "leadership_term",
+        "living_cost_at_review",
+        "maintenance_funded",
+        "military_json",
+        "missiles",
+        "mission_json",
+        "next_election_tick",
+        "no_fit_soldier_weeks",
+        "powered_sessions_left_json",
+        "production_input_credits_json",
+        "relationships_json",
+        "repair_orders_json",
+        "resource_imports_json",
+        "tax_changed_tick",
+        "tax_mark_minor",
+        "trade_gross_week_minor",
+        "trade_net_week_minor",
+        "unrest_since_tick",
+        "untreated_patient_days_this_week",
+        "war_accounting_initialized",
+        "war_weariness",
+        "war_weeks",
+        "wars"
+      ]
+    },
+    "infrastructure_daily": {
+      "columns": 25,
+      "added_columns": [
+        "complete",
+        "condition",
+        "cost_minor",
+        "country_id",
+        "frame_kind",
+        "level",
+        "paid_minor",
+        "payload_json",
+        "progress_basis",
+        "progress_days",
+        "progress_fraction",
+        "project_id",
+        "project_json",
+        "ready_tick",
+        "record_sha256",
+        "required_builders",
+        "required_days",
+        "revision",
+        "run_id",
+        "sequence",
+        "source_manifest_sha256",
+        "started_tick",
+        "status",
+        "tick",
+        "type"
+      ]
+    }
+  },
+  "actual_historical_verification": {
+    "status": "pass",
+    "legacy_run_id": "world_20261011_111421_045575",
+    "rows": [
+      {
+        "dataset": "old_agents",
+        "rows": "3209",
+        "source_backed_columns": "3209",
+        "unavailable_facts_wrongly_filled": "0",
+        "source_value_mismatches": "0"
+      },
+      {
+        "dataset": "old_countries",
+        "rows": "160",
+        "source_backed_columns": "160",
+        "unavailable_facts_wrongly_filled": "0",
+        "source_value_mismatches": "0"
+      },
+      {
+        "dataset": "old_silver_raw",
+        "rows": "3369",
+        "source_backed_columns": "3369",
+        "unavailable_facts_wrongly_filled": "0",
+        "source_value_mismatches": "0"
+      }
+    ],
+    "original_raw_hashes_and_source_pins_match_bronze": true,
+    "absent_historical_fields_remain_null": true,
+    "new_inventory_and_bank_columns_equal_original_payloads": true
+  },
+  "actual_browser_verification": {
+    "status": "pass",
+    "datasets": 20,
+    "rows": "Rows 101\u2013200 of 1,800 \u00b7 full columns. More rows available.",
+    "source": "Actual Databricks \u00b7 cached read-only",
+    "storage": "Connected to Neon saved data",
+    "width": 1440,
+    "scrollWidth": 1440
+  },
+  "isolated_neon_v4": {
+    "run_id": "world_20261011_125538_c54e27",
+    "population_target": 200,
+    "ticks": 8,
+    "records": 3873,
+    "export_and_capture_validation": "pass"
+  },
+  "interpretation": {
+    "new_fields_are_source_values": true,
+    "zero_false_and_null_are_not_replaced_with_invented_values": true,
+    "absent_historical_facts_remain_unknown": true,
+    "cross_country_credit_positions_require_deduplication_by_credit_id": true
+  },
+  "limits": [
+    "RULE pilots only; no new model inference.",
+    "No 50,000-agent/365-day storage or throughput qualification.",
+    "Daily flow reconciliation remains unknown because aggregate daily-flow records are outside audit v1. Individual transactions are retained.",
+    "The production VM still needs the reviewed code and GEARTH_ANALYTICS=true before a fresh run.",
+    "The full dataset cache must be published on the observer host or its shared volume.",
+    "An eight-day pilot does not exercise every policy or nonzero reserve/repair state; focused tests cover those states."
+  ]
+}

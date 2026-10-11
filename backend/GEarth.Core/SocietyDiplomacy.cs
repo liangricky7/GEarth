@@ -162,7 +162,10 @@ public static class SocietyDiplomacy
                     relationship.Tension = Math.Max(0, relationship.Tension - 25);
                 }
                 else
+                {
                     relationship.Tension = Math.Min(100, relationship.Tension + 5);
+                    relationship.DiplomacyFailedTick = world.Tick;
+                }
                 relationship.ProposedBy = null;
                 relationship.ProposalKind = null;
                 world.Emit("diplomatic_response", "rule", [relationship.Id], new
@@ -204,6 +207,7 @@ public static class SocietyDiplomacy
         foreach (var relation in world.Society!.Relations.Values.Where(relation => relation.ProposedBy is not null
             && relation.ProposalExpiresTick < world.Tick))
         {
+            relation.DiplomacyFailedTick = world.Tick;
             relation.ProposedBy = null;
             relation.ProposalKind = null;
         }

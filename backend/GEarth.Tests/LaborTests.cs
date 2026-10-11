@@ -32,7 +32,7 @@ public sealed class LaborTests
     }
 
     [Fact]
-    public void FirmShortOfCashCutsPayAndLaysOffAndClosingReturnsCashToOwner()
+    public void FirmShortOfCashLaysOffBeforeCuttingPayAndClosingReturnsCashToOwner()
     {
         var world = NewWorld();
         var workshop = world.Agents["aster_tools"];
@@ -46,10 +46,21 @@ public sealed class LaborTests
         foreach (var worker in staff)
             worker.WorkEffort = 1;
 
+        var pay = staff.ToDictionary(worker => worker.Id, worker => worker.SalaryMinor);
+        // A clinic whose owner cannot see patients keeps a crew of one doctor, whom it cannot afford.
+        var clinic = world.Agents["aster_clinic"];
+        world.Agents[clinic.OwnerId!].FormerOccupation = "farmer";
+        foreach (var doctor in SocietyLabor.Staff(world, clinic))
+            doctor.SalaryMinor = 1_000_000;
+
         AdvanceDays(world, 7);
 
-        Assert.True(SocietyLabor.Staff(world, workshop).All(worker => worker.SalaryMinor < salary));
+        // Layoffs come first: the workshop sheds staff and those left keep their pay.
         Assert.True(SocietyLabor.Staff(world, workshop).Length < staff.Length);
+        Assert.All(SocietyLabor.Staff(world, workshop), worker => Assert.Equal(pay[worker.Id], worker.SalaryMinor));
+        // At its minimum crew a firm cuts pay instead of firing the last worker.
+        var crew = Assert.Single(SocietyLabor.Staff(world, clinic));
+        Assert.Equal(900_000, crew.SalaryMinor);
         Assert.Contains(world.Events, item => item.EventType == "labor_market" && item.Payload["pay_cuts"]!.GetValue<int>() > 0);
 
         // Closing (after four weeks unable to cover costs) lays everyone off and returns cash to the owner.
@@ -162,7 +173,9 @@ public sealed class LaborTests
         var founder = world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen" && agent.Occupation == "farmer");
         foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
             farm.PriceMinor = 60; // incumbents are expensive: an opportunity
-        nation.QolParts["needs"] = 0.5; // and residents feel it: needs are going unmet
+        nation.PricedOutLastWeek = 3; // and residents go hungry at that price
+        var idle = world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen" && agent != founder);
+        (idle.EmployerId, idle.UnemployedSinceTick) = (null, -SocietyLabor.RelatedJobAfterDays); // out of work long enough to farm
         var cost = SocietyLabor.StartupCost("food");
         SocietyEconomy.Transfer(world, world.Agents["aster_bank"], founder, cost);
         var cash = founder.CashMinor;

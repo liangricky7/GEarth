@@ -112,7 +112,7 @@ public sealed class BankTests
         var founder = Resident(world, "aster");
         foreach (var venue in SocietyLabor.Firms(world, "aster", "entertainment"))
             venue.PriceMinor = 2 * SocietyLabor.SectorOf("entertainment").BasePrice; // an opening for a cheaper venue
-        var cost = SocietyLabor.StartupCost(founder, "entertainment");
+        var cost = SocietyLabor.StartupCost("entertainment");
         SocietyEconomy.Transfer(world, founder, world.Agents["aster_government"], founder.CashMinor);
         Give(world, founder, cost / 2); // half the cost: more than the 25% down payment, less than the whole
 

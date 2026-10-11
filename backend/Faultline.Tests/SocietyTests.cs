@@ -12,11 +12,11 @@ public sealed class SocietyTests
 
         Assert.Equal(1000, world.Agents.Count);
         Assert.Equal(10, world.Society!.Nations.Count);
-        // Government, media and thirteen firms per country: 3 farms, 2 each of energy, tools and
-        // entertainment, and one pharma, clinic, freight firm and bank.
-        Assert.Equal(150, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
+        // Government, media and fourteen firms per country: 3 farms, 2 each of energy, tools and
+        // entertainment, and one pharma, clinic, school, freight firm and bank.
+        Assert.Equal(160, world.Agents.Values.Count(agent => agent.Role is "government" or "bank" or "media" or "business"));
         Assert.Equal(3, SocietyLabor.Firms(world, "aster", "food").Count());
-        // Market countries' firms each have an entrepreneur owner; planned economies' firms are state-owned.
+        // Market countries' firms each have an entrepreneur owner; planned economies' firms and every school are state-owned.
         Assert.Equal(104, world.Agents.Values.Count(agent => agent.Role == "entrepreneur"));
         // Doctors are scarce: one employed doctor per country (plus the clinic's owner in market economies).
         Assert.All(world.Society.Nations.Keys, country => Assert.Equal(1,
@@ -58,7 +58,9 @@ public sealed class SocietyTests
             world.Tick = week * SocietyLabor.DaysPerWeek;
             var cohort = SocietyScheduler.WeeklyCohort(world);
             Assert.Equal("government", cohort[0].Role); // governments are served first
-            Assert.All(deciders.Where(agent => agent.Role != "citizen"), agent => Assert.Contains(agent, cohort));
+            Assert.All(deciders.Where(agent => agent.Role is not ("citizen" or "planner")), agent => Assert.Contains(agent, cohort));
+            // The planned economies' planners set the plan every four weeks.
+            Assert.Equal(week % SocietyPlanning.PlanningWeeks == 0 ? 2 : 0, cohort.Count(agent => agent.Role == "planner"));
             Assert.InRange(cohort.Count(agent => agent.Role == "citizen"), 60, 160);
             foreach (var agent in cohort)
                 turns[agent.Id] = turns.GetValueOrDefault(agent.Id) + 1;
@@ -158,14 +160,15 @@ public sealed class SocietyTests
     public void DifferentInstitutionsEnactTheSamePolicyWithDifferentDelays()
     {
         var world = SocietyFactory.Create("policy", false, 1000);
-        var action = new ActionProposal("set_tax", new JsonObject { ["tax_basis_points"] = 500 }, "Test policy.", []);
+        var action = new ActionProposal("adjust_tax", new JsonObject { ["change_basis_points"] = -50 }, "Test policy.", []);
         SocietyDiplomacy.Propose(world, world.Agents["aster_government"], action, "cause");
         SocietyDiplomacy.Propose(world, world.Agents["dune_government"], action, "cause");
-        Assert.Equal(500, world.Society!.Nations["dune"].TaxBasisPoints);
+        Assert.Equal(950, world.Society!.Nations["dune"].TaxBasisPoints); // the dictatorship acts at once
         Assert.Equal(1500, world.Society.Nations["aster"].TaxBasisPoints);
         for (var tick = 0; tick < 3; tick++)
             SocietyEngine.Advance(world);
-        Assert.Equal(500, world.Society.Nations["aster"].TaxBasisPoints);
+        Assert.Equal(1450, world.Society.Nations["aster"].TaxBasisPoints);
+        Assert.Equal("adjust_tax", world.Society.Nations["aster"].LastPolicyAction);
         SocietyEconomy.AssertConservation(world);
     }
 

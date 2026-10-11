@@ -14,7 +14,7 @@ public sealed class AuditTests
         {
             var store = new LocalStore(directory);
             await store.Initialize(CancellationToken.None);
-            var world = SocietyFactory.Create("audit_retry", false, 160);
+            var world = SocietyFactory.Create("audit_retry", false, 170);
             RunAudit.Enable(world);
             world.Revision = 1;
             await store.Save(world, 0, CancellationToken.None);
@@ -59,7 +59,7 @@ public sealed class AuditTests
         {
             var store = new LocalStore(directory);
             await store.Initialize(CancellationToken.None);
-            var world = SocietyFactory.Create("audit_conflict", false, 160);
+            var world = SocietyFactory.Create("audit_conflict", false, 170);
             RunAudit.Enable(world);
             world.Revision = 1;
             await store.Save(world, 0, CancellationToken.None);
@@ -90,7 +90,7 @@ public sealed class AuditTests
         {
             var store = new LocalStore(directory);
             await store.Initialize(CancellationToken.None);
-            var world = SocietyFactory.Create("audit_missing", false, 160);
+            var world = SocietyFactory.Create("audit_missing", false, 170);
             RunAudit.Enable(world);
             world.Revision = 1;
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.Save(Wire.Copy(world), 0, CancellationToken.None));
@@ -122,7 +122,7 @@ public sealed class AuditTests
     [Fact]
     public void OriginalContextSurvivesDecisionCompactionAndEffectsAreLinked()
     {
-        var world = SocietyFactory.Create("audit_context", false, 160);
+        var world = SocietyFactory.Create("audit_context", false, 170);
         RunAudit.Enable(world);
         var agent = world.Agents.Values.First(agent => agent.Role == "citizen");
         var now = DateTimeOffset.UtcNow;
@@ -154,7 +154,7 @@ public sealed class AuditTests
     [Fact]
     public void OpeningDailyAndTerminalFramesPreserveTickBoundaryAndCancellation()
     {
-        var world = SocietyFactory.Create("audit_days", false, 160);
+        var world = SocietyFactory.Create("audit_days", false, 170);
         RunAudit.Enable(world);
         RunAudit.Day(world);
         Assert.DoesNotContain(world.PendingAudit, row => row.Kind == "agent_day");
@@ -182,7 +182,7 @@ public sealed class AuditTests
     [Fact]
     public void FallbackAndRejectedResultsRetainTheirDifferentOutcomes()
     {
-        var world = SocietyFactory.Create("audit_outcomes", false, 160);
+        var world = SocietyFactory.Create("audit_outcomes", false, 170);
         RunAudit.Enable(world);
         var agent = world.Agents.Values.First(agent => agent.Role == "citizen");
         var now = DateTimeOffset.UtcNow;
@@ -210,7 +210,7 @@ public sealed class AuditTests
     [InlineData(true, true)]
     public void ResumeDisablesInheritedCaptureAndRejectsExplicitAnalytics(bool inherited, bool requested)
     {
-        var world = SocietyFactory.Create("audit_resume", false, 160);
+        var world = SocietyFactory.Create("audit_resume", false, 170);
         if (inherited)
         {
             RunAudit.Enable(world);
@@ -237,7 +237,7 @@ public sealed class AuditTests
     [Fact]
     public void ResumeCannotDiscardUncommittedAuditRecords()
     {
-        var world = SocietyFactory.Create("audit_resume_pending", false, 160);
+        var world = SocietyFactory.Create("audit_resume_pending", false, 170);
         RunAudit.Enable(world);
         Assert.Throws<InvalidOperationException>(() => RunAudit.PrepareResume(world, false));
         Assert.True(world.AnalyticsEnabled);
@@ -247,7 +247,7 @@ public sealed class AuditTests
     [Fact]
     public void CaptureDoesNotChangeSimulationStateOrMoney()
     {
-        var plain = SocietyFactory.Create("audit_equivalence", false, 160);
+        var plain = SocietyFactory.Create("audit_equivalence", false, 170);
         var audited = Wire.Copy(plain);
         RunAudit.Enable(audited);
         for (var day = 1; day <= 14; day++)

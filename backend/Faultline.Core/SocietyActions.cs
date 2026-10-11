@@ -5,6 +5,8 @@ namespace Faultline.Core;
 
 public static class SocietyActions
 {
+    public const int MaxTaxBasisPoints = 6000;
+
     public static Candidate[] Available(World world, Agent agent)
     {
         var options = new List<Candidate> { Make("hold", new { }) };
@@ -18,6 +20,10 @@ public static class SocietyActions
                 options.Add(Make("express_support", new { support = !agent.SupportsLeadership }));
                 foreach (var threshold in new[] { 0, 50, 70, 85 }.Where(threshold => threshold != agent.HealthThreshold))
                     options.Add(Make("health_policy", new { visit_doctor_below_health = threshold }));
+                // Seeing a doctor now, when unwell and a clinic can take the visit.
+                if (agent.Health < 70 && SocietyEconomy.OpenClinic(world, world.Society!.Nations[agent.CountryId]) is { } clinic
+                    && agent.CashMinor >= clinic.PriceMinor)
+                    options.Add(Make("visit_doctor", new { }));
                 if (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank)
                     options.Add(Make("bank_savings", new { keep_in_bank = !agent.KeepsSavingsInBank }));
                 if (agent.Role == "entrepreneur")
@@ -25,10 +31,15 @@ public static class SocietyActions
                     OwnerOptions(world, agent, options);
                     break;
                 }
+                // School is full time: an employee who enrolls leaves their job.
+                if (SocietySchool.CanEnroll(world, agent))
+                    options.Add(Make("enroll_school", new { leaves_job = agent.EmployerId is not null }));
+                if (agent.EmployerId is { } job && world.Agents[job].Role == "business" && agent.SeekingUntilTick < world.Tick)
+                    options.Add(Make("seek_better_job", new { }));
                 // Founders who cannot pay in full can ask the bank for the rest beyond the down payment.
-                foreach (var sector in SocietyLabor.StartableSectors(agent))
+                foreach (var sector in SocietyLabor.StartableSectors())
                 {
-                    var cost = SocietyLabor.StartupCost(agent, sector);
+                    var cost = SocietyLabor.StartupCost(sector);
                     var launch = SocietyLabor.LaunchPrice(world, world.Society!.Nations[agent.CountryId], sector);
                     var loan = SocietyBank.StartupLoan(world, agent, cost);
                     if (SocietyLabor.CanStart(world, agent, sector))
@@ -41,6 +52,9 @@ public static class SocietyActions
                         .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
                         .OrderByDescending(nation => nation.Approval).Take(2))
                         options.Add(Make("migrate", new { country_id = nation.Id, cost_minor = 100 }));
+                break;
+            case "planner":
+                options.Add(SocietyPlanning.Option(world, world.Society!.Nations[agent.CountryId]));
                 break;
             case "business":
                 BusinessOptions(world, agent, options);
@@ -57,10 +71,27 @@ public static class SocietyActions
                 options.Add(Make("publish", new { text, observed_tick = world.Tick }));
                 break;
         }
-        if (agent.Role is not ("government" or "defunct") && SocietyLabor.DecidesForItself(agent))
+        if (agent.Role is not ("government" or "defunct" or "planner") && SocietyLabor.DecidesForItself(agent))
             SocietyPayments.AddOptions(world, agent, options);
         return options.ToArray();
     }
+
+    // A free numeric parameter: the model picks any integer in [min, max]; rule decisions use the default.
+    public static JsonObject Range(int min, int max, int @default) => new() { ["min"] = min, ["max"] = max, ["default"] = @default };
+
+    private static bool IsRange(JsonNode? node) => node is JsonObject range && range.ContainsKey("min") && range.ContainsKey("max");
+
+    // An action matches a candidate when every fixed parameter is equal and every free one is an integer in range.
+    public static bool Matches(Candidate candidate, string actionType, JsonObject parameters) =>
+        candidate.ActionType == actionType && candidate.Params.Count == parameters.Count
+        && candidate.Params.All(pair => parameters.TryGetPropertyValue(pair.Key, out var value) && (IsRange(pair.Value)
+            ? value is JsonValue number && number.TryGetValue<int>(out var chosen)
+                && chosen >= pair.Value!["min"]!.GetValue<int>() && chosen <= pair.Value!["max"]!.GetValue<int>()
+            : JsonNode.DeepEquals(pair.Value, value)));
+
+    // The candidate's parameters with each free number at its default, for rule-driven choices.
+    public static JsonObject Resolve(Candidate candidate) => new(candidate.Params.Select(pair =>
+        KeyValuePair.Create(pair.Key, IsRange(pair.Value) ? pair.Value!["default"]!.DeepClone() : pair.Value?.DeepClone())));
 
     // An entrepreneur steers their one business; the engine runs it daily between turns.
     private static void OwnerOptions(World world, Agent owner, List<Candidate> options)
@@ -162,8 +193,9 @@ public static class SocietyActions
         var nation = society.Nations[agent.CountryId];
         if (society.Policies.Any(policy => policy.CountryId == nation.Id) || !SocietyDiplomacy.HasAuthority(world, nation))
             return;
-        foreach (var tax in new[] { 500, 1500, 3000 }.Where(tax => tax != nation.TaxBasisPoints))
-            options.Add(Make("set_tax", new { tax_basis_points = tax }));
+        // Income tax moves a little at a time (a quarter, half or whole point), as real tax changes do.
+        foreach (var step in new[] { -100, -50, -25, 25, 50, 100 }.Where(step => nation.TaxBasisPoints + step is >= 0 and <= MaxTaxBasisPoints))
+            options.Add(Make("adjust_tax", new { change_basis_points = step }));
         foreach (var benefit in new[] { 0, 300, 600 }.Where(benefit => benefit != nation.UnemploymentBenefitMinor))
             options.Add(Make("set_unemployment_benefit", new { amount_minor = benefit }));
         foreach (var welfare in new[] { 0, 100, 200 }.Where(welfare => welfare != nation.WelfareMinor))
@@ -174,6 +206,23 @@ public static class SocietyActions
             options.Add(Make("fund_services", new { amount_minor = services }));
         if (agent.CashMinor >= 1500 && nation.Productivity < 2)
             options.Add(Make("invest", new { amount_minor = 1500 }));
+        // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
+        // a food subsidy when residents went hungry with food on the shelves, and schooling when people are
+        // out of work (each also shows while in force, so it can be changed or ended).
+        foreach (var sector in nation.NeededSince.Keys.Order().Where(sector => agent.CashMinor >= SocietyLabor.StartupCost(sector)))
+            options.Add(Make("subsidize_startup", new { sector, grant_minor = SocietyLabor.StartupCost(sector) }));
+        var residents = world.InCountry(nation.Id).Count(SocietyLabor.IsResident);
+        if (nation.PricedOutLastWeek * 10 >= residents || nation.FoodSubsidyPct > 0)
+            foreach (var percent in new[] { 0, 25, 50, 75 }.Where(percent => percent != nation.FoodSubsidyPct))
+                options.Add(Make("subsidize_food", new { percent }));
+        if (nation.Unemployed * 20 >= residents || nation.TuitionSubsidyPct > 0 || nation.StudentStipend || nation.HiringBonusMinor > 0)
+        {
+            foreach (var percent in new[] { 0, 50, 100 }.Where(percent => percent != nation.TuitionSubsidyPct))
+                options.Add(Make("subsidize_tuition", new { percent }));
+            options.Add(Make("student_stipend", new { on = !nation.StudentStipend }));
+            foreach (var amount in new[] { 0, 100, 200 }.Where(amount => amount != nation.HiringBonusMinor))
+                options.Add(Make("hiring_bonus", new { amount_minor = amount }));
+        }
         var relationships = society.Relations.Values.Where(relation => relation.First == nation.Id || relation.Second == nation.Id)
             .OrderByDescending(relation => relation.ProposedBy is not null && relation.ProposedBy != nation.Id)
             .ThenByDescending(relation => relation.AtWar).ThenByDescending(relation => relation.Tension).Take(4);

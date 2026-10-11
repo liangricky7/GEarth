@@ -29,7 +29,7 @@ public sealed class HistoryTests
                             var pick = job.Candidates[System.Security.Cryptography.SHA256.HashData(
                                 System.Text.Encoding.UTF8.GetBytes($"{agent.Id}:{world.Tick}"))[0] % job.Candidates.Length];
                             SocietyEngine.Apply(world, job, new DecisionResult(job.RequestId,
-                                new ActionProposal(pick.ActionType, (JsonObject)pick.Params.DeepClone(), "test", []),
+                                new ActionProposal(pick.ActionType, SocietyActions.Resolve(pick), "test", []),
                                 "rule", "none", 0), DateTimeOffset.UnixEpoch);
                         }
                     history.Day(world);

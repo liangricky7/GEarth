@@ -66,7 +66,8 @@ public static class RunAnalysis
         {
             var goods = imports.GroupBy(item => item.Payload["good"]!.GetValue<string>())
                 .Select(group => $"{group.Key}: {group.Sum(item => item.Payload["quantity"]!.GetValue<int>())} units");
-            observations.Add(new("trade", $"{imports.Length} cross-border shipments were dispatched ({string.Join(", ", goods)}); {deliveries.Length} arrived, {failed.Length} failed, and {rerouted.Length} reroute events occurred. Settlement used internal escrow.", Evidence(imports.Concat(deliveries).Concat(failed))));
+            var automatic = imports.Count(item => item.CauseIds.Length == 0);
+            observations.Add(new("trade", $"{imports.Length} cross-border shipments were dispatched ({string.Join(", ", goods)}): {imports.Length - automatic} ordered by agents and {automatic} placed automatically by firms with no domestic supply or short of food; {deliveries.Length} arrived, {failed.Length} failed, and {rerouted.Length} reroute events occurred. Settlement used internal escrow.", Evidence(imports.Concat(deliveries).Concat(failed))));
         }
         else
             observations.Add(new("trade", "No physical cross-border shipment dispatches were recorded in this history.", []));

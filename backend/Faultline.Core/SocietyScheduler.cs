@@ -1,7 +1,8 @@
 namespace Faultline.Core;
 
 // Decisions follow the weekly rhythm of the economy: every week each government, entrepreneur, bank,
-// newsroom and state firm gets one turn, plus a rotating slice of citizens. The run loop waits for the
+// newsroom and state firm gets one turn, plus a rotating slice of citizens; a planned economy's planner
+// sets the plan every four weeks. The run loop waits for the
 // week's decisions before payroll and the weekly reviews, and a decision older than a week expires.
 public static class SocietyScheduler
 {
@@ -11,7 +12,8 @@ public static class SocietyScheduler
     {
         var week = world.Tick / SocietyLabor.DaysPerWeek;
         return world.Agents.Values.Where(agent => SocietyLabor.DecidesForItself(agent)
-                && (agent.Role != "citizen" || RotationSlot(world, agent) == week % CitizenRotationWeeks))
+                && (agent.Role != "citizen" || RotationSlot(world, agent) == week % CitizenRotationWeeks)
+                && (agent.Role != "planner" || week % SocietyPlanning.PlanningWeeks == 0))
             .OrderBy(agent => agent.Role switch { "government" => 0, "citizen" => 2, _ => 1 }).ThenBy(agent => agent.Id)
             .ToArray();
     }
@@ -26,7 +28,8 @@ public static class SocietyScheduler
         if (world.Society!.QueuedAgentIds.Contains(agent.Id))
             return world.Tick;
         var week = world.Tick == 0 ? 0 : world.Tick / SocietyLabor.DaysPerWeek + 1;
-        while (agent.Role == "citizen" && week % CitizenRotationWeeks != RotationSlot(world, agent))
+        while (agent.Role == "citizen" && week % CitizenRotationWeeks != RotationSlot(world, agent)
+               || agent.Role == "planner" && week % SocietyPlanning.PlanningWeeks != 0)
             week++;
         return week == 0 ? 1 : week * SocietyLabor.DaysPerWeek;
     }

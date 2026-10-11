@@ -162,7 +162,8 @@ public sealed class LaborTests
         var founder = world.Agents.Values.First(agent => agent.CountryId == "aster" && agent.Role == "citizen" && agent.Occupation == "farmer");
         foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
             farm.PriceMinor = 60; // incumbents are expensive: an opportunity
-        var cost = SocietyLabor.StartupCost(founder, "food");
+        nation.QolParts["needs"] = 0.5; // and residents feel it: needs are going unmet
+        var cost = SocietyLabor.StartupCost("food");
         SocietyEconomy.Transfer(world, world.Agents["aster_bank"], founder, cost);
         var cash = founder.CashMinor;
 

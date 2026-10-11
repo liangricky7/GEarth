@@ -56,10 +56,10 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
 
 | Area | Built and verified | Not built or not verified |
 |---|---|---|
-| World engine | C#/.NET 10; 10 countries; 1,100 agents by default (software range 160–100,000); one tick = one day | No maximum population qualified for live inference |
-| Economy | Labor market, fixed salaries, entrepreneurs, 12 competing firms in 7 sectors per country, quality of life, health and clinics, overtime by consent, wage/sales/profit tax, welfare, unemployment benefit, public healthcare, education factor | Calibration: 8 of 10 countries collapse in a rule-mode year; product quality |
+| World engine | C#/.NET 10; 10 countries; 1,100 agents by default (software range 170–100,000); one tick = one day | No maximum population qualified for live inference |
+| Economy | Labor market, fixed salaries, entrepreneurs, 13 competing firms in 8 sectors per country, quality of life with a steep health penalty, too sick to work, always-staffed clinics with capitation, pharmacy medicine, hunger penalty, automatic input and food imports, startup grants, food and tuition subsidies, school and graduates, planned-economy quotas set by a planner, tax steps, overtime by consent, wage/sales/profit tax, welfare, unemployment and sick benefit ([5.10](#510-public-services-batch)) | Live behavior of the new levers; product quality |
 | Trade and politics | Physical shipments with escrow, freight firms, tariffs, routes; diplomacy, borders, conflict, migration, elections, five government profiles | Tick-based political durations not rescaled to days |
-| Banking | Legacy working-capital loans only | Full bank (deposits, interest, insurance, bank runs) built on `labor-market-potential-bank`, on hold |
+| Banking | Full bank (deposits, interest, insurance, bank runs) merged | Live calibration with the public-services batch |
 | Agents and prompts | Seeded traits and endowments; role-specific observations; compact numbered menus; `{choice, reason}` answers | Behavioral effect of traits and endowments not evaluated |
 | Scheduling | Weekly cohorts (institutions weekly, citizens every 8 weeks); weekly barrier before payroll; bounded, cancellable queue | Sustained live throughput of the weekly system |
 | Compute | Spark A: Qwen3-8B (institutions) + Qwen3-4B (citizens), verified; AMD Qwen3-4B, verified | Spark B; AMD's second model |
@@ -85,9 +85,8 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
   - Budgets and shortages improved, with needs 98–99% met in the democracies.
   - Then a slump set in: 21–55% unemployment, no startups or closures, and firms hoarding cash.
   - This drove the redesign in [13.4](#134-redesign-after-kennedys-run).
-- **Rule-mode 365-day run on the current engine:**
-  - All 12 `check_world` checks pass, with exact conservation of cash and goods.
-  - Health collapses in most countries (see [14](#14-known-problems-and-open-questions)).
+- **Rule-mode 365-day run before the public-services batch:** health reached 0 in 7 of 10 countries and both planned treasuries emptied.
+- **The same run after the batch (in-process):** all 10 countries keep average health 77–85 and quality of life 64–81, with exact conservation; unemployment 0–20% (highest in monarchies, which pay no benefit). `MoneyKeepsCirculatingForAFullYear` passes.
 - **A stopped hybrid live run** used both Qwen models but accumulated HTTP-error fallbacks; the cause is still unexplained.
 
 ---
@@ -140,7 +139,7 @@ Political structure and economic policy are modeled as explicit rules, not perso
 
 ### 3.3 Institutions and population
 
-Every country starts with 15 institutions: a government, a bank, a newsroom and 12 firms.
+Every country starts with 16 institutions: a government, a bank, a newsroom and 13 firms (including the state school). The smallest world is 170 agents.
 
 | Sector | Firms | Occupation | Base price |
 |---|---:|---|---:|
@@ -149,17 +148,18 @@ Every country starts with 15 institutions: a government, a bank, a newsroom and 
 | Tools | 2 | Factory worker | 100 |
 | Entertainment | 2 | Service worker | 60 per session |
 | Medicine | 1 | Researcher | 120 |
-| Clinic | 1 | Doctor | 450 per visit |
+| Clinic | 1 | Doctor | 200 per visit, plus a weekly public capitation |
+| School | 1 (state-owned) | Teacher | 2,000 tuition per 4-week course |
 | Freight | 1 | Dockworker | Shipment fee |
 
 **Population at 1,100 agents:**
-- 150 are institutions across the ten countries.
-- 950 are residents, 95 per country.
+- 160 are institutions across the ten countries.
+- 940 are residents, 94 per country (in planned economies one is the planner).
 - In market countries, firm owners are resident entrepreneurs, not extra population. Planned-economy firms are state owned.
 
 **Starting jobs (weights per 100 workers):**
-- **Private sector:** farmer 21, energy worker 6, factory worker 25, service worker 20, dockworker 2.
-- **Government:** teacher 9, soldier 6.
+- **Private sector:** farmer 21, energy worker 6, factory worker 25, service worker 24, dockworker 2.
+- **Public:** teacher 5 (at the state school), soldier 6, and in planned economies one planner (2,500 a week).
 - **Unemployed:** 9.
 - Researchers and doctors are placed first.
 
@@ -207,9 +207,10 @@ Voting and approval are not weighted by wealth. Profiles are paired by ordinal a
 
 | Role | Goal | Model decisions |
 |---|---|---|
-| Citizen | Work, meet household needs, keep savings | Household stock target; work effort (0 strike, 1 normal, 2 accept offered overtime); doctor threshold (0/50/70/85); express support; migrate (arrives unemployed); pay a local resident, government or employer; buy extra food or energy; start a business in their trade or an entertainment venue when the market shows an opportunity |
+| Citizen | Keep their own quality of life high | Household stock target; work effort (0 strike, 1 normal, 2 accept offered overtime); doctor threshold (0/50/70/85); visit a doctor now (health below 70); enroll in school (an employee leaves their job); seek a better job (any raise for 28 days); express support; migrate (arrives unemployed); pay a local resident, government or employer; buy extra food or energy; start any business where residents feel a gap and the market shows one |
 | Entrepreneur | Keep their one business profitable while meeting their own needs | Citizen choices plus, for the business: price ±10%, wage ±10% (applies to current staff), headcount −1/+1/+2, imports in three sizes |
-| Government | Meet public needs with a funded budget | Wage tax, sales tax (0/5/10%), weekly welfare (0/100/200), unemployment benefit (0/300/600), healthcare budget (0/50/150 per resident), productivity investment, borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Sees last week's income and spending |
+| Government | Meet public needs with a funded budget | Income tax in steps of ±0.25/0.5/1 point (0–60%), sales tax (0/5/10%), weekly welfare (0/100/200), unemployment benefit (0/300/600), clinic capitation (0/50/150 per resident), productivity investment, and when they apply: startup grants for an empty essential sector, food subsidy (0/25/50/75%), tuition subsidy (0/50/100%), student stipend, graduate hiring bonus (0/100/200); borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Sees last week's budget, the last policy's effect, the treasury in weeks of spending, hunger and quality of life by part |
+| Planner (planned economy) | Meet needs without shortages or waste | Every 4 weeks, one `set_plan` with a free weekly quota per sector (food, energy, tools, medicine, clinic visits, entertainment). Sees each sector's quota, sales, stock or queue, workers and capacity |
 | State firm (planned economy) | Supply its sector | Imports; prices and wages are fixed by the state |
 | Owned firm | — | No turns of its own; acts through its entrepreneur |
 | Bank | Lend safely | Approve requested loans (legacy credit) |
@@ -231,7 +232,7 @@ Routine life between turns follows standing policies and engine rules:
 
 **How the model answers**
 - **Menu:** the engine builds the candidate menu, and the worker renders it as compact numbered options.
-- **Answer:** the model returns `{choice, reason}`, with the reason asked to be at most 100 characters (the validator accepts up to 240). The choice maps to an exact action with parameters.
+- **Answer:** the model returns `{choice, reason}`, with the reason asked to be at most 100 characters (the validator accepts up to 240). The choice maps to an exact action with parameters. An option can carry free integer fields (`{"min","max","default"}`, shown as `<integer MIN-MAX, now N>`); the model then adds `"values"` with an integer for each, and both the worker and the engine check the range. Rule-driven choices use the defaults.
 - **Caching:** the shared rules text (`RulesNote`, built from the engine's constants) leads the system prompt, so the model server can cache it as a prefix.
 - **Model settings:**
   - Qwen requests disable thinking.
@@ -274,9 +275,12 @@ All amounts are integers. Cash plus shipment escrow, and goods held plus goods i
   - researcher 2,500
   - doctor 6,000
 
-  Education is folded into pay and productivity; there is no education progression.
+  - planner 2,500
+
+  Occupations differ in pay from day one; school ([5.10](#510-public-services-batch)) adds a graduate's output boost.
 - **Salaries are fixed agreements.** Employers set wage offers; the occupation table sets the differences between jobs.
-- **Hiring:** firms hire toward a headcount target. They take unemployed workers first, then workers who would gain at least 10% in pay.
+- **Hiring:** firms hire toward a headcount target. They take unemployed workers first (graduates first), then workers who would gain at least 10% in pay (any raise while seeking a better job). Students are not hired.
+- **Shortage pay:** in a shortage, farms, power plants, pharma and clinics raise wage offers as fast as prices may rise (up to 20% a week, to twice the table wage); other firms by 5% a week, to 1.5×.
 - **Changing trades:**
   - After 14 days unemployed, anyone can take unskilled work.
   - Skilled workers (doctors, researchers) keep their trade and return when a matching job pays more.
@@ -298,8 +302,10 @@ All amounts are integers. Cash plus shipment escrow, and goods held plus goods i
   - Then half of the remaining profit.
   - Then cash above an eight-week payroll buffer, as a dividend.
 - **Starting a business:**
-  - A citizen with savings can start a firm in their own trade, or an entertainment venue, when the market shows an opportunity.
-  - It costs 8 weeks of the founder's table wage for a goods firm and 4 weeks for an entertainment venue.
+  - A citizen with savings can start a firm in any sector except banking and freight.
+  - **Gap check:** the option appears only where residents feel the shortfall (the national quality-of-life part the sector serves is below 60% of its best: food and energy → needs, clinic and medicine → health, tools and entertainment → comfort, school → security) **and** the market shows it (no firm, high prices, empty shelves or customers turned away). An empty sector always counts.
+  - A clinic, pharma or school needs someone qualified to work in it: the founder or a resident free to hire. Owners work in their firm only in a trade they could be hired for.
+  - It costs 8 weeks of the sector's table wage for a goods firm and 4 weeks for a service.
   - The new firm launches 10% below the cheapest incumbent.
 - **Failure:** if the firm closes, the owner returns to a citizen role and takes the remaining cash.
 
@@ -316,28 +322,30 @@ All amounts are integers. Cash plus shipment escrow, and goods held plus goods i
 - **Daily needs:** residents consume one food and one energy a day and restock up to their household stock target.
 - **Weekly extras:** they buy tools and entertainment while the next unit adds more quality of life than the savings it uses.
 - **Quality of life (0–100):**
-  - weights, with diminishing returns:
-    - needs 0.35
-    - health 0.20
-    - comfort 0.20
-    - security 0.15
-    - leisure 0.10
+  - parts, with diminishing returns:
+    - needs up to 35
+    - health: `20 × h/100 − 50 × ((100 − h)/100)³`, so +20 at full health, about +13 at 70, +4 at 50, −11 at 30 and −50 at 0
+    - comfort up to 20
+    - security up to 15
+    - free time up to 10
+  - the total is clamped to 0–100; residents see their own parts, and countries publish the average of each part (0–1)
   - moves a quarter of the way toward its target each day.
 - **Approval:** follows quality of life. A sharp fall or deep misery withdraws support from the leadership.
 
 ### 5.6 Health and public services
 
-- **Health wear:** health falls 1 a day. A 1% daily illness costs 30, and unmet needs and overtime add further costs.
-- **Clinics:** a clinic visit restores 40 and uses one medicine. Residents visit the cheapest clinic with a free doctor once below their threshold.
+- **Health wear:** health falls 1 every 4 days. A 1% daily illness costs 30, and unmet needs and overtime add further costs. Acute illness is the main reason to see a doctor, about 6 visits per resident a year.
+- **Clinics:** a clinic visit restores 40 and uses one medicine. Residents visit the cheapest clinic with a free doctor once below their threshold, or now with `visit_doctor`. With no visit possible they buy medicine at the pharmacy (+15).
+- **Too sick to work:** below health 30 a resident produces nothing and is not paid for those days; sick pay equals the unemployment benefit where one is paid, and a clinic sees them free if they cannot pay.
 - **Effect on work:** health scales output from 25% to 100%, and wellbeing adds a milder output factor.
-- **Public healthcare:** buys visits for the sickest residents within its budget.
-- **Education:** funded, healthy teachers set an education factor of 0.7–1.0.
+- **Public healthcare:** the per-resident services budget is paid weekly to clinics as a capitation, shared by the doctors working, so a visit costs 200 instead of 450 and the clinic covers a doctor's pay.
+- **Always staffed:** a clinic never lays off its last doctor; an idle essential firm takes back someone from the trade; with no clinic left, a doctor opens one on a startup grant.
 
 ### 5.7 Government finance
 
 - **Income:** wage tax (by profile), sales tax (default 5%, inside the price), profit tax (20%), tariffs (5% without a trade agreement) and migration fees.
-- **Spending:** public salaries (teachers, soldiers), weekly welfare, unemployment benefit, public healthcare and investment.
-- **Planned economies:** the state collects firm cash above the payroll buffer and covers shortfalls. Other displayed public-ownership percentages cause no transfers.
+- **Spending:** public salaries (soldiers, the planner), weekly welfare, unemployment and sick benefit, clinic capitation, startup grants, food and tuition subsidies, the student stipend, hiring bonuses and investment.
+- **State firms:** the state collects firm cash above four weeks of payroll and covers shortfalls, for every firm in a planned economy and for the school everywhere. Other displayed public-ownership percentages cause no transfers.
 
 ### 5.8 Legacy credit
 
@@ -354,6 +362,19 @@ These were never rescaled when a tick became a day:
 - loans that mature after 60 days.
 
 Rescaling them is a design decision ([14](#14-known-problems-and-open-questions)).
+
+### 5.10 Public services batch
+
+Built on October 11, 2026 after the hosted live run `world_20261011_004205_8e1892`, in which health fell to 0 in every market country: a clinic laid off its only doctor, energy-poor countries lost their power plants and with them all food output, and governments flipped tax rates weekly while their treasuries grew.
+
+- **Health and work:** decay, the health curve, too sick to work and pharmacy medicine ([5.5](#55-households-and-quality-of-life), [5.6](#56-health-and-public-services)).
+- **Hunger:** a resident who missed their last meal produces 99% less until they eat again. Farm workers eat first from their employer's stock, paying cash or, when broke, owing it from the next wage. Governments see hungry and priced-out residents and the share of working days lost.
+- **Essential sectors** (food, energy, clinic, medicine) never stay without workers: an idle firm takes back someone from the trade, and a sector still empty after 14 days gets a startup grant (in a planned economy the state opens a firm). Governments can also grant one themselves (`subsidize_startup`).
+- **Imports:** a firm with no domestic supplier imports its input from the cheapest foreign seller, one shipment at a time; when a country's food shelves hold under three days of meals, farms import food that lands cheaper than their price (the planned state always). Run notes count automatic and agent-ordered shipments separately.
+- **Food subsidy:** offered when at least 10% of residents went hungry with food on the shelves; the treasury pays 25, 50 or 75% of households' food and farms still receive the full price.
+- **School:** a state-owned school in every country (private schools allowed through the gap check). A citizen who is not studying or graduated enrolls for a fixed 2,000 tuition; an employee leaves their job to do so. The course lasts 28 days without pay (a stipend if offered). Graduates produce 25% more (tunable) and are hired first. Each working teacher takes 5 students; the state school grows when classes fill and keeps its teachers when they don't. The old national education factor is gone.
+- **Planned economies:** a planner sets each sector's weekly quota every four weeks with free numbers; state firms make or serve their share at fixed prices, so mistakes show as queues or unsold stock rather than as a built-in penalty. Without a model the rule default raises a quota 10% after shortages and lowers it 10% after gluts.
+- **Taxes:** income tax moves in ±0.25/0.5/1-point steps; the government sees what its last policy did to the weekly budget.
 
 ---
 
@@ -928,18 +949,13 @@ The redesign added:
 ## 14. Known problems and open questions
 
 **Known problems**
-1. **Year-long collapse.** In rule mode, 8 of 10 countries reach health 0 within a year, including both planned economies, and `MoneyKeepsCirculatingForAFullYear` fails. Traced causes:
-   - medicine runs out with one researcher,
-   - clinic staff are fired and rehired in a loop,
-   - closed sectors never reopen,
-   - welfare drains demand.
-
-   The fix is accepted as waiting until a live run has been analyzed.
-2. **Planned economies collapse:** the state props up firms until the treasury is empty.
-3. **The hybrid live run's HTTP-error fallbacks** are unexplained.
-4. **No qualified live capacity** for the weekly Qwen system.
-5. **Observer layout** hasn't been visually checked since the labor-market changes.
-6. **Entrepreneur menus** are long (about 30 options with imports).
+1. **Year-long collapse (addressed, awaiting a live run).** Before the public-services batch, 7–8 of 10 countries reached health 0 within a rule-mode year. The batch ([5.10](#510-public-services-batch)) keeps all ten healthy in rule mode; a Spark run should confirm it under model decisions.
+2. **Planned treasuries still drain slowly** (about 0.6k a day in a rule-mode year with banking on): households' savings pile up in the state bank while the state covers firm losses. The planner's quotas and, later, bank lending should be watched for this.
+3. **Monarchies idle up to a fifth of their factory workers** in a decision-free year: they pay no unemployment benefit, so the jobless cannot buy household goods.
+4. **The hybrid live run's HTTP-error fallbacks** are unexplained.
+5. **No qualified live capacity** for the weekly Qwen system.
+6. **Observer layout** hasn't been visually checked since the labor-market changes.
+7. **Entrepreneur menus** are long (about 30 options with imports).
 
 **Open questions**
 1. **Tick durations:** should policy delays, elections, crisis timing, proposal expiry and loan maturity be rescaled to days?

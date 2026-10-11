@@ -18,7 +18,7 @@ public sealed class CoordinatorAuditTests
         var settings = new Dictionary<string, string?>
         {
             ["FAULTLINE_ANALYTICS"] = "true", ["FAULTLINE_WORLD"] = "true", ["FAULTLINE_LIVE"] = "false",
-            ["FAULTLINE_TICKS"] = "8", ["FAULTLINE_POPULATION"] = "160", ["FAULTLINE_INTERVAL_MS"] = "0",
+            ["FAULTLINE_TICKS"] = "8", ["FAULTLINE_POPULATION"] = "170", ["FAULTLINE_INTERVAL_MS"] = "0",
             ["FAULTLINE_VERBOSE"] = "false", ["FAULTLINE_SAVED_RUN_ID"] = null,
             ["FAULTLINE_COMPUTE_PROVIDERS"] = null, ["FAULTLINE_RESUME_RUN_ID"] = null
         };
@@ -77,7 +77,7 @@ public sealed class CoordinatorAuditTests
         var settings = new Dictionary<string, string?>
         {
             ["FAULTLINE_ANALYTICS"] = "false", ["FAULTLINE_WORLD"] = "true", ["FAULTLINE_LIVE"] = "false",
-            ["FAULTLINE_TICKS"] = "8", ["FAULTLINE_POPULATION"] = "160", ["FAULTLINE_INTERVAL_MS"] = "0",
+            ["FAULTLINE_TICKS"] = "8", ["FAULTLINE_POPULATION"] = "170", ["FAULTLINE_INTERVAL_MS"] = "0",
             ["FAULTLINE_VERBOSE"] = "false", ["FAULTLINE_SAVED_RUN_ID"] = null,
             ["FAULTLINE_COMPUTE_PROVIDERS"] = null, ["FAULTLINE_RESUME_RUN_ID"] = runId,
             ["FAULTLINE_TIMELINE"] = "ordinary_fork", ["FAULTLINE_FORK_GOVERNMENT"] = null
@@ -89,7 +89,7 @@ public sealed class CoordinatorAuditTests
                 Environment.SetEnvironmentVariable(key, value);
             var parentStore = new LocalStore(parentDirectory);
             await parentStore.Initialize(CancellationToken.None);
-            var parent = SocietyFactory.Create(runId, false, 160);
+            var parent = SocietyFactory.Create(runId, false, 170);
             RunAudit.Enable(parent);
             for (var day = 1; day <= 6; day++)
             {

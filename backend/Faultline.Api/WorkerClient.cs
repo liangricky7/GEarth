@@ -19,7 +19,7 @@ public static class WorkerClient
             var candidate = stageTwo ? job.Candidates[choice]
                 : job.Candidates.FirstOrDefault(item => item.ActionType is "purchase" or "choose_route") ?? job.Candidates[0];
             return new DecisionResult(job.RequestId,
-                new ActionProposal(candidate.ActionType, (JsonObject)candidate.Params.DeepClone(),
+                new ActionProposal(candidate.ActionType, SocietyActions.Resolve(candidate),
                     "Deterministic rule choice; no model inference.", []), "rule", "none", 0);
         }
 

@@ -269,6 +269,25 @@ def test_world_rules_form_a_shared_prefix_and_menus_stay_compact():
     assert user["available_actions"] == ["0: hold", "1: set_price change_pct=10"]
 
 
+def test_free_numbers_fill_ranged_fields_within_bounds():
+    job = make_job()
+    job.observation = {"world_stage": 2}
+    plan = {"food": {"min": 0, "max": 1000, "default": 700}, "energy": {"min": 0, "max": 900, "default": 800}}
+    job.candidates.append({"action_type": "set_plan", "params": plan})
+    action = worker.validate_action(
+        {"choice": 1, "reason": "Feed everyone.", "values": {"food": 720, "energy": 810}}, job
+    )
+    assert action["params"] == {"food": 720, "energy": 810}
+    assert worker.render_action(1, job.candidates[1]) == (
+        "1: set_plan food=<integer 0-1000, now 700> energy=<integer 0-900, now 800>"
+    )
+    for values in ({"food": 720}, {"food": 1001, "energy": 1}, {"food": "720", "energy": 1}, None):
+        with pytest.raises(ValueError, match="INVALID_VALUES"):
+            worker.validate_action({"choice": 1, "reason": "Plan.", "values": values}, job)
+    with pytest.raises(ValueError, match="INVALID_SCHEMA"):  # fixed actions take no values
+        worker.validate_action({"choice": 0, "reason": "Wait.", "values": {"food": 1}}, job)
+
+
 @pytest.mark.parametrize("choice", [True, -1, 1, "0", None])
 def test_world_choice_rejects_invalid_indices(choice):
     job = make_job()

@@ -51,11 +51,26 @@ public sealed class Agent
     // Overtime: firms offer it when short-handed; residents count the days they worked it this week.
     public bool OvertimeOffered { get; set; }
     public int LastWeekUnitsSold { get; set; }
+    public int LastWeekTurnedAway { get; set; }
     public int OvertimeDays { get; set; }
     // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
     public int GoodsBoughtLastWeek { get; set; }
     public int ServicesBoughtLastWeek { get; set; }
     public int LastWeekWellbeing { get; set; } = 100;
+    // Health and hunger: days too sick to work this week (unpaid), whether the last meal was missed (output
+    // falls 99% until the next one) and food taken from a farm employer, owed back from the next wage.
+    public int SickDays { get; set; }
+    public bool Hungry { get; set; }
+    public int NeedsMet { get; set; } = 2;
+    public bool HungryThisWeek { get; set; }
+    public bool PricedOutThisWeek { get; set; }
+    public long InKindMinor { get; set; }
+    // School: a student until StudentUntilTick (-1 when not studying); graduates produce more and are hired first.
+    public int StudentUntilTick { get; set; } = -1;
+    public string? SchoolId { get; set; }
+    public bool Graduated { get; set; }
+    // Looking for a better job: until this tick any higher offer pulls the worker, not only 10% more.
+    public int SeekingUntilTick { get; set; } = -1;
     // Banking: residents' savings deposited at their country's bank (the government's deposit is the
     // insurance claims it took over). Banks: owner-set rates and lending standard, and withdrawals the
     // reserves could not pay since the last weekly review.

@@ -131,7 +131,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         var tickLimit = ReadNumber("FAULTLINE_TICKS", 360, 1, 10000);
         var interval = ReadNumber("FAULTLINE_INTERVAL_MS", 2000, 0, 30000);
         var capacity = ReadNumber("FAULTLINE_CAPACITY", 64, 1, 384);
-        var population = ReadNumber("FAULTLINE_POPULATION", 1100, 160, 100000);
+        var population = ReadNumber("FAULTLINE_POPULATION", 1100, 170, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
         var resumeId = Environment.GetEnvironmentVariable("FAULTLINE_RESUME_RUN_ID");

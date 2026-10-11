@@ -55,10 +55,15 @@ public static class SocietyDiplomacy
         foreach (var policy in world.Society!.Policies.Where(policy => policy.EffectiveTick <= world.Tick).ToArray())
         {
             var nation = world.Society.Nations[policy.CountryId];
+            var government = world.Agents[nation.Id + "_government"];
+            var netBefore = government.LastWeekInMinor - government.LastWeekOutMinor;
             using var auditContext = RunAudit.Context(world, new(EventId: policy.CauseId));
-            using var effects = RunAudit.Effects(world, world.Agents[nation.Id + "_government"],
+            using var effects = RunAudit.Effects(world, government,
                 new ActionProposal(policy.ActionType, policy.Params, "policy enactment", []), null, policy.CauseId);
             var accepted = HasAuthority(world, nation) && Enact(world, nation, policy);
+            if (accepted)
+                (nation.LastPolicyAction, nation.LastPolicyParams, nation.LastPolicyTick, nation.NetBeforeLastPolicyMinor) =
+                    (policy.ActionType, (JsonObject)policy.Params.DeepClone(), world.Tick, netBefore);
             world.Emit(accepted ? "policy_enacted" : "policy_blocked", "rule", [nation.Id, policy.Id], new
             {
                 action = policy.ActionType, policy.Params,
@@ -75,8 +80,24 @@ public static class SocietyDiplomacy
         var parameters = policy.Params;
         switch (policy.ActionType)
         {
-            case "set_tax":
-                nation.TaxBasisPoints = parameters["tax_basis_points"]!.GetValue<int>();
+            case "adjust_tax":
+                nation.TaxBasisPoints = Math.Clamp(nation.TaxBasisPoints + parameters["change_basis_points"]!.GetValue<int>(),
+                    0, SocietyActions.MaxTaxBasisPoints);
+                return true;
+            case "subsidize_startup":
+                return nation.NeededSince.ContainsKey(parameters["sector"]!.GetValue<string>())
+                    && SocietyLabor.Grant(world, nation, parameters["sector"]!.GetValue<string>(), policy.CauseId) is not null;
+            case "subsidize_food":
+                nation.FoodSubsidyPct = parameters["percent"]!.GetValue<int>();
+                return true;
+            case "subsidize_tuition":
+                nation.TuitionSubsidyPct = parameters["percent"]!.GetValue<int>();
+                return true;
+            case "student_stipend":
+                nation.StudentStipend = parameters["on"]!.GetValue<bool>();
+                return true;
+            case "hiring_bonus":
+                nation.HiringBonusMinor = parameters["amount_minor"]!.GetValue<int>();
                 return true;
             case "set_welfare":
                 nation.WelfareMinor = parameters["amount_minor"]!.GetValue<int>();

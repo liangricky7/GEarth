@@ -128,7 +128,7 @@ public sealed class WeeklyAnalyticsSaveTests
             var settings = new Dictionary<string, string?>
             {
                 ["FAULTLINE_ANALYTICS"] = "true", ["FAULTLINE_WORLD"] = "true", ["FAULTLINE_LIVE"] = "false",
-                ["FAULTLINE_TICKS"] = ticks.ToString(), ["FAULTLINE_POPULATION"] = "160", ["FAULTLINE_INTERVAL_MS"] = interval.ToString(),
+                ["FAULTLINE_TICKS"] = ticks.ToString(), ["FAULTLINE_POPULATION"] = "170", ["FAULTLINE_INTERVAL_MS"] = interval.ToString(),
                 ["FAULTLINE_VERBOSE"] = "false", ["FAULTLINE_SAVED_RUN_ID"] = null,
                 ["FAULTLINE_COMPUTE_PROVIDERS"] = null, ["FAULTLINE_RESUME_RUN_ID"] = null
             };

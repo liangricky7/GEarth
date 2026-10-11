@@ -258,7 +258,7 @@ public static class SocietyBank
             : request.Sector is { } sector
                 ? !SocietyLabor.CanStart(world, borrower, sector, request.PrincipalMinor)
                   || borrower.CashMinor + request.PrincipalMinor + Math.Min(borrower.DepositMinor, bank.CashMinor - request.PrincipalMinor)
-                     < SocietyLabor.StartupCost(borrower, sector)
+                     < SocietyLabor.StartupCost(sector)
                     ? "the founder no longer qualifies" : null
             : borrower.Role != "business" ? "the business closed"
             : (principal + interest) * 100 > revenue * standard.RevenueSharePct ? "installments too large for the firm's revenue"

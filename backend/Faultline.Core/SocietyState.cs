@@ -51,7 +51,32 @@ public sealed class Nation
     public double FoodMultiplier { get; set; } = 1;
     public double EnergyMultiplier { get; set; } = 1;
     public double Productivity { get; set; } = 1;
-    public double EducationFactor { get; set; } = 1;
+    // Government levers added for famine, failed sectors and schooling.
+    public int FoodSubsidyPct { get; set; }
+    public long FoodSubsidyPaidMinor { get; set; }
+    public long StartupGrantsPaidMinor { get; set; }
+    public long CapitationPaidMinor { get; set; }
+    public int TuitionSubsidyPct { get; set; }
+    public bool StudentStipend { get; set; }
+    public int HiringBonusMinor { get; set; }
+    // Hunger last week: residents who missed a meal, those who missed one while food was on the shelves
+    // (priced out), and the share of working days lost to it.
+    public int HungryResidentsLastWeek { get; set; }
+    public int PricedOutLastWeek { get; set; }
+    public int HungryDays { get; set; }
+    public int WorkerDays { get; set; }
+    public double OutputLostToHungerPct { get; set; }
+    // Essential sectors with no working firm, and since which tick (startup grants fire after two weeks).
+    public Dictionary<string, int> NeededSince { get; set; } = new();
+    // Planned economies: weekly output quota per sector (goods in units, services in visits or sessions).
+    public Dictionary<string, int> Plan { get; set; } = new();
+    // National average of each quality-of-life part (0-1), which founders read as market gaps.
+    public Dictionary<string, double> QolParts { get; set; } = new();
+    // The last enacted policy and the government's weekly net budget just before it, so its effect shows.
+    public string? LastPolicyAction { get; set; }
+    public System.Text.Json.Nodes.JsonObject? LastPolicyParams { get; set; }
+    public int LastPolicyTick { get; set; } = -1;
+    public long NetBeforeLastPolicyMinor { get; set; }
     public int SalesTaxBasisPoints { get; set; } = 500;
     public int ProfitTaxBasisPoints { get; set; } = 2000;
     public long SalesTaxCollectedMinor { get; set; }

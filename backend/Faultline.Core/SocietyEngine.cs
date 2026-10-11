@@ -8,7 +8,7 @@ public static class SocietyEngine
     public const int DecisionMaxAgeDays = 7;
 
     // Numbers come from the engine constants so the model is never told a stale rule.
-    public static readonly string RulesNote = $"One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 per day, more with illness or unmet needs; you visit the cheapest open clinic automatically when below your health threshold, and public healthcare pays for the sickest. Lower health lowers the output you produce. quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met, health, household goods and entertainment bought last week, security (a job or business plus savings) and free time. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after {SocietyLabor.RelatedJobAfterDays} days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay. Several firms compete in most sectors. A citizen with savings, or with a bank loan for all but a down payment, can start a business related to their occupation, or an entertainment venue, where the market shows an opportunity, launching 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above {SocietyLabor.DividendBufferWeeks} weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for {SocietyLabor.DistressWeeksToClose} weeks closes, repays what it can of its bank loan and returns the rest to the owner. Prices adjust weekly in proportion to shortages or gluts, up to {SocietyLabor.MaxPriceStepPct}%. Banking: each country has one bank, run by its owner (by the state in planned economies). Each week residents keep two weeks of their pay as cash and the rest is deposited automatically, earning the bank's deposit rate; bank_savings keep_in_bank=false withdraws everything and keeps savings as cash until you choose to bank again. The bank lends deposits to businesses (request_loan) and founders, repaid weekly over 26 weeks at the loan rate when funded. Requests are decided weekly against the owner's lending standard (founder down payment strict 50%, normal 25%, loose 10%; installments at most 10/20/35% of weekly revenue), the reserve rule (reserves of 10% of deposits) and banker capacity (10 loans each, owner included). Three missed installments close the borrowing firm; the bank recovers what it can and the owner is not personally liable. When withdrawals exceed reserves the bank cannot pay them all: government deposit insurance (by government type) pays the insured part and the bank lends nothing that week. A bank owing depositors more than its reserves and loans are worth is taken over by the state and the owner loses their stake. The bank's owner sets deposit and loan rates, lending standard, headcount and wage, and receives dividends only from equity above their capital. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale, welfare, unemployment benefit and public healthcare from the treasury; budget_last_week shows income and spending. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within {DecisionMaxAgeDays} days of the observation they were made on.";
+    public static readonly string RulesNote = $"One tick is one day. Daily: everyone uses 1 food and 1 energy, bought automatically up to your target stock, mostly from cheaper local sellers. Health falls 1 every {SocietyEconomy.HealthDecayDays} days, more with illness (a 1% daily chance of losing 30), overtime or unmet needs. Below your health threshold you automatically see the cheapest open clinic if you can pay (+{SocietyEconomy.VisitHealthGain} health; visit_doctor goes now); with no visit possible you buy medicine at the pharmacy (+{SocietyEconomy.MedicineHealthGain}). Below health {SocietyEconomy.SickBelow} you are too sick to work: no output and no pay for those days (sick pay equals the unemployment benefit where one is paid), and if you cannot pay, the clinic sees you free. Lower health lowers your output, and a missed meal cuts your output by 99% until you eat again; farm workers eat first from their employer's stock (paid from cash or from the next wage). quality_of_life (0-100) is scored from outcomes with diminishing returns: needs met (up to 35), health (+20 when healthy, falling ever faster to -50 when very sick), household goods and entertainment bought last week (20), security from a job or business plus savings (15) and free time (10); quality_of_life_parts shows yours. Weekly: households automatically buy household goods (tools) and entertainment while the next unit adds more quality of life than the savings it costs. Employees receive their agreed salary; effort 1 is normal hours; effort 2 means you accept overtime when your employer offers it (overtime_offered), working a quarter more hours for 1.5x pay on those hours at the cost of free time and some health, and it does nothing when no overtime is offered; effort 0 is a strike and forfeits that week's pay. Firms short of cash cut pay 10% or lay off staff. Unemployed residents are hired automatically by firms with openings in their occupation; after {SocietyLabor.RelatedJobAfterDays} days anyone can take an unskilled job (skilled workers keep their qualification and return when a matching job pays 10% more), and doctors and researchers can swap; employed workers switch for at least 10% more pay (for any raise for {SocietyLabor.CourseDays} days after seek_better_job). School: a citizen can enroll_school (an employee leaves their job) for a fixed tuition; the course lasts {SocietyLabor.CourseDays} days without pay (a stipend if the government offers one), and graduates produce {(int)Math.Round((SocietyLabor.GraduateOutputBoost - 1) * 100)}% more and are hired first at the same pay. Several firms compete in most sectors. A citizen with savings, or with a bank loan for all but a down payment, can start any business (it costs {SocietyLabor.StartupWeeks} weeks of its workers' pay, {SocietyLabor.ServiceStartupWeeks} for services) where residents' quality of life is low (below {(int)(SocietyLabor.QolGapBelow * 100)}% of its best) in the part the business serves (food and energy: needs; clinic and medicine: health; tools and entertainment: comfort; school: security) and the market shows an opportunity (no firm, high prices, empty shelves or customers turned away); a clinic, pharma or school needs someone qualified to work in it. New firms launch 10% below the cheapest competitor; entrepreneurs are paid from profit (up to their former trade's wage, then half the rest; nothing in a losing week), receive as dividends any business cash above {SocietyLabor.DividendBufferWeeks} weeks of payroll, and set price, wage offer and headcount. A business that cannot cover costs for {SocietyLabor.DistressWeeksToClose} weeks closes, repays what it can of its bank loan and returns the rest to the owner. Prices adjust weekly in proportion to shortages or gluts, up to {SocietyLabor.MaxPriceStepPct}%; in a shortage, farms, power, pharma and clinics raise wage offers as fast (up to twice the usual pay). Firms with no domestic supplier import inputs automatically, and when food shelves run low farms import food that lands cheaper than their price. Banking: each country has one bank, run by its owner (by the state in planned economies). Each week residents keep two weeks of their pay as cash and the rest is deposited automatically, earning the bank's deposit rate; bank_savings keep_in_bank=false withdraws everything and keeps savings as cash until you choose to bank again. The bank lends deposits to businesses (request_loan) and founders, repaid weekly over 26 weeks at the loan rate when funded. Requests are decided weekly against the owner's lending standard (founder down payment strict 50%, normal 25%, loose 10%; installments at most 10/20/35% of weekly revenue), the reserve rule (reserves of 10% of deposits) and banker capacity (10 loans each, owner included). Three missed installments close the borrowing firm; the bank recovers what it can and the owner is not personally liable. When withdrawals exceed reserves the bank cannot pay them all: government deposit insurance (by government type) pays the insured part and the bank lends nothing that week. A bank owing depositors more than its reserves and loans are worth is taken over by the state and the owner loses their stake. The bank's owner sets deposit and loan rates, lending standard, headcount and wage, and receives dividends only from equity above their capital. Household prices include sales tax, wages carry income tax and firms pay profit tax. Governments pay public salaries on a fixed scale (soldiers, a planned economy's planner), welfare, unemployment and sick benefit, and each week pay clinics a capitation from the services budget (fund_services, per resident) so visits stay cheap; budget_last_week shows income and spending and last_policy what the last change did. Income tax moves in small steps (adjust_tax). Food, energy, clinics and pharma never stay without workers: an idle firm takes back someone from the trade, and the government can grant the startup cost of a new firm (subsidize_startup; automatic after {SocietyLabor.GrantAfterDays} days). Governments can also subsidize food when residents go hungry with food on the shelves, tuition, a student stipend and a hiring bonus for graduates. In a planned economy a planner sets each sector's weekly output quota every {SocietyPlanning.PlanningWeeks} weeks (set_plan, any numbers); state firms make their share at prices fixed by decree, so a quota too low leaves shortages and one too high leaves unsold stock. Residents whose quality of life falls sharply withdraw support from the leadership. Imports use simulated escrow and transit; freight fees go to a domestic freight firm. Conflict costs 5000 upfront plus 1000 per week. Decisions apply only within {DecisionMaxAgeDays} days of the observation they were made on.";
 
     private static void DropNulls(JsonNode? node)
     {
@@ -88,10 +88,17 @@ public static class SocietyEngine
             best_wage_offer_minor_per_week = resident || governing ? SocietyLabor.Sectors.ToDictionary(sector => sector.Occupation,
                 sector => SocietyLabor.Firms(world, nation.Id, sector.Id).Select(other => (long?)other.WageOfferMinor).Max()) : null,
             unemployed_residents = nation.Unemployed, nation.UnemploymentBenefitMinor,
+            // Founders read the country's quality of life by part (0-1) and the sectors where it runs low and the market shows a gap.
+            quality_of_life_by_part = resident || governing ? nation.QolParts : null,
             startup_cost_minor = agent.Role == "citizen"
-                ? SocietyLabor.StartableSectors(agent).ToDictionary(sector => sector, sector => SocietyLabor.StartupCost(agent, sector)) : null,
+                ? SocietyLabor.StartableSectors().ToDictionary(sector => sector, SocietyLabor.StartupCost) : null,
             business_opportunities = agent.Role == "citizen"
-                ? SocietyLabor.StartableSectors(agent).Where(sector => SocietyLabor.HasOpportunity(world, nation, sector)).ToArray() : null
+                ? SocietyLabor.StartableSectors().Where(sector => !SocietyLabor.Firms(world, nation.Id, sector).Any()
+                    || SocietyLabor.HasGap(world, nation, sector)).ToArray() : null,
+            school = agent.Role == "citizen" && SocietySchool.OpenSchool(world, nation.Id) is { } school
+                ? new { tuition_minor = school.PriceMinor, you_pay_minor = SocietySchool.OwnShare(nation, school),
+                    course_days = SocietyLabor.CourseDays, graduate_output_boost = SocietyLabor.GraduateOutputBoost,
+                    stipend_while_studying_minor = nation.StudentStipend ? nation.UnemploymentBenefitMinor : 0 } : null
         };
         var treasury = world.Agents[nation.Id + "_government"].CashMinor;
         object country = governing
@@ -100,7 +107,19 @@ public static class SocietyEngine
                 nation.Id, government = profile.Name, profile.PolicyDelay, profile.PublicOwnershipPercent,
                 nation.TaxBasisPoints, nation.WelfareMinor, nation.ServiceBudgetPerResidentMinor,
                 nation.Approval, nation.Population, nation.Stocks, nation.UnmetNeedsLastCycle, treasury_minor = treasury,
-                nation.Productivity, nation.EducationFactor, nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints,
+                treasury_weeks_of_spending = agent.LastWeekOutMinor > 0 ? Math.Round(treasury / (double)agent.LastWeekOutMinor, 1) : (double?)null,
+                hungry_residents_last_week = nation.HungryResidentsLastWeek,
+                priced_out_of_food_last_week = nation.PricedOutLastWeek,
+                output_lost_to_hunger_pct = nation.OutputLostToHungerPct,
+                essential_sectors_without_workers = nation.NeededSince.Keys.Order().ToArray(),
+                nation.FoodSubsidyPct, nation.TuitionSubsidyPct, nation.StudentStipend, nation.HiringBonusMinor,
+                last_policy = nation.LastPolicyAction is null ? null : new
+                {
+                    action = nation.LastPolicyAction, @params = nation.LastPolicyParams, enacted_tick = nation.LastPolicyTick,
+                    weekly_net_before_minor = nation.NetBeforeLastPolicyMinor,
+                    weekly_net_now_minor = agent.LastWeekInMinor - agent.LastWeekOutMinor
+                },
+                nation.Productivity, nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints,
                 nation.CrisisGood, crisis_until_tick = nation.CrisisGood is null ? (int?)null : nation.CrisisUntilTick,
                 pending_policy = world.Society.Policies.FirstOrDefault(policy => policy.CountryId == nation.Id)?.ActionType,
                 government_authority_available = SocietyDiplomacy.HasAuthority(world, nation)
@@ -121,7 +140,15 @@ public static class SocietyEngine
                 deposit_minor = agent.DepositMinor > 0 ? agent.DepositMinor : (long?)null,
                 keeps_savings_in_bank = resident && !agent.KeepsSavingsInBank ? false : (bool?)null,
                 work_effort = resident ? agent.WorkEffort : (int?)null, target_stock = resident ? agent.TargetStock : (int?)null,
-                quality_of_life = resident ? agent.Wellbeing : (int?)null, health = resident ? agent.Health : (int?)null,
+                quality_of_life = resident ? agent.Wellbeing : (int?)null,
+                quality_of_life_parts = resident ? SocietyEconomy.QolParts(agent, agent.NeedsMet, SocietyLabor.WorksOvertime(world, agent))
+                    .ToDictionary(part => part.Key, part => Math.Round(part.Value, 1)) : null,
+                health = resident ? agent.Health : (int?)null,
+                too_sick_to_work = resident && SocietyEconomy.TooSick(agent) ? true : (bool?)null,
+                hungry = agent.Hungry ? true : (bool?)null,
+                student_until_tick = SocietyLabor.IsStudent(agent) ? agent.StudentUntilTick : (int?)null,
+                graduated = agent.Graduated ? true : (bool?)null,
+                seeking_better_job_until_tick = agent.SeekingUntilTick >= world.Tick ? agent.SeekingUntilTick : (int?)null,
                 health_threshold = resident ? agent.HealthThreshold : (int?)null,
                 supports_leadership = resident ? agent.SupportsLeadership : (bool?)null,
                 memories = agent.Memories.TakeLast(3).Select(memory => memory.Length > 100 ? memory[..100] : memory),
@@ -131,6 +158,7 @@ public static class SocietyEngine
                 unemployed_days = agent.EmployerId is null && agent.UnemployedSinceTick >= 0 ? world.Tick - agent.UnemployedSinceTick : (int?)null
             },
             business, market,
+            plan = agent.Role == "planner" ? SocietyPlanning.View(world, nation) : null,
             bank = resident || runsBank ? SocietyBank.View(world, SocietyBank.BankOf(world, nation.Id), runsBank) : null,
             loan = loan is null ? null : new
             {
@@ -232,8 +260,7 @@ public static class SocietyEngine
         if (action.EvidenceIds.Distinct().Count() != action.EvidenceIds.Length
             || action.EvidenceIds.Any(evidence => !job.EvidenceIds.Contains(evidence)))
             return "UNKNOWN_EVIDENCE";
-        if (!job.Candidates.Any(candidate => candidate.ActionType == action.ActionType
-            && JsonNode.DeepEquals(candidate.Params, action.Params)))
+        if (!job.Candidates.Any(candidate => SocietyActions.Matches(candidate, action.ActionType, action.Params)))
             return "UNAVAILABLE_ACTION";
         if (action.ActionType == "publish" && agent.Role == "media")
             return "OK";
@@ -254,8 +281,7 @@ public static class SocietyEngine
                 && agent.CashMinor >= 100 && !SocietyDiplomacy.Relation(world, agent.CountryId, destination).AtWar
                 ? "OK" : "CURRENT_PRECONDITION_FAILED";
         }
-        if (!SocietyActions.Available(world, agent).Any(candidate => candidate.ActionType == action.ActionType
-            && JsonNode.DeepEquals(candidate.Params, action.Params)))
+        if (!SocietyActions.Available(world, agent).Any(candidate => SocietyActions.Matches(candidate, action.ActionType, action.Params)))
             return "CURRENT_PRECONDITION_FAILED";
         return "OK";
     }
@@ -339,6 +365,18 @@ public static class SocietyEngine
                 break;
             case "health_policy":
                 agent.HealthThreshold = parameters["visit_doctor_below_health"]!.GetValue<int>();
+                break;
+            case "visit_doctor":
+                SocietyEconomy.Visit(world, world.Society!.Nations[agent.CountryId], agent, agent, true);
+                break;
+            case "enroll_school":
+                SocietySchool.Enroll(world, agent, cause);
+                break;
+            case "seek_better_job":
+                agent.SeekingUntilTick = world.Tick + SocietyLabor.CourseDays;
+                break;
+            case "set_plan":
+                SocietyPlanning.Apply(world, agent, parameters, cause);
                 break;
             case "work":
                 agent.WorkEffort = parameters["effort"]!.GetValue<int>();

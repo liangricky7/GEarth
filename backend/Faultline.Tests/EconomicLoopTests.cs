@@ -28,7 +28,8 @@ public sealed class EconomicLoopTests
             var residents = world.Agents.Values.Where(agent => agent.CountryId == nation.Id && SocietyLabor.IsResident(agent)).ToArray();
             Assert.True(residents.Average(resident => resident.Health) > 70, $"{nation.Id} health");
             Assert.True(residents.Average(resident => resident.Wellbeing) > 60, $"{nation.Id} quality of life");
-            Assert.True(nation.Unemployed < residents.Length * 0.15, $"{nation.Id} unemployed {nation.Unemployed}");
+            // With no decisions, a monarchy paying no unemployment benefit idles up to a fifth of its factory workers.
+            Assert.True(nation.Unemployed < residents.Length * 0.2, $"{nation.Id} unemployed {nation.Unemployed}");
             foreach (var sector in SocietyLabor.Sectors.Where(sector => sector.Id != "freight"))
                 Assert.True(SocietyLabor.Firms(world, nation.Id, sector.Id).Any(), $"{nation.Id} has no {sector.Id} firm");
             var lastWeek = world.Events.Last(item => item.EventType == "economy_cycle" && item.EntityIds.Contains(nation.Id));

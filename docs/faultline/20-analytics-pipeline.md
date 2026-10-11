@@ -7,7 +7,7 @@ The flow is simulation → Neon → finished-run export → Databricks → cache
 Add `--analytics` to a new world run. For an isolated rule baseline:
 
 ```sh
-.venv/bin/python ops/run_stage1.py --world --storage local --analytics --population 160 --ticks 8 --interval 0
+.venv/bin/python ops/run_stage1.py --world --storage local --analytics --population 170 --ticks 8 --interval 0
 ```
 
 For an approved Neon run, use `--storage neon` and the existing private `DATABASE_URL` configuration. Analytics is off by default. Old runs without complete audit capture cannot be upgraded into complete historical decision/transaction evidence.

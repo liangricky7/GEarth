@@ -22,11 +22,34 @@ public static class SocietyFactory
     // One of each essential occupation comes first so small test worlds still have every sector staffed;
     // doctors come only from that list, so each country starts with one (two with a clinic owner, about
     // 20 per 1,000 people: the fewest that keep a clinic open at this population size).
+    // Teachers staff the state school (about 5 in 100 workers, near the real 3-6%).
     private static readonly (string Occupation, int Weight)[] JobShares =
     [
-        ("farmer", 21), ("energy_worker", 6), ("factory_worker", 25), ("service_worker", 20),
-        ("dockworker", 2), ("teacher", 9), ("soldier", 6), ("unemployed", 9)
+        ("farmer", 21), ("energy_worker", 6), ("factory_worker", 25), ("service_worker", 24),
+        ("dockworker", 2), ("teacher", 5), ("soldier", 6), ("unemployed", 9)
     ];
+
+    public static string CitizenGoal(string occupation) =>
+        $"Keep your own quality of life high (health, needs, comfort, security, free time): work as a {occupation.Replace('_', ' ')}, see a doctor when unwell, keep some savings and influence leadership according to your values.";
+
+    public static string OwnerGoal(string sector) =>
+        $"Keep your {sector} business profitable while keeping your own quality of life high.";
+
+    public const string PlannerGoal = "Set each sector's weekly output quota so residents' needs are met without shortages or waste.";
+
+    // The planned economy's planner: a resident on the public payroll who sets the monthly plan.
+    public static void AppointPlanner(World world, Nation nation, Agent person)
+    {
+        person.Role = "planner";
+        person.FormerOccupation = person.Occupation;
+        person.Occupation = "planner";
+        person.EmployerId = nation.Id + "_government";
+        person.SalaryMinor = SocietyLabor.TableWage["planner"];
+        person.UnemployedSinceTick = -1;
+        person.Goal = PlannerGoal;
+        foreach (var sector in SocietyPlanning.PlannedSectors)
+            nation.Plan.TryAdd(sector, SocietyPlanning.Demand(world, nation, sector));
+    }
 
     // A forked timeline's one change: the country switches regime overnight and starts from the new profile's default policies.
     public static void ChangeGovernment(World world, string countryId, string profileId)
@@ -42,6 +65,21 @@ public static class SocietyFactory
         nation.UnemploymentBenefitMinor = profile.Id switch { "market_democracy" => 300, "social_democracy" => 400, _ => 0 };
         foreach (var country in world.Countries.OfType<System.Text.Json.Nodes.JsonObject>().Where(item => (string?)item["id"] == countryId))
             country["government_id"] = profile.Id;
+        // A planned economy needs a planner; leaving one returns the planner to their old trade.
+        var planner = world.InCountry(countryId).FirstOrDefault(agent => agent.Role == "planner");
+        if (profile.Id == "planned_republic" && planner is null
+            && world.InCountry(countryId).Where(agent => agent.Role == "citizen").OrderBy(agent => agent.Id).FirstOrDefault() is { } appointee)
+            AppointPlanner(world, nation, appointee);
+        else if (profile.Id != "planned_republic" && planner is not null)
+        {
+            planner.Role = "citizen";
+            planner.Occupation = planner.FormerOccupation ?? "factory_worker";
+            planner.FormerOccupation = null;
+            planner.EmployerId = null;
+            planner.SalaryMinor = 0;
+            planner.UnemployedSinceTick = world.Tick;
+            planner.Goal = CitizenGoal(planner.Occupation);
+        }
         world.Emit("government_changed", "rule", [countryId], new { from = previous, to = profile.Id, reason = "timeline_fork" });
     }
 
@@ -106,15 +144,15 @@ public static class SocietyFactory
                 world.Agents.Add(resident.Id, resident);
                 return resident;
             }
-            if (!planned)
-                foreach (var firm in firms.Values.SelectMany(group => group).Take(citizensPerCountry))
+            if (!planned) // the school is state-owned everywhere
+                foreach (var firm in firms.Values.SelectMany(group => group).Where(firm => firm.Specialty != "school").Take(citizensPerCountry))
                 {
                     var sector = SocietyLabor.SectorOf(firm.Specialty!);
                     var owner = NewResident("entrepreneur", 2 * SocietyLabor.TableWage[sector.Occupation]);
                     owner.Role = "entrepreneur";
                     owner.FormerOccupation = sector.Occupation;
                     owner.OwnedBusinessId = firm.Id;
-                    owner.Goal = $"Keep your {sector.Id} business profitable while meeting your own household needs.";
+                    owner.Goal = OwnerGoal(sector.Id);
                     firm.OwnerId = owner.Id;
                 }
             foreach (var occupation in AllocateJobs(citizensPerCountry - number, planned))
@@ -128,9 +166,11 @@ public static class SocietyFactory
                     citizen.UnemployedSinceTick = 0;
                     continue;
                 }
-                citizen.EmployerId = occupation is "teacher" or "soldier" ? government.Id : NextFirm(occupation).Id;
+                citizen.EmployerId = occupation is "soldier" ? government.Id : NextFirm(occupation).Id;
                 citizen.SalaryMinor = wage;
             }
+            if (planned && world.InCountry(countryId).LastOrDefault(agent => agent.Role == "citizen" && agent.Occupation == "factory_worker") is { } appointee)
+                AppointPlanner(world, nation, appointee);
             var residentsHere = world.Agents.Values.Where(agent => agent.CountryId == countryId && SocietyLabor.IsResident(agent)).ToArray();
             AgentEndowments.AllocateCash(residentsHere, budgetMinor: residentsHere.Sum(resident => resident.CashMinor));
             foreach (var resident in residentsHere)
@@ -160,7 +200,8 @@ public static class SocietyFactory
                 }
             }
             var publicPayroll = residentsHere.Where(resident => resident.EmployerId == government.Id).Sum(worker => worker.SalaryMinor);
-            government.CashMinor = Math.Max(20000, 16 * (publicPayroll + (long)nation.WelfareMinor * citizensPerCountry));
+            government.CashMinor = Math.Max(20000, 16 * (publicPayroll
+                + (long)(nation.WelfareMinor + nation.ServiceBudgetPerResidentMinor) * citizensPerCountry));
         }
 
         AddRoutes(world);
@@ -214,7 +255,7 @@ public static class SocietyFactory
             Inventory = Goods.ToDictionary(good => good, _ => 0),
             Goal = role switch
             {
-                "citizen" => $"Work as a {occupation.Replace('_', ' ')}, meet household needs, preserve savings and influence leadership according to your values.",
+                "citizen" => CitizenGoal(occupation),
                 "business" => $"Produce and sell {occupation}, pay workers, import scarce inputs and keep the business solvent.",
                 "government" => "Meet public needs with a funded budget, follow institutional rules, manage trade and avoid costly conflict unless justified.",
                 _ => "Select factual public reports that help residents understand shortages, trade and government performance."

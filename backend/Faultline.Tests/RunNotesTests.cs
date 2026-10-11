@@ -86,12 +86,12 @@ public sealed class RunNotesTests
         for (var tick = 0; tick < 120; tick++)
             SocietyEngine.Advance(world);
         var notes = RunAnalysis.Create(world, world.Events);
-        Assert.Contains(notes.Observations, item => item.Category == "trade" && item.Text.Contains("1 arrived"));
+        Assert.Contains(notes.Observations, item => item.Category == "trade" && item.Text.Contains("1 ordered by agents"));
         Assert.Contains(notes.Observations, item => item.Category == "crisis" && item.Text.Contains("scripted food"));
         Assert.Equal(10, notes.Countries.Length);
         Assert.Contains(notes.Limits, item => item.Contains("not causal conclusions"));
         Assert.Contains("## Country outcomes", notes.Markdown);
-        Assert.Contains(world.Events.First(item => item.EventType == "shipment_delivered").EventId, notes.Markdown);
+        Assert.Contains(world.Events.Last(item => item.EventType == "shipment_delivered").EventId, notes.Markdown);
     }
 
     [Fact]

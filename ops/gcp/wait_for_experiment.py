@@ -31,12 +31,12 @@ def wait_for_boundary(directory, active, stop_service, pause=time.sleep):
 
 def main():
     def active():
-        return subprocess.run(["systemctl", "is-active", "--quiet", "faultline.service"]).returncode == 0
+        return subprocess.run(["systemctl", "is-active", "--quiet", "gearth.service"]).returncode == 0
 
     def stop_service():
-        subprocess.run(["systemctl", "stop", "faultline.service"], check=True)
+        subprocess.run(["systemctl", "stop", "gearth.service"], check=True)
 
-    wait_for_boundary(Path("/var/lib/faultline/collection"), active, stop_service)
+    wait_for_boundary(Path("/var/lib/gearth/collection"), active, stop_service)
 
 
 if __name__ == "__main__":

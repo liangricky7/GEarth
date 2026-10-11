@@ -1,0 +1,18 @@
+[Unit]
+Description=GEarth HTTPS team simulation controls
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gearth
+Group=gearth
+WorkingDirectory=/opt/gearth/current
+ExecStart=/opt/gearth/current/.venv/bin/python -m ops.gcp.control_server
+Restart=on-failure
+RestartSec=5
+UMask=0077
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

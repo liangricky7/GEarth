@@ -1,2 +1,2 @@
 # Only fixed collector operations are delegated; credentials and arbitrary commands are not.
-faultline ALL=(root) NOPASSWD: /usr/bin/systemctl start faultline.service, /usr/bin/systemctl stop faultline.service
+gearth ALL=(root) NOPASSWD: /usr/bin/systemctl start gearth.service, /usr/bin/systemctl stop gearth.service

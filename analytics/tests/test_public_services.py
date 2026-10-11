@@ -18,7 +18,7 @@ def feature_metadata():
     return {"seed": 7, "mode": "RULE", "tick_limit": 35, "initial_population": 170,
             "engine_commit": "a" * 40, "worker_capacity": 8, "tick_interval_ms": 100,
             "compute_providers": [], "government_rotation": 0,
-            "capture_contract_version": "faultline.public_services.v1",
+            "capture_contract_version": "gearth.public_services.v1",
             "features": {"public_services": "v1", "bounded_integer_choices": "v1"},
             "active_features": ["school", "public_services", "planner_quotas", "bounded_integer_choices"],
             "banking_paused": True, "economy_configuration": {

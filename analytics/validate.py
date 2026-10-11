@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check, canonical
 from .transform import typed_record
+from .contracts import contract_matches
 
 
 def file_sha256(path):
@@ -41,7 +42,7 @@ def read_manifest(path):
     manifest_path = Path(path)
     with manifest_path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
-    if manifest.get("schema_version") != FORMAT or manifest.get("record_schema_version") != "faultline.audit.v1":
+    if not contract_matches(manifest.get("schema_version"), FORMAT) or not contract_matches(manifest.get("record_schema_version"), "gearth.audit.v1"):
         raise ValueError("unsupported export schema")
     run = manifest.get("run", {})
     if not isinstance(run.get("run_id"), str) or not run["run_id"] or run.get("status") not in TERMINAL:
@@ -136,7 +137,7 @@ def iter_records(manifest_path, manifest=None):
 def validate(manifest_path):
     manifest = read_manifest(manifest_path)
     run = manifest["run"]
-    with tempfile.TemporaryDirectory(prefix="faultline-validate-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="gearth-validate-") as temporary:
         db = sqlite3.connect(str(Path(temporary) / "coverage.sqlite"))
         db.executescript("""PRAGMA journal_mode=OFF;
             CREATE TABLE opening(id TEXT PRIMARY KEY, kind TEXT);

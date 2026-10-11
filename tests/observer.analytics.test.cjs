@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
-const root = 'backend/Faultline.Api/wwwroot/';
+const root = 'backend/GEarth.Api/wwwroot/';
 const html = readFileSync(root + 'index.html', 'utf8');
 // Isolate rendering from polling; the existing observer tests cover navigation races.
 const script = readFileSync(root + 'observer.js', 'utf8').replace('refresh();\nsetInterval(refresh, 1500);', '');
@@ -12,7 +12,7 @@ function view() {
   return dom;
 }
 function report() {
-  return { schema_version: 'faultline.analytics-report.v1', run_id: 'done', through_revision: 9,
+  return { schema_version: 'gearth.analytics-report.v1', run_id: 'done', through_revision: 9,
     through_sequence: 21, analysis_version: '1.0.0', source_manifest_sha256: 'a'.repeat(64),
     generated_at: '2026-10-10T12:00:00Z', completeness: { run_status: 'stopped', run_complete: false,
       snapshot_complete: true, missing_data: ['tokens'], metadata_unknown: ['hardware'], synthetic: true },

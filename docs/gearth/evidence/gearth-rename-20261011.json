@@ -1,0 +1,148 @@
+{
+  "project": "GEarth",
+  "date": "2026-10-11",
+  "source_head": "ede282fc3989ff27b0fc3af9d031a67a1a3c6854",
+  "tests": {
+    "python_passed": 231,
+    "csharp_passed": 156,
+    "csharp_skipped_paused_banking": 4,
+    "annual_calibration": "passed within full suite",
+    "browser_passed": 11,
+    "browser_skipped_live_run": 1
+  },
+  "neon": {
+    "project": "hidden-night-95238449",
+    "verification_branch": "br-wild-base-b5t23nkj",
+    "tables": 9,
+    "total_rows": 109832,
+    "before": [
+      {
+        "name": "analytics_reports",
+        "object_id": "90410",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "checkpoint_parts",
+        "object_id": "90370",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "checkpoints",
+        "object_id": "81920",
+        "rows": "108",
+        "fingerprint": "9015890404728534026"
+      },
+      {
+        "name": "run_audit",
+        "object_id": "90381",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "run_audit_commits",
+        "object_id": "90393",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "run_notes",
+        "object_id": "49211",
+        "rows": "21",
+        "fingerprint": "5758433367241268920"
+      },
+      {
+        "name": "stage1_events",
+        "object_id": "24589",
+        "rows": "109673",
+        "fingerprint": "5243548455121801489"
+      },
+      {
+        "name": "stage1_runs",
+        "object_id": "24577",
+        "rows": "22",
+        "fingerprint": "3400408080442226335"
+      },
+      {
+        "name": "timelines",
+        "object_id": "81946",
+        "rows": "8",
+        "fingerprint": "-4089039269465758430"
+      }
+    ],
+    "after": [
+      {
+        "name": "analytics_reports",
+        "object_id": "90410",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "checkpoint_parts",
+        "object_id": "90370",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "checkpoints",
+        "object_id": "81920",
+        "rows": "108",
+        "fingerprint": "9015890404728534026"
+      },
+      {
+        "name": "run_audit",
+        "object_id": "90381",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "run_audit_commits",
+        "object_id": "90393",
+        "rows": "0",
+        "fingerprint": "0"
+      },
+      {
+        "name": "run_notes",
+        "object_id": "49211",
+        "rows": "21",
+        "fingerprint": "5758433367241268920"
+      },
+      {
+        "name": "stage1_events",
+        "object_id": "24589",
+        "rows": "109673",
+        "fingerprint": "5243548455121801489"
+      },
+      {
+        "name": "stage1_runs",
+        "object_id": "24577",
+        "rows": "22",
+        "fingerprint": "3400408080442226335"
+      },
+      {
+        "name": "timelines",
+        "object_id": "81946",
+        "rows": "8",
+        "fingerprint": "-4089039269465758430"
+      }
+    ],
+    "preserved": true,
+    "production_schema_cutover": "pending coordinated app deployment"
+  },
+  "databricks": {
+    "tables": 13,
+    "total_rows": 73554,
+    "views": 6,
+    "verification_run": 597900744613688,
+    "preserved": true,
+    "schemas": [
+      "workspace.gearth_bronze",
+      "workspace.gearth_silver",
+      "workspace.gearth_gold"
+    ],
+    "credential_profile": "gearth"
+  },
+  "historical_evidence": "Previous recorded payloads, manifests and evidence remain byte-for-byte unchanged.",
+  "capacity": "50,000-agent annual workload unqualified"
+}

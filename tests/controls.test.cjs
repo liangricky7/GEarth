@@ -2,7 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { JSDOM } = require("jsdom");
-const root = "backend/Faultline.Api/wwwroot/";
+const root = "backend/GEarth.Api/wwwroot/";
 async function until(predicate) {
   for (let i=0;i<100;i++) { if(predicate()) return; await new Promise(resolve=>setTimeout(resolve,5)); }
   throw new Error("Controls did not settle");

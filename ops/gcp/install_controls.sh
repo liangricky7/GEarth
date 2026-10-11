@@ -4,16 +4,16 @@ set -euo pipefail
 hostname=${1:?HTTPS hostname required}
 private_config=${2:?private control configuration required}
 if [[ ! "$hostname" =~ ^[a-z0-9][a-z0-9.-]+$ ]]; then exit 2; fi
-target=$(readlink -f /opt/faultline/current)
-grep -q 'new SimulationPause(' "$target/backend/Faultline.Api/Coordinator.cs"
+target=$(readlink -f /opt/gearth/current)
+grep -q 'new SimulationPause(' "$target/backend/GEarth.Api/Coordinator.cs"
 test -f "/etc/letsencrypt/live/$hostname/fullchain.pem"
-mkdir -p /var/lib/faultline/control
-chown faultline:faultline /var/lib/faultline/control
-chmod 700 /var/lib/faultline/control
-install -m 600 -o faultline -g faultline "$private_config" /var/lib/faultline/control.env
+mkdir -p /var/lib/gearth/control
+chown gearth:gearth /var/lib/gearth/control
+chmod 700 /var/lib/gearth/control
+install -m 600 -o gearth -g gearth "$private_config" /var/lib/gearth/control.env
 visudo -cf "$target/ops/gcp/control-sudoers"
-install -m 440 "$target/ops/gcp/control-sudoers" /etc/sudoers.d/faultline-control
-install -m 644 "$target/ops/gcp/faultline-control.service" /etc/systemd/system/faultline-control.service
+install -m 440 "$target/ops/gcp/control-sudoers" /etc/sudoers.d/gearth-control
+install -m 644 "$target/ops/gcp/gearth-control.service" /etc/systemd/system/gearth-control.service
 # Static assets stay available while Reset restarts the engine.
 cat > /etc/nginx/sites-available/default <<EOF
 server {
@@ -47,7 +47,7 @@ server {
     }
     location / {
         limit_except GET HEAD { deny all; }
-        root /opt/faultline/current/backend/Faultline.Api/wwwroot;
+        root /opt/gearth/current/backend/GEarth.Api/wwwroot;
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control no-cache;
     }
@@ -55,10 +55,10 @@ server {
 EOF
 nginx -t
 mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-printf '#!/bin/sh\n/usr/bin/systemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/faultline-nginx
-chmod 755 /etc/letsencrypt/renewal-hooks/deploy/faultline-nginx
+printf '#!/bin/sh\n/usr/bin/systemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/gearth-nginx
+chmod 755 /etc/letsencrypt/renewal-hooks/deploy/gearth-nginx
 systemctl daemon-reload
-systemctl enable --now faultline-control.service certbot.timer
+systemctl enable --now gearth-control.service certbot.timer
 systemctl reload nginx
 rm -f "$private_config"
 echo 'HTTPS team controls installed.'

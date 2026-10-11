@@ -43,7 +43,7 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
     daily_counts = {"agent_snapshots": 0, "escrow_snapshots": 0, "mismatches": 0, "unknown_openings": 0}
     daily_examples = []
     daily_evidence = []
-    with tempfile.TemporaryDirectory(prefix="faultline-analysis-", dir=work_directory) as temp:
+    with tempfile.TemporaryDirectory(prefix="gearth-analysis-", dir=work_directory) as temp:
         db = sqlite3.connect(str(Path(temp) / "checks.sqlite"))
         db.executescript("""
         PRAGMA journal_mode=OFF;
@@ -241,7 +241,7 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
         missing.append("opening_account_balances")
     if missing_context:
         missing.append("decision_context")
-    return {"schema_version": "faultline.analytics-report.v1", "analysis_version": ANALYSIS_VERSION,
+    return {"schema_version": "gearth.analytics-report.v1", "analysis_version": ANALYSIS_VERSION,
             "run_id": run["run_id"], "through_revision": run["through_revision"], "through_sequence": run["through_sequence"],
             "source_manifest_sha256": file_sha256(manifest_path), "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "completeness": {"snapshot_complete": True, "run_complete": run["status"] == "completed", "run_status": run["status"],

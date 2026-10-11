@@ -152,8 +152,8 @@ async function checkInBrowser(fixture) {
 
 async function main() {
   const root = path.resolve(__dirname, "..");
-  const web = path.join(root, "backend/Faultline.Api/wwwroot");
-  const fixture = fs.readFileSync(path.join(root, "docs/faultline/fixtures/stage2-api-sample.json"), "utf8");
+  const web = path.join(root, "backend/GEarth.Api/wwwroot");
+  const fixture = fs.readFileSync(path.join(root, "docs/gearth/fixtures/stage2-api-sample.json"), "utf8");
   const html = fs.readFileSync(path.join(web, "index.html"), "utf8").replace(
     '<script src="/observer.js" defer></script>',
     `<script>(${checkInBrowser.toString()})(${fixture.replaceAll("<", "\\u003c")});</script>`,
@@ -171,7 +171,7 @@ async function main() {
     response.end(files[request.url] ? fs.readFileSync(path.join(web, request.url)) : html);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "faultline-browser-"));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "gearth-browser-"));
   const artifacts = path.join(root, "artifacts/local");
   fs.mkdirSync(artifacts, { recursive: true });
   try {

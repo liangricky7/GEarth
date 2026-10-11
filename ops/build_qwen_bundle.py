@@ -25,7 +25,7 @@ def notebook():
     requirements = (ROOT / "ops/amd-requirements.txt").read_text()
     install = f"""import json, os, secrets, subprocess, sys, time
 from pathlib import Path
-setup_dir = Path('/workspace/faultline-amd')
+setup_dir = Path('/workspace/gearth-amd')
 setup_dir.mkdir(exist_ok=True)
 (setup_dir / 'amd_model_server.py').write_text({server!r})
 (setup_dir / 'qwen-models.json').write_text({manifest!r})
@@ -127,7 +127,7 @@ address = urlsplit(AMD_ORIGIN)
 if address.scheme != 'https' or not address.hostname or not address.hostname.endswith('.radeon.firstdg.ai') or address.username or address.password or address.query or address.fragment or address.path not in ('', '/'):
     raise ValueError('Set AMD_ORIGIN to the HTTPS tunnel origin')
 values = {'AMD_ENABLED': 'true', 'AMD_MODEL': 'Qwen/Qwen3-8B', 'AMD_DECISION_GROUP': 'institution', 'AMD_CAPACITY': '1', 'AMD_BASE_URL': AMD_ORIGIN.rstrip('/') + '/v1', 'AMD_API_KEY': api_key, 'AMD_CITIZEN_ENABLED': 'true', 'AMD_CITIZEN_MODEL': 'Qwen/Qwen3-4B', 'AMD_CITIZEN_DECISION_GROUP': 'citizen', 'AMD_CITIZEN_CAPACITY': '1', 'AMD_CITIZEN_BASE_URL': AMD_ORIGIN.rstrip('/') + '/v1', 'AMD_CITIZEN_API_KEY': api_key}
-connection_path = Path.cwd() / 'faultline-amd-connection.env'
+connection_path = Path.cwd() / 'gearth-amd-connection.env'
 descriptor = os.open(connection_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
 with os.fdopen(descriptor, 'w') as handle:
     handle.write(''.join(key + '=' + value + '\\n' for key, value in values.items()))
@@ -138,13 +138,13 @@ print('Private connection file created; do not print its contents')
     cells = [
         cell(
             "markdown",
-            "# Faultline: the same Qwen3 model pair on AMD\n\nRun cells in order. This preserves ROCm PyTorch and uses no sudo. It replaces only the model server in `/workspace/faultline-amd` on port 8180. Models download from Hugging Face at the same revisions as both Sparks.\n",
+            "# GEarth: the same Qwen3 model pair on AMD\n\nRun cells in order. This preserves ROCm PyTorch and uses no sudo. It replaces only the model server in `/workspace/gearth-amd` on port 8180. Models download from Hugging Face at the same revisions as both Sparks.\n",
         ),
         cell("code", install),
         cell("code", status),
         cell(
             "markdown",
-            "## Start both models\n\nThis stops the prior Faultline model server before loading the new pair. GPU loading needs at least 28 GiB free memory and can take several minutes.\n",
+            "## Start both models\n\nThis stops the prior GEarth model server before loading the new pair. GPU loading needs at least 28 GiB free memory and can take several minutes.\n",
         ),
         cell("code", start),
         cell("code", health),
@@ -176,17 +176,17 @@ print('Private connection file created; do not print its contents')
 def build(destination):
     destination.mkdir(parents=True, exist_ok=True)
     prepared = json.dumps(notebook(), indent=2) + "\n"
-    (ROOT / "ops/faultline-qwen-amd.ipynb").write_text(prepared)
+    (ROOT / "ops/gearth-qwen-amd.ipynb").write_text(prepared)
     for name in (
         "spark_qwen.py",
         "qwen-models.json",
         "amd_model_server.py",
         "amd-requirements.txt",
-        "faultline-qwen-amd.ipynb",
+        "gearth-qwen-amd.ipynb",
     ):
         shutil.copy2(ROOT / "ops" / name, destination / name)
     shutil.copy2(
-        ROOT / "docs/faultline/18-all-node-qwen-setup.md", destination / "README.md"
+        ROOT / "docs/gearth/18-all-node-qwen-setup.md", destination / "README.md"
     )
     archive = shutil.make_archive(str(destination), "zip", destination)
     print(f"Setup bundle: {archive}")
@@ -195,6 +195,6 @@ def build(destination):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--output", type=Path, default=Path.home() / "Downloads/faultline-qwen-setup"
+        "--output", type=Path, default=Path.home() / "Downloads/gearth-qwen-setup"
     )
     build(parser.parse_args().output)

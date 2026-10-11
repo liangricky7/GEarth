@@ -1,0 +1,30 @@
+[Unit]
+Description=GEarth continuous Spark simulation experiments
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=gearth
+Group=gearth
+WorkingDirectory=/opt/gearth/current
+Environment=DOTNET_ROOT=/opt/dotnet
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=WORKER_KEEPALIVE_CONNECTIONS=0
+Environment=GEARTH_CONTROL_DIRECTORY=/var/lib/gearth/control
+Environment=PATH=/opt/dotnet:/opt/gearth/current/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStartPre=/opt/gearth/current/.venv/bin/python ops/gcp/check_compute.py
+ExecStartPre=/usr/bin/rm -f /var/lib/gearth/control/paused
+ExecStart=/opt/gearth/current/.venv/bin/python ops/run_collection.py --live --compute auto --storage neon --skip-build --ticks 365 --population 1100
+Restart=on-failure
+RestartSec=60
+TimeoutStopSec=120
+# Launcher children have separate process groups; systemd also catches orphaned children.
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -35,7 +35,7 @@ def check_run(base_url, require_model):
                 break
 
         event_schema = json.loads(
-            (ROOT / "docs/faultline/contracts/event.schema.json").read_text()
+            (ROOT / "docs/gearth/contracts/event.schema.json").read_text()
         )
         event_validator = jsonschema.Draft202012Validator(event_schema)
         known_ids = set()
@@ -167,7 +167,7 @@ def verify_neon(run_id, snapshot, events):
         "Neon-Array-Mode": "true",
     }
     query = {
-        "query": "SELECT state, (SELECT count(*) FROM faultline.stage1_events WHERE run_id=$1) FROM faultline.stage1_runs WHERE run_id=$1",
+        "query": "SELECT state, (SELECT count(*) FROM gearth.stage1_events WHERE run_id=$1) FROM gearth.stage1_runs WHERE run_id=$1",
         "params": [run_id],
     }
 

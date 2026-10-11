@@ -105,9 +105,9 @@ def test_expired_and_tampered_sessions_are_rejected_and_login_is_rate_limited(co
 
 def test_control_hooks_are_idempotent_and_refuse_unrecognized_engine_layouts():
     root = Path(__file__).resolve().parents[2]
-    coordinator = (root / "backend/Faultline.Api/Coordinator.cs").read_text()
+    coordinator = (root / "backend/GEarth.Api/Coordinator.cs").read_text()
     assert pause_hooks(coordinator) == coordinator
-    html = (root / "backend/Faultline.Api/wwwroot/index.html").read_text()
+    html = (root / "backend/GEarth.Api/wwwroot/index.html").read_text()
     assert control_panel(html) == html
     with pytest.raises(ValueError):
         pause_hooks("unrecognized collecting engine")

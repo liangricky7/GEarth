@@ -3,11 +3,11 @@ const { readFileSync } = require("node:fs");
 const { test } = require("node:test");
 const { JSDOM } = require("jsdom");
 
-const root = "backend/Faultline.Api/wwwroot/";
+const root = "backend/GEarth.Api/wwwroot/";
 const html = readFileSync(root + "index.html", "utf8");
 const script = readFileSync(root + "observer.js", "utf8");
 const sample = JSON.parse(
-  readFileSync("docs/faultline/fixtures/stage2-api-sample.json", "utf8"),
+  readFileSync("docs/gearth/fixtures/stage2-api-sample.json", "utf8"),
 );
 
 function fixture(id, tick = 40) {
@@ -279,10 +279,10 @@ test("new search and page requests replace in-flight requests", async (t) => {
 test(
   "recorded live and stopped runs render and switch through the real read API",
   {
-    skip: !process.env.FAULTLINE_OBSERVER_URL,
+    skip: !process.env.GEARTH_OBSERVER_URL,
   },
   async (t) => {
-    const base = process.env.FAULTLINE_OBSERVER_URL.replace(/\/$/, "");
+    const base = process.env.GEARTH_OBSERVER_URL.replace(/\/$/, "");
     const ids = [
       "world_20261010_125750_6d3812",
       "world_20261010_133526_7c181f",

@@ -29,7 +29,7 @@ def read_checkpoint(run_id, storage):
             endpoint,
             headers=headers,
             json={
-                "query": "SELECT state, (SELECT count(*) FROM faultline.stage1_events WHERE run_id=$1) FROM faultline.stage1_runs WHERE run_id=$1",
+                "query": "SELECT state, (SELECT count(*) FROM gearth.stage1_events WHERE run_id=$1) FROM gearth.stage1_runs WHERE run_id=$1",
                 "params": [run_id],
             },
         )
@@ -62,7 +62,7 @@ def check_run(base_url, require_model=False, require_full_coverage=False, reques
             assert page
             events.extend(page)
         schema = json.loads(
-            (ROOT / "docs/faultline/contracts/event.v2.schema.json").read_text()
+            (ROOT / "docs/gearth/contracts/event.v2.schema.json").read_text()
         )
         validator = jsonschema.Draft202012Validator(schema)
         known_ids = set()

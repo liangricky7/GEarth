@@ -97,21 +97,21 @@ def main():
 
     def start(ticks, interval, log):
         environment = os.environ.copy()
-        for name in ("DATABASE_URL", "DATABASE_DIRECT_URL", "FAULTLINE_SAVED_RUN_ID"):
+        for name in ("DATABASE_URL", "DATABASE_DIRECT_URL", "GEARTH_SAVED_RUN_ID"):
             environment.pop(name, None)
         environment.update(
             {
-                "FAULTLINE_PORT": "5081",
-                "FAULTLINE_STORAGE": "local",
-                "FAULTLINE_LIVE": "true",
-                "FAULTLINE_WORLD": "true",
-                "FAULTLINE_POPULATION": "400",
-                "FAULTLINE_CAPACITY": "3",
-                "FAULTLINE_TICKS": str(ticks),
-                "FAULTLINE_INTERVAL_MS": str(interval),
+                "GEARTH_PORT": "5081",
+                "GEARTH_STORAGE": "local",
+                "GEARTH_LIVE": "true",
+                "GEARTH_WORLD": "true",
+                "GEARTH_POPULATION": "400",
+                "GEARTH_CAPACITY": "3",
+                "GEARTH_TICKS": str(ticks),
+                "GEARTH_INTERVAL_MS": str(interval),
                 "WORKER_TOKEN": token,
-                "ASPNETCORE_CONTENTROOT": str(ROOT / "backend/Faultline.Api"),
-                "FAULTLINE_COMPUTE_PROVIDERS": json.dumps(
+                "ASPNETCORE_CONTENTROOT": str(ROOT / "backend/GEarth.Api"),
+                "GEARTH_COMPUTE_PROVIDERS": json.dumps(
                     [
                         {"name": name, "model": "scheduler-fixture", "capacity": 1}
                         for name in ("spark_a", "spark_b", "amd")
@@ -122,7 +122,7 @@ def main():
         process = subprocess.Popen(
             [
                 "dotnet",
-                str(ROOT / "backend/Faultline.Api/bin/Debug/net10.0/Faultline.Api.dll"),
+                str(ROOT / "backend/GEarth.Api/bin/Debug/net10.0/GEarth.Api.dll"),
             ],
             cwd=ROOT,
             env=environment,
@@ -204,7 +204,7 @@ def main():
                 "automatic_notes": True,
             }
         assert state["max_active"] <= 3
-        path = ROOT / "docs/faultline/evidence/multi-compute-scheduler.json"
+        path = ROOT / "docs/gearth/evidence/multi-compute-scheduler.json"
         path.write_text(json.dumps(evidence, indent=2) + "\n")
         print(json.dumps(evidence, indent=2))
     finally:

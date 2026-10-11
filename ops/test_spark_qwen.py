@@ -149,7 +149,7 @@ def test_rollback_restores_original_launch_and_removes_stale_connection(
     (tmp_path / "rollback.json").write_text(json.dumps({"container_id": "original"}))
     (tmp_path / "connection.env").write_text("stale")
     original = {"Id": "original", "State": {"Running": False}}
-    owned = {"Config": {"Labels": {"io.faultline.workload": "qwen-roles"}}}
+    owned = {"Config": {"Labels": {"io.gearth.workload": "qwen-roles"}}}
     monkeypatch.setattr(
         spark_qwen, "inspect", lambda name: original if name == "vllm_node" else owned
     )
@@ -217,7 +217,7 @@ def test_launch_failure_restores_original_server(tmp_path, monkeypatch):
 
 def test_fresh_rollback_only_removes_owned_replacements(tmp_path, monkeypatch):
     (tmp_path / "rollback.json").write_text(json.dumps({"container_id": None}))
-    owned = {"Config": {"Labels": {"io.faultline.workload": "qwen-roles"}}}
+    owned = {"Config": {"Labels": {"io.gearth.workload": "qwen-roles"}}}
     monkeypatch.setattr(
         spark_qwen, "inspect", lambda name: None if name == "vllm_node" else owned
     )
@@ -246,7 +246,7 @@ def partial_deployment(tmp_path, monkeypatch):
         "Image": "sha256:pinned",
         "State": {"Running": True},
         "Config": {
-            "Labels": {"io.faultline.workload": "qwen-roles"},
+            "Labels": {"io.gearth.workload": "qwen-roles"},
             "Entrypoint": ["vllm"],
             "Cmd": arguments[arguments.index("sha256:pinned") + 1 :],
             "Env": ["VLLM_API_KEY=institution-private-key"],
@@ -262,7 +262,7 @@ def partial_deployment(tmp_path, monkeypatch):
         ],
     }
     original = {"Id": "original", "State": {"Running": True}}
-    containers = {"vllm_node": original, "faultline-qwen-institution": institution}
+    containers = {"vllm_node": original, "gearth-qwen-institution": institution}
     monkeypatch.setattr(spark_qwen, "inspect", lambda name: containers.get(name))
 
     class AvailablePort:
@@ -293,7 +293,7 @@ def test_resume_keeps_matching_running_model_and_starts_missing_citizen(
     spark_qwen.resume(state, owner)
     assert calls[0] == ("stop", "vllm_node")
     assert len(calls) == 2
-    assert calls[1][calls[1].index("--name") + 1] == "faultline-qwen-citizen"
+    assert calls[1][calls[1].index("--name") + 1] == "gearth-qwen-citizen"
     assert verified == ["institution", "citizen"]
     assert (state / "connection.env").stat().st_mode & 0o777 == 0o600
     assert "private-key" not in capsys.readouterr().out
@@ -306,7 +306,7 @@ def test_resume_rejects_mismatched_partial_deployment_before_mutations(
     partial_deployment, monkeypatch, mismatch
 ):
     state, owner, containers = partial_deployment
-    container = containers["faultline-qwen-institution"]
+    container = containers["gearth-qwen-institution"]
     if mismatch == "owner":
         container["Config"]["Labels"] = {}
     elif mismatch == "image":
@@ -410,8 +410,8 @@ def recreated_original(tmp_path, monkeypatch):
     }
     containers = {
         "vllm_node": original,
-        "faultline-qwen-institution": {
-            "Config": {"Labels": {"io.faultline.workload": "qwen-roles"}}
+        "gearth-qwen-institution": {
+            "Config": {"Labels": {"io.gearth.workload": "qwen-roles"}}
         },
     }
     monkeypatch.setattr(spark_qwen, "inspect", lambda name: containers.get(name))
@@ -466,7 +466,7 @@ def test_recovery_rejects_unverified_original_before_state_changes(
     elif failure == "workload":
         monkeypatch.setattr(spark_qwen, "original_workload_running", lambda: False)
     elif failure == "owner":
-        containers["faultline-qwen-institution"]["Config"]["Labels"] = {}
+        containers["gearth-qwen-institution"]["Config"]["Labels"] = {}
     else:
 
         def preflight(*args):
@@ -506,7 +506,7 @@ def test_recovery_launch_rejects_container_changed_after_cleanup(
 @pytest.fixture
 def reinstall_state(recreated_original, monkeypatch):
     state, owner, containers, calls = recreated_original
-    containers["faultline-qwen-institution"]["Id"] = "failed-qwen-id"
+    containers["gearth-qwen-institution"]["Id"] = "failed-qwen-id"
     for role, *_ in spark_qwen.MODELS:
         (state / f"{role}.env").write_text(f"VLLM_API_KEY={role}-private-key\n")
     events = []
@@ -565,7 +565,7 @@ def test_reinstall_preserves_unknown_containers_and_resumes_launcher_on_error(
 ):
     state, owner, containers, calls, events = reinstall_state
     if failure == "foreign":
-        containers["faultline-qwen-citizen"] = {"Config": {"Labels": {}}}
+        containers["gearth-qwen-citizen"] = {"Config": {"Labels": {}}}
     elif failure == "image":
         containers["vllm_node"]["Config"]["Image"] = "other-workload"
     else:

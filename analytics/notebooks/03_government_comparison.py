@@ -8,9 +8,9 @@
 
 # COMMAND ----------
 from pyspark.sql import functions as F, Window
-runs = spark.table("workspace.faultline_silver.runs")
-receipts = spark.table("workspace.faultline_gold.import_receipts")
-countries = spark.table("workspace.faultline_silver.country_daily")
+runs = spark.table("workspace.gearth_silver.runs")
+receipts = spark.table("workspace.gearth_gold.import_receipts")
+countries = spark.table("workspace.gearth_silver.country_daily")
 ranked = countries.withColumn("rank", F.row_number().over(Window.partitionBy("run_id", "country_id").orderBy(F.col("sequence").desc())))
 final = ranked.where("rank = 1").drop("rank")
 facts = final.join(runs.select("run_id", "seed", "mode", "government_rotation", "tick_limit", "population", "engine_commit", "condition_signature", "conditions_known", "conditions_unknown_json", "features_json", "active_features_json", "banking_paused", "economy_configuration_json", F.col("payload_json").alias("run_payload")), "run_id").join(receipts.select("run_id", "run_complete", "snapshot_complete", "source_manifest_sha256"), "run_id")
@@ -38,12 +38,12 @@ else:
         F.avg("employment_rate").alias("employment_rate_mean"), F.avg("unmet_needs").alias("unmet_needs_mean"),
         F.avg("gini").alias("gini_mean"), F.avg("treasury_minor").alias("treasury_mean_minor"))
     display(comparison)
-    comparison.createOrReplaceTempView("faultline_government_comparison")
+    comparison.createOrReplaceTempView("gearth_government_comparison")
 
 # COMMAND ----------
 display(facts.select("run_id", "country_id", "government_type", "run_complete", "features_json", "banking_paused", "students", "graduates", "job_seekers", "hungry_residents", "too_sick_residents", "average_health", "average_wellbeing", "output_lost_to_hunger_pct", "plan_json", "qol_parts_json"))
 
 # COMMAND ----------
 # Money stays integer at transfer level and is counted once per actual leg.
-transfers = spark.table("workspace.faultline_silver.transactions")
+transfers = spark.table("workspace.gearth_silver.transactions")
 display(transfers.groupBy("run_id", "transfer_kind").agg(F.count("*").alias("transfer_legs"), F.sum("amount_minor").alias("amount_minor")))

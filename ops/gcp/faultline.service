@@ -13,7 +13,7 @@ Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
 Environment=WORKER_KEEPALIVE_CONNECTIONS=0
 Environment=PATH=/opt/dotnet:/opt/faultline/current/.venv/bin:/usr/local/bin:/usr/bin:/bin
 ExecStartPre=/opt/faultline/current/.venv/bin/python ops/gcp/check_compute.py
-ExecStart=/opt/faultline/current/.venv/bin/python ops/run_collection.py --live --compute spark --storage neon --skip-build --ticks 365 --population 1100
+ExecStart=/opt/faultline/current/.venv/bin/python ops/run_collection.py --live --compute auto --storage neon --skip-build --ticks 365 --population 1100
 Restart=on-failure
 RestartSec=60
 TimeoutStopSec=120

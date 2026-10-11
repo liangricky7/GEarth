@@ -14,12 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
-async def check(output):
+async def check(output, config_path=None):
     from agents import worker
     from agents.providers import ProviderPool, load_providers
 
     configuration = {
-        **dotenv_values(ROOT / ".env.local"),
+        **dotenv_values(config_path or ROOT / ".env.local", interpolate=False),
         "SPARK_A_ENABLED": "false",
         "SPARK_B_ENABLED": "false",
         "SPARK_A_CITIZEN_ENABLED": "false",
@@ -100,9 +100,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output", type=Path, default=ROOT / ".data/amd-connection.json"
     )
+    parser.add_argument("--config", type=Path, default=ROOT / ".env.local")
     arguments = parser.parse_args()
     try:
-        asyncio.run(check(arguments.output))
+        asyncio.run(check(arguments.output, arguments.config))
     except (ValueError, RuntimeError, httpx.HTTPError, KeyError, TypeError) as error:
         print(
             f"AMD check failed: {type(error).__name__}. Check configuration and cloud server readiness.",

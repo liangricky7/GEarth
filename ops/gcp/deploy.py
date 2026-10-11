@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT))
 from ops.compute_config import compute_environment
 
 
-def bundle_source(root, destination):
+def bundle_source(root, destination, base_archive=None):
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode().split("\0")
     additions = ["ops/run_collection.py", "ops/test_run_collection.py", "docs/faultline/22-google-cloud-deployment.md"]
     additions += [str(path.relative_to(root)) for path in (root / "ops/gcp").glob("*") if path.is_file()]
@@ -28,6 +28,32 @@ def bundle_source(root, destination):
     digest = hashlib.sha256()
     # Read each file once: the recorded hash describes exactly what goes into the archive.
     files = [(name, (root / name).read_bytes()) for name in names]
+    base_source = None
+    if base_archive:
+        # Operational changes can preserve the exact engine already collecting data.
+        # Refuse archives whose recorded contents do not match their source hash.
+        with tarfile.open(base_archive) as archive:
+            base_source = json.load(archive.extractfile(".deployment.json"))
+            base_files = {}
+            for entry in archive.getmembers():
+                if entry.name == ".deployment.json":
+                    continue
+                path = Path(entry.name)
+                if (not entry.isfile() or path.is_absolute() or ".." in path.parts or entry.name.startswith(".env")
+                        or any(part in {".git", ".data", ".logs", ".venv", "node_modules", "bin", "obj", "__pycache__"} for part in path.parts)):
+                    raise ValueError("Unsafe base source archive")
+                if entry.name in base_files:
+                    raise ValueError("Repeated base source archive path")
+                base_files[entry.name] = archive.extractfile(entry).read()
+        original = hashlib.sha256()
+        for name, content in sorted(base_files.items()):
+            original.update(name.encode() + b"\0" + hashlib.sha256(content).digest())
+        if original.hexdigest() != base_source["source_sha256"]:
+            raise ValueError("Base source archive hash mismatch")
+        for name, content in files:
+            if name.startswith("ops/gcp/") or name in {"ops/check_amd.py", "ops/test_run_collection.py", "docs/faultline/22-google-cloud-deployment.md"}:
+                base_files[name] = content
+        files = sorted(base_files.items())
     for name, content in files:
         digest.update(name.encode() + b"\0" + hashlib.sha256(content).digest())
     source = {
@@ -35,6 +61,9 @@ def bundle_source(root, destination):
         "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root)),
         "source_sha256": digest.hexdigest(),
     }
+    if base_source:
+        source.update({"operations_commit": source["commit"], "commit": base_source["commit"],
+                       "dirty": True, "base_source_sha256": base_source["source_sha256"]})
     with tarfile.open(destination, "w:gz") as archive:
         for name, content in files + [(".deployment.json", json.dumps(source, indent=2).encode())]:
             info = tarfile.TarInfo(name)
@@ -57,9 +86,16 @@ def cloud_config(config):
     for prefix, port in [("SPARK_A", 18001), ("SPARK_A_CITIZEN", 18003)]:
         result[prefix + "_BASE_URL"] = f"http://127.0.0.1:{port}/v1"
         result.pop(prefix + "_TAILSCALE_HTTP_HOST", None)
+    for prefix in ("AMD", "AMD_CITIZEN"):
+        enabled = config.get(prefix + "_ENABLED", "false").lower() == "true"
+        result[prefix + "_ENABLED"] = str(enabled).lower()
+        if enabled:
+            for suffix in ("_BASE_URL", "_MODEL", "_API_KEY", "_CAPACITY", "_DECISION_GROUP"):
+                if config.get(prefix + suffix) is not None:
+                    result[prefix + suffix] = config[prefix + suffix]
     # Spark B stays on its existing pinned Tailscale relay, reached directly
     # from the VM. Spark A's reverse ports currently depend on Jayden's laptop.
-    compute_environment(result, "spark")
+    compute_environment(result, "auto")
     return result
 
 
@@ -78,6 +114,10 @@ def main():
     parser.add_argument("--zone", default="us-central1-a")
     parser.add_argument("--instance", default="faultline-sim")
     parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--config", type=Path, default=ROOT / ".env.local")
+    parser.add_argument("--base-archive", type=Path, help="Preserve this engine release; replace cloud operations only")
+    parser.add_argument("--after-current", action="store_true", help="Wait for the active experiment before switching releases")
+    parser.add_argument("--start", action="store_true", help="Start the verified collector after installation")
     options = parser.parse_args()
     directory = ROOT / ".data/gcp"
     directory.mkdir(parents=True, exist_ok=True)
@@ -86,8 +126,8 @@ def main():
     known_hosts = directory / "spark-known-hosts"
     keys = subprocess.check_output(["ssh-keygen", "-F", "100.70.23.23", "-f", str(Path.home() / ".ssh/known_hosts")])
     known_hosts.write_bytes(keys)
-    source = bundle_source(ROOT, archive)
-    write_config(private, cloud_config(dotenv_values(ROOT / ".env.local", interpolate=False)))
+    source = bundle_source(ROOT, archive, options.base_archive)
+    write_config(private, cloud_config(dotenv_values(options.config, interpolate=False)))
     print("Prepared source", source["source_sha256"], flush=True)
     if options.prepare_only:
         return
@@ -96,6 +136,15 @@ def main():
     subprocess.run(["gcloud", "compute", "scp", str(archive), str(private), str(known_hosts),
                     str(ROOT / "ops/gcp/install_release.sh"), options.instance + ":~/", *common], check=True)
     command = "sudo bash ~/install_release.sh ~/source.tar.gz ~/config.env " + source["source_sha256"]
+    if options.after_current:
+        # The VM owns the wait, even if the uploading laptop disconnects.
+        command = ("sudo systemd-run --unit=faultline-deploy-" + source["source_sha256"][:12]
+                   + " --wait --collect /bin/bash ~/install_release.sh ~/source.tar.gz ~/config.env "
+                   + source["source_sha256"] + " after-current")
+    if options.start:
+        if not options.after_current:
+            command += " immediate"
+        command += " true"
     subprocess.run(["gcloud", "compute", "ssh", options.instance, *common, "--command=" + command], check=True)
     subprocess.run(["gcloud", "compute", "ssh", options.instance, *common,
                     "--command=rm -f ~/config.env ~/source.tar.gz ~/install_release.sh ~/spark-known-hosts"], check=True)

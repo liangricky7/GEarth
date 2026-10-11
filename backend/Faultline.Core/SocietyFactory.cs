@@ -8,7 +8,7 @@ public static class SocietyFactory
 {
     private static readonly (string Id, string Name, double Lat, double Lon)[] Geography =
     [
-        ("aster", "Aster", 40, -105), ("beryl", "Beryl", -18, -58),
+        ("aster", "Jaypan", 40, -105), ("beryl", "Beryl", -18, -58),
         ("cinder", "Cinder", 50, 15), ("dune", "Capybarlos", 25, 42),
         ("ember", "Lebanonia", -27, 135), ("fjord", "Fjord", 64, -22),
         ("grove", "Dyland", 3, 23), ("haven", "Haven", 25, 110),

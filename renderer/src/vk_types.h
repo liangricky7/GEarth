@@ -59,9 +59,9 @@ static_assert(sizeof(StarfieldPushConstants) == 80);
 // Ocean flight scene (shaders/ocean.glsl): x = time, y/z = camera x/z; viewport xy = framebuffer pixels.
 struct OceanPushConstants {
     glm::mat4 inverseViewProj{1};
-    glm::vec4 params{}, viewport{};
+    glm::vec4 params{}, viewport{}, wind{};
 };
-static_assert(sizeof(OceanPushConstants) == 96);
+static_assert(sizeof(OceanPushConstants) == 112);
 enum class MaterialPass : uint8_t { MainColor, Transparent, Mask, Other };
 struct MaterialPipeline { VkPipeline pipeline{}; VkPipelineLayout layout{}; };
 struct MaterialInstance {

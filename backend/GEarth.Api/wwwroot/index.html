@@ -6,6 +6,8 @@
     <title>GEarth · Society observer</title>
     <link rel="stylesheet" href="/style.css" />
     <script src="/observer.js" defer></script>
+    <link rel="stylesheet" href="/constellation.css" />
+    <script src="/constellation.js" defer></script>
   <link rel="stylesheet" href="/controls.css" />
     <script src="/controls.js" defer></script>
     <link rel="stylesheet" href="/experiments.css" />
@@ -18,6 +20,7 @@
         <h1>GEarth<span> / </span><small>world observer</small></h1>
       </div>
       <div class="status">
+        <a id="data-explorer-link" href="/data.html">Saved run data</a>
         <span id="connection">Connecting</span
         ><select id="runs" aria-label="Recorded run"></select>
       </div>
@@ -81,6 +84,25 @@
         <article>
           <span>Fallback / rejected</span><strong id="failures">—</strong>
         </article>
+      </section>
+      <section id="constellation-panel" aria-labelledby="constellation-title">
+        <div class="constellation-heading">
+          <div><p class="eyebrow">Agents · Countries · Signals</p><h2 id="constellation-title">A society, connected</h2><p class="constellation-subtitle">A living network of citizens, institutions, and international interactions.</p></div>
+          <div class="constellation-actions"><span id="constellation-state">Waiting for world</span><button id="constellation-reset" type="button" disabled>World overview</button><button id="constellation-present" type="button" aria-pressed="false">Present ↗</button></div>
+        </div>
+        <div class="constellation-layout">
+          <div class="constellation-stage">
+            <canvas id="constellation-canvas" role="img" aria-label="Rotating abstract network of countries and agents with interaction signals. Use the country buttons below to explore."></canvas>
+            <div class="constellation-stage-label"><span class="constellation-signal"></span><span id="constellation-caption">Connecting to the simulation</span></div>
+            <p id="network-event" hidden></p>
+            <p class="network-idle-hint">Move or tap for controls · Esc to exit</p>
+            <p id="constellation-hover">Drag to rotate · Select a node or signal to explore</p>
+          </div>
+          <aside id="constellation-inspector" aria-label="Selected country or agent"><div id="constellation-detail" aria-live="polite"></div><div id="constellation-node-list" aria-label="Agents in selected country"></div></aside>
+        </div>
+        <div class="constellation-footer"><div class="constellation-legend"><span><i class="trace-trade"></i>Trade</span><span><i class="trace-diplomacy"></i>Diplomacy</span><span><i class="trace-conflict"></i>Conflict / border closed</span><span><i class="trace-corridor"></i>Open corridor</span></div><div class="network-controls"><button id="constellation-colors" type="button" aria-pressed="false">Color by needs</button><button id="network-zoom-out" type="button" aria-label="Zoom out">−</button><button id="network-zoom-in" type="button" aria-label="Zoom in">+</button><button id="constellation-motion" type="button" aria-pressed="false">Pause motion</button></div></div>
+        <nav id="constellation-countries" aria-label="Explore a country"></nav>
+        <p id="constellation-scope"><span id="network-color-key">Colors = countries · Bright nodes = agents · Large nodes = institutions · Faint dots = ambient</span><br />Ambient dots and their faint mesh add visual texture. Selectable agents use a bounded sample; needs totals include every citizen. Brighter links show membership, employment, and schooling. Moving signals show recorded country interactions. Ripples highlight recent trade, policy, and diplomatic events.</p>
       </section>
       <div class="columns">
         <section class="panel geography">

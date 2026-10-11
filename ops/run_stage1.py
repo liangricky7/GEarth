@@ -122,8 +122,9 @@ def main():
     )
     parser.add_argument(
         "--analytics",
-        action="store_true",
-        help="With --world: preserve daily states, full decisions, and individual transfers for finished-run analysis.",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Preserve daily states, full decisions and individual transfers. Enabled by default for fresh --world runs; --no-analytics opts out.",
     )
     # Set by ops/fork_run.py: continue a run on its Neon branch from a week-boundary checkpoint.
     parser.add_argument("--resume", help=argparse.SUPPRESS)
@@ -133,6 +134,9 @@ def main():
     parser.add_argument("--api-port", type=int, default=5080, help="Loopback API port for an isolated run.")
     parser.add_argument("--output-directory", type=Path, help="Isolated logs, notes and pause state for an experiment.")
     options = parser.parse_args()
+    if options.analytics is None:
+        # Saved runs and forks retain their original dataset identity and capture boundary.
+        options.analytics = bool(options.world and not options.run_id and not options.resume)
     if not 1024 <= options.api_port <= 65535:
         parser.error("API port must be 1024-65535.")
     api_url = f"http://127.0.0.1:{options.api_port}"

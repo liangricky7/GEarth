@@ -746,19 +746,21 @@ internal static class AuditPersistence
     public static IEnumerable<AuditRecord[]> Batches(World world)
     {
         var rows = new List<AuditRecord>();
-        var bytes = 0;
+        var bytes = 2; // Serialized array brackets; separators also count toward the request bound.
         foreach (var pending in world.PendingAudit)
         {
             var row = pending with { Revision = world.Revision };
             var size = JsonSerializer.SerializeToUtf8Bytes(row, Wire.Json).Length;
-            if (size > 2_000_000)
+            if (size + 2 > 2_000_000)
                 throw new InvalidOperationException("One audit record exceeds the 2 MB capture limit; simulation paused without committing this revision");
-            if (rows.Count > 0 && (rows.Count >= 1000 || bytes + size > 2_000_000))
+            if (rows.Count > 0 && (rows.Count >= 1000 || bytes + 1 + size > 2_000_000))
             {
                 yield return rows.ToArray();
                 rows.Clear();
-                bytes = 0;
+                bytes = 2;
             }
+            if (rows.Count > 0)
+                bytes++;
             rows.Add(row);
             bytes += size;
         }

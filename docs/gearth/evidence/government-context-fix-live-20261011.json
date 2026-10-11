@@ -1,0 +1,113 @@
+{
+  "health": {
+    "status": "ok",
+    "error": null,
+    "storage": "neon_https",
+    "run_id": "world_20261011_131823_563a99",
+    "tick": 181,
+    "run_status": "running",
+    "updated_at": "2026-10-11T13:52:01.8957823+00:00"
+  },
+  "governments": [
+    {
+      "agent": "aster",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_a",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "beryl",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_b",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "cinder",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_a",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "dune",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_b",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "set_unemployment_benefit"
+    },
+    {
+      "agent": "ember",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_a",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "fjord",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_b",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "hold"
+    },
+    {
+      "agent": "grove",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_a",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "haven",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_b",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "ionia",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_a",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "fund_services"
+    },
+    {
+      "agent": "jade",
+      "observation_tick": 175,
+      "source": "model",
+      "backend": "spark_b",
+      "error_category": null,
+      "accepted": true,
+      "code": "OK",
+      "action": "set_unemployment_benefit"
+    }
+  ]
+}

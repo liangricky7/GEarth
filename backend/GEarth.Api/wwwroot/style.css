@@ -513,3 +513,5 @@ input,
   max-height: 200px;
   overflow: auto;
 }
+
+#data-explorer-link { color: var(--accent); text-underline-offset: 3px; }

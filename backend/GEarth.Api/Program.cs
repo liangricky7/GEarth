@@ -27,8 +27,11 @@ if (args.Contains("--publish-analytics-report"))
             ?? throw new ArgumentException("Report must be a JSON object.");
         var publicationStore = CreateStore();
         await publicationStore.Initialize(CancellationToken.None);
-        await new AnalyticsService(publicationStore).Publish(report,
-            await File.ReadAllBytesAsync(manifestPath), CancellationToken.None);
+        var browseIndex = Array.IndexOf(args, "--analytics-browse");
+        if (browseIndex >= 0 && browseIndex + 1 >= args.Length) throw new ArgumentException("--analytics-browse requires a bundle directory.");
+        await new AnalyticsService(publicationStore, AnalyticsBrowseStore.FromEnvironment()).Publish(report,
+            await File.ReadAllBytesAsync(manifestPath), CancellationToken.None,
+            browseIndex < 0 ? null : Path.GetFullPath(args[browseIndex + 1]));
         Console.WriteLine($"Published cached analytics report for {report["run_id"]}.");
     }
     catch (Exception error)
@@ -52,7 +55,9 @@ IWorldStore store = CreateStore();
 
 builder.Services.AddSingleton(store);
 builder.Services.AddSingleton<RunNotesService>();
+builder.Services.AddSingleton(AnalyticsBrowseStore.FromEnvironment());
 builder.Services.AddSingleton<AnalyticsService>();
+builder.Services.AddSingleton<RunDataService>();
 builder.Services.AddSingleton<Coordinator>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<Coordinator>());
 
@@ -62,6 +67,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapAnalytics();
+app.MapRunData();
 app.MapRenderer();
 
 app.MapGet("/api/health", (Coordinator coordinator) => Results.Ok(new

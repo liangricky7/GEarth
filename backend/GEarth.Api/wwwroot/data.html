@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GEarth · Saved run data</title>
+  <link rel="stylesheet" href="/data.css"><script src="/data.js" defer></script>
+</head>
+<body>
+<header><div><p class="eyebrow">GEarth</p><h1>Saved run data</h1><p class="muted">Inspect what each simulation actually recorded.</p></div><a id="observer-link" href="/">World observer</a></header>
+<main>
+  <section class="panel" aria-label="Connected data source">
+    <h2 id="source-title">Checking data source…</h2>
+    <p id="source-description" class="muted" role="status"></p>
+  </section>
+  <section class="panel" aria-labelledby="run-title">
+    <div class="heading"><h2 id="run-title">Choose a simulation</h2><span id="discovery-status" role="status">Loading saved runs…</span></div>
+    <div class="controls"><label>Simulation<select id="data-runs"><option value="">Loading…</option></select></label><button id="more-runs" hidden>Older simulations</button><button id="refresh-run">Refresh saved data</button></div>
+    <p class="muted">New saved runs appear automatically every 10 seconds while this page is visible. Selecting a run does not start an import or change the simulation.</p>
+    <p id="run-status" role="status" aria-live="polite">Choose a saved run.</p>
+    <dl id="run-facts" class="facts"></dl>
+    <p id="run-duration" class="muted"></p>
+    <details><summary>Original capture settings</summary><p id="metadata-status" class="muted"></p><pre id="capture-metadata"></pre></details>
+  </section>
+  <section class="panel" aria-labelledby="saves-title">
+    <div class="heading"><h2 id="saves-title">Saved weeks and checkpoints</h2><span id="checkpoints-status" role="status"></span></div>
+    <p class="muted">A save marker confirms a database save. A replay frame contains a saved world you can open. Opening, weekly and final frames are separate observations.</p>
+    <div id="checkpoints" class="checkpoint-list"></div><button id="more-checkpoints" hidden>More checkpoints</button>
+    <details id="frame-details" hidden><summary>Saved world · full JSON</summary><p id="frame-status" role="status"></p><pre id="frame-json"></pre></details>
+  </section>
+  <section class="panel" aria-labelledby="records-title">
+    <div class="heading"><h2 id="records-title">Daily records in Neon / saved storage</h2><span id="records-source" class="badge">No source selected</span></div>
+    <p class="muted">These are original committed records, including their complete payloads. Each page scans a bounded part of the saved history.</p>
+    <form id="record-filters" class="controls">
+      <label>Time range<select id="record-period"><option value="all">All saved observations</option><option value="opening">Opening · tick 0</option><option value="days">Daily observations</option><option value="end">Final observations</option><option value="custom">Custom days</option></select></label>
+      <label>From day<input id="from-tick" type="number" min="0" step="1" placeholder="Any"></label>
+      <label>Through day<input id="to-tick" type="number" min="0" step="1" placeholder="Any"></label>
+      <label>Record type<input id="record-kind" list="record-kinds" placeholder="All types"><datalist id="record-kinds"><option value="agent_day"><option value="nation_day"><option value="event"><option value="transaction"><option value="decision_request"><option value="decision_result"><option value="opening_balance"><option value="bank_ledger"><option value="run_metadata"></datalist></label>
+      <button type="submit">Show records</button>
+    </form>
+    <p id="records-status" role="status" aria-live="polite"></p><div id="records"></div><button id="more-records" hidden>Continue through saved records</button>
+    <details><summary>Fields in this displayed page</summary><p class="muted">Presence here proves only what this page contains. Absence here does not prove a feature was never captured.</p><pre id="page-fields"></pre></details>
+  </section>
+  <section class="panel" aria-labelledby="coverage-title">
+    <h2 id="coverage-title">What information was captured?</h2>
+    <p class="muted">Compare this run’s original records with its Databricks columns and stored JSON. A column alone does not prove older runs captured it. Unknown, null, zero and false are different.</p>
+    <div class="table-scroll"><table><thead><tr><th>Feature</th><th>Run capture settings</th><th>Original records · displayed page</th><th>Databricks · this run</th></tr></thead><tbody id="feature-coverage"></tbody></table></div>
+  </section>
+  <section class="panel" aria-labelledby="report-title">
+    <div class="heading"><h2 id="report-title">Finished-run report</h2><a id="report-download" hidden>Download report JSON</a></div>
+    <p id="report-status" role="status"></p><p id="report-preview" class="muted"></p>
+    <label>Report section<select id="report-section" disabled><option>No report available</option></select></label><pre id="report-json"></pre>
+  </section>
+  <section class="panel" aria-labelledby="datasets-title">
+    <div class="heading"><h2 id="datasets-title">Actual Databricks tables and rows</h2><span id="datasets-source" class="badge">No published row cache</span></div>
+    <p class="muted">Rows come from a verified, published Databricks export for this run. Browsing does not start Databricks compute. Row order is export order; use tick and sequence fields to interpret time.</p>
+    <p id="datasets-status" role="status" aria-live="polite"></p>
+    <label>Dataset<select id="dataset-select" disabled><option>No datasets available</option></select></label>
+    <p id="dataset-status" role="status"></p><div class="table-scroll"><table><thead><tr><th>Actual column</th><th>Type</th><th>Nullable</th><th>Non-null values in this run</th></tr></thead><tbody id="dataset-columns"></tbody></table></div>
+    <details><summary>Original JSON field coverage · this run</summary><p id="dataset-coverage-scope" class="muted"></p><div class="table-scroll"><table><thead><tr><th>Payload field</th><th>Present</th><th>Null</th><th>Non-null</th><th>Zero / false</th></tr></thead><tbody id="dataset-fields"></tbody></table></div></details>
+    <p id="dataset-rows-status" role="status" aria-live="polite"></p><div id="dataset-rows"></div><button id="more-dataset-rows" hidden>Next rows</button>
+    <details><summary>Dataset publication evidence</summary><pre id="dataset-catalog-json"></pre></details>
+  </section>
+</main>
+<footer>Read-only inspection · Missing data is shown explicitly.</footer>
+</body>
+</html>

@@ -11,7 +11,7 @@ public sealed class AnalyticsException(int statusCode, string message) : Excepti
 }
 
 // Uses persisted checkpoints exclusively: Coordinator.Current may be ahead of its last commit.
-public sealed class AnalyticsService(IWorldStore store)
+public sealed class AnalyticsService(IWorldStore store, AnalyticsBrowseStore? browse = null)
 {
     public const string ReportSchema = "gearth.analytics-report.v1";
     public const int MaximumReportBytes = 8 * 1024 * 1024;
@@ -128,10 +128,12 @@ public sealed class AnalyticsService(IWorldStore store)
         return report;
     }
 
-    public async Task Publish(JsonObject report, byte[] manifestBytes, CancellationToken ct)
+    public async Task Publish(JsonObject report, byte[] manifestBytes, CancellationToken ct, string? browseDirectory = null)
     {
         if (manifestBytes.Length > MaximumManifestBytes)
             throw new AnalyticsException(400, "Source manifest exceeds the 16 MiB limit.");
+        if (JsonSerializer.SerializeToUtf8Bytes(report, Wire.Json).Length > MaximumReportBytes)
+            throw new AnalyticsException(400, "Analytics report exceeds the 8 MiB limit.");
         var id = String(report, "run_id");
         var world = await Committed(id, ct);
         ValidateReport(report, world);
@@ -169,6 +171,30 @@ public sealed class AnalyticsService(IWorldStore store)
         }
         if (store is not IAnalyticsReportStore cache)
             throw new AnalyticsException(409, "Analytics report storage is unavailable.");
+        if (browseDirectory is not null)
+        {
+            if (browse is null) throw new AnalyticsException(409, "Analytics browse cache is not configured.");
+            await browse.Publish(browseDirectory, report, ct);
+        }
+        else if (report["dataset_catalog"] is not null)
+        {
+            if (browse is null) throw new AnalyticsException(409, "Analytics browse cache is not configured.");
+            await browse.ReadManifest(report, ct);
+        }
+        else
+        {
+            // A summary-only refresh of the same source preserves its verified full-row receipt.
+            var previous = await cache.ReadAnalyticsReport(id, ct);
+            if (previous?["dataset_catalog"] is JsonObject previousCatalog && previous["source_manifest_sha256"]?.GetValue<string>() == hash
+                && previous["through_revision"]?.GetValue<long>() == world.Revision && previous["through_sequence"]?.GetValue<long>() == world.AuditSequence)
+            {
+                if (browse is null) throw new AnalyticsException(409, "Cannot preserve dataset receipt without its configured cache.");
+                await browse.ReadManifest(previous, ct);
+                report["dataset_catalog"] = previousCatalog.DeepClone();
+            }
+        }
+        if (JsonSerializer.SerializeToUtf8Bytes(report, Wire.Json).Length > MaximumReportBytes)
+            throw new AnalyticsException(400, "Analytics report exceeds the 8 MiB limit after preserving its dataset receipt.");
         await cache.SaveAnalyticsReport(id, report, ct);
     }
 
@@ -213,6 +239,10 @@ public sealed class AnalyticsService(IWorldStore store)
         Array(report, "evidence_refs");
         if (report["public_services"] is not null)
             ValidatePublicServices(Object(report, "public_services"));
+        if (report["dataset_catalog"] is JsonObject catalog)
+            AnalyticsBrowseStore.ValidateCatalog(catalog, world.Id, world.Revision, world.AuditSequence, digest);
+        else if (report.ContainsKey("dataset_catalog") && report["dataset_catalog"] is not null)
+            throw new AnalyticsException(400, "dataset_catalog must be an object.");
         ValidateEvidence(report, world);
         ValidateNumbers(report);
     }

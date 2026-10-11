@@ -10,11 +10,11 @@ import tempfile
 from pathlib import Path
 
 from .export import canonical
-from .transform import typed_record, agent_facts
+from .transform import typed_record, agent_facts, COUNTRY_FACTS, COUNTRY_JSON_FACTS, capture_requirements
 from .choice import candidate_matches, matching_indices, parameter_contract
 from .validate import file_sha256, iter_records, read_manifest, validate
 
-ANALYSIS_VERSION = "1.2.0"
+ANALYSIS_VERSION = "1.4.0"
 
 
 def build_report(manifest_path, *, max_agents=100, work_directory=None):
@@ -44,6 +44,8 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
     daily_counts = {"agent_snapshots": 0, "escrow_snapshots": 0, "mismatches": 0, "unknown_openings": 0}
     daily_examples = []
     daily_evidence = []
+    capture_counts = {kind: {key: {"present_count": 0, "null_count": 0, "non_null_count": 0, "zero_or_false_count": 0}
+        for key in capture_requirements(kind)} for kind in ("agent_day", "nation_day")}
     with tempfile.TemporaryDirectory(prefix="gearth-analysis-", dir=work_directory) as temp:
         db = sqlite3.connect(str(Path(temp) / "checks.sqlite"))
         db.executescript("""
@@ -80,10 +82,19 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             payload = record["payload"]
             _, row = typed_record(record)
             counts[kind] += 1
+            for key, counter in capture_counts.get(kind, {}).items():
+                if key in payload:
+                    counter["present_count"] += 1
+                    counter["null_count"] += payload[key] is None
+                    counter["non_null_count"] += payload[key] is not None
+                    counter["zero_or_false_count"] += payload[key] is not None and payload[key] == 0
             if len(evidence) < 20:
                 evidence.append({"run_id": run["run_id"], "sequence": record["sequence"], "kind": kind})
             if kind == "run_metadata":
                 feature_metadata = {key: payload.get(key) for key in ("capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration")}
+                capture_counts = {snapshot: {key: {"present_count": 0, "null_count": 0, "non_null_count": 0, "zero_or_false_count": 0}
+                    for key in capture_requirements(snapshot, payload.get("capture_contract_version"))}
+                    for snapshot in ("agent_day", "nation_day")}
             elif kind == "opening_balance":
                 account(row["account_id"])
                 existing = db.execute("SELECT opening FROM accounts WHERE id=?", (row["account_id"],)).fetchone()[0]
@@ -144,7 +155,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 if country:
                     # A finite country-day map (5*365 expected), selecting final same-tick revision.
                     countries[(country, row["tick"])] = {"country_id": country, "tick": row["tick"], "sequence": row["sequence"],
-                        "metrics": {key: value for key, value in payload.items() if isinstance(value, (int, float, bool)) or value is None},
+                        "metrics": {**{key: value for key, value in payload.items() if isinstance(value, (int, float, bool)) or value is None},
+                            **{key: payload.get(key) for key in COUNTRY_FACTS}},
+                        "economy_state": {key: payload.get(key) for key in COUNTRY_JSON_FACTS},
                         "public_services": {key: payload.get(key) for key in ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params")},
                         "evidence_ref": {"run_id": run["run_id"], "sequence": row["sequence"], "kind": kind}}
                 for escrow in payload.get("escrow_accounts", []):
@@ -269,6 +282,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             "banking": {"ledger_record_count": counts["bank_ledger"],
                 "movements_by_kind": [bank_movements[key] for key in sorted(bank_movements)],
                 "accounting": "transactions and summary.transfer_minor track base cash; bank_ledger tracks deposit claims; economic transfers_by_kind includes deposit payments"},
+            "economy_capture": {"contract_version": feature_metadata.get("capture_contract_version"),
+                "fields": capture_counts, "snapshot_counts": {kind: counts[kind] for kind in capture_counts},
+                "basis": "original daily/end payload key presence; absence is uncaptured, not zero"},
             "checks": checks, "agents": agents, "countries": [countries[key] for key in sorted(countries)],
             "government_comparison": {"status": "insufficient_evidence", "reason": "A single run cannot establish matched-seed government comparisons.", "sample_count": 1},
             "public_services": {"metadata": feature_metadata, "snapshot_summary": services_summary,

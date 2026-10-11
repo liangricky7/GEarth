@@ -1,0 +1,341 @@
+{
+  "schema_version": "gearth.explorer-pilot.v1",
+  "status": "pass",
+  "source_storage": "local",
+  "source_mode": "RULE",
+  "simulation_run_id": "world_20261011_111421_045575",
+  "days": 15,
+  "initial_agents": 200,
+  "final_agents": 201,
+  "synthetic": false,
+  "implementation_commit": "8723994a3ef080c6fc0f1757752e41380162a4a6",
+  "source_manifest_sha256": "bdc6339407d9b4dbf8ebc293d0d854c96992497a79c6f54af8e9e0c80e916080",
+  "bundle_manifest_sha256": "42f399f17a6405215c09a77f8a952cbe309e5f11830cbdf91812ca66f15cbf09",
+  "databricks_job_run_id": 457214739825810,
+  "databricks_task_run_id": 435096157046414,
+  "databricks_job_url": "https://dbc-b2c708ad-61ed.cloud.databricks.com/?o=7474652335460966#job/534785166979170/run/457214739825810",
+  "qualification": {
+    "bronze": {
+      "first_sequence": 1,
+      "kind_action_effect": 549,
+      "kind_agent_day": 3209,
+      "kind_bank_ledger": 43,
+      "kind_decision_request": 512,
+      "kind_decision_result": 512,
+      "kind_event": 1364,
+      "kind_nation_day": 160,
+      "kind_opening_balance": 201,
+      "kind_run_metadata": 1,
+      "kind_transaction": 885,
+      "last_sequence": 7436,
+      "rows": 7436,
+      "unique_sequences": 7436
+    },
+    "expected_derived_counts": {
+      "decision_options": 3456,
+      "event_edges": 233
+    },
+    "run_id": "world_20261011_111421_045575",
+    "schema_version": "gearth.delta-qualification.v1",
+    "silver": {
+      "action_effects": {
+        "rows": 549,
+        "unique_sequences": 549
+      },
+      "agent_daily": {
+        "rows": 3209,
+        "unique_sequences": 3209
+      },
+      "bank_ledger": {
+        "rows": 43,
+        "unique_sequences": 43
+      },
+      "country_daily": {
+        "rows": 160,
+        "unique_sequences": 160
+      },
+      "decision_options": {
+        "rows": 3456,
+        "unique_keys": 3456
+      },
+      "decision_requests": {
+        "rows": 512,
+        "unique_sequences": 512
+      },
+      "decision_results": {
+        "rows": 512,
+        "unique_sequences": 512
+      },
+      "event_edges": {
+        "rows": 233,
+        "unique_keys": 233
+      },
+      "events": {
+        "rows": 1364,
+        "unique_sequences": 1364
+      },
+      "opening_balances": {
+        "rows": 201,
+        "unique_sequences": 201
+      },
+      "runs": {
+        "rows": 1,
+        "unique_sequences": 1
+      },
+      "transactions": {
+        "rows": 885,
+        "unique_sequences": 885
+      }
+    },
+    "source_manifest_sha256": "bdc6339407d9b4dbf8ebc293d0d854c96992497a79c6f54af8e9e0c80e916080",
+    "status": "pass",
+    "through_revision": 18,
+    "through_sequence": 7436
+  },
+  "datasets": [
+    {
+      "dataset_id": "bronze.audit",
+      "table_name": "workspace.gearth_bronze.audit",
+      "availability": "available",
+      "row_count": 7436,
+      "columns": 9
+    },
+    {
+      "dataset_id": "silver.opening_balances",
+      "table_name": "workspace.gearth_silver.opening_balances",
+      "availability": "available",
+      "row_count": 201,
+      "columns": 11
+    },
+    {
+      "dataset_id": "silver.agent_daily",
+      "table_name": "workspace.gearth_silver.agent_daily",
+      "availability": "available",
+      "row_count": 3209,
+      "columns": 63
+    },
+    {
+      "dataset_id": "silver.country_daily",
+      "table_name": "workspace.gearth_silver.country_daily",
+      "availability": "available",
+      "row_count": 160,
+      "columns": 60
+    },
+    {
+      "dataset_id": "silver.transactions",
+      "table_name": "workspace.gearth_silver.transactions",
+      "availability": "available",
+      "row_count": 885,
+      "columns": 20
+    },
+    {
+      "dataset_id": "silver.bank_ledger",
+      "table_name": "workspace.gearth_silver.bank_ledger",
+      "availability": "available",
+      "row_count": 43,
+      "columns": 20
+    },
+    {
+      "dataset_id": "silver.decision_requests",
+      "table_name": "workspace.gearth_silver.decision_requests",
+      "availability": "available",
+      "row_count": 512,
+      "columns": 16
+    },
+    {
+      "dataset_id": "silver.decision_results",
+      "table_name": "workspace.gearth_silver.decision_results",
+      "availability": "available",
+      "row_count": 512,
+      "columns": 20
+    },
+    {
+      "dataset_id": "silver.action_effects",
+      "table_name": "workspace.gearth_silver.action_effects",
+      "availability": "available",
+      "row_count": 549,
+      "columns": 14
+    },
+    {
+      "dataset_id": "silver.events",
+      "table_name": "workspace.gearth_silver.events",
+      "availability": "available",
+      "row_count": 1364,
+      "columns": 13
+    },
+    {
+      "dataset_id": "silver.runs",
+      "table_name": "workspace.gearth_silver.runs",
+      "availability": "available",
+      "row_count": 1,
+      "columns": 22
+    },
+    {
+      "dataset_id": "silver.decision_options",
+      "table_name": "workspace.gearth_silver.decision_options",
+      "availability": "available",
+      "row_count": 3456,
+      "columns": 11
+    },
+    {
+      "dataset_id": "silver.event_edges",
+      "table_name": "workspace.gearth_silver.event_edges",
+      "availability": "available",
+      "row_count": 233,
+      "columns": 6
+    },
+    {
+      "dataset_id": "gold.agent_days",
+      "table_name": "workspace.gearth_gold.agent_days",
+      "availability": "available",
+      "row_count": 3008,
+      "columns": 63
+    },
+    {
+      "dataset_id": "gold.agent_latest",
+      "table_name": "workspace.gearth_gold.agent_latest",
+      "availability": "available",
+      "row_count": 201,
+      "columns": 63
+    },
+    {
+      "dataset_id": "gold.country_days",
+      "table_name": "workspace.gearth_gold.country_days",
+      "availability": "available",
+      "row_count": 150,
+      "columns": 13
+    },
+    {
+      "dataset_id": "gold.public_service_days",
+      "table_name": "workspace.gearth_gold.public_service_days",
+      "availability": "available",
+      "row_count": 150,
+      "columns": 26
+    },
+    {
+      "dataset_id": "gold.public_service_transfers",
+      "table_name": "workspace.gearth_gold.public_service_transfers",
+      "availability": "available",
+      "row_count": 1,
+      "columns": 20
+    },
+    {
+      "dataset_id": "gold.import_receipts",
+      "table_name": "workspace.gearth_gold.import_receipts",
+      "availability": "available",
+      "row_count": 1,
+      "columns": 9
+    }
+  ],
+  "api_verification": {
+    "status": "pass",
+    "simulation_run_id": "world_20261011_111421_045575",
+    "source_manifest_sha256": "bdc6339407d9b4dbf8ebc293d0d854c96992497a79c6f54af8e9e0c80e916080",
+    "datasets": 19,
+    "agent_observations_read_via_api": 3209,
+    "pages": 17,
+    "captured_days": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "frames": {
+      "day": 3008,
+      "end": 201
+    },
+    "databricks_job_run_id": 457214739825810,
+    "synthetic": false,
+    "source_storage": "local",
+    "qualification_status": "pass"
+  },
+  "chrome_verification": {
+    "status": "pass",
+    "datasets": 19,
+    "rows": "Rows 101\u2013200 of 3,209 \u00b7 full columns. More rows available.",
+    "source": "Actual Databricks \u00b7 cached read-only",
+    "storage": "Local saved data \u00b7 not connected to Neon",
+    "width": 1440,
+    "scrollWidth": 1440
+  },
+  "report_checks": [
+    {
+      "name": "manifest_integrity",
+      "status": "pass",
+      "details": {
+        "records": 7436
+      }
+    },
+    {
+      "name": "ledger_account_reconciliation",
+      "status": "pass",
+      "details": {
+        "examples": [],
+        "mismatched_accounts": 0,
+        "missing_final_balances": 0,
+        "missing_openings": 0
+      }
+    },
+    {
+      "name": "daily_account_reconciliation",
+      "status": "pass",
+      "details": {
+        "agent_snapshots": 3209,
+        "basis": "opening plus running ledger net at each snapshot audit sequence",
+        "escrow_snapshots": 0,
+        "examples": [],
+        "mismatches": 0,
+        "unknown_openings": 0
+      }
+    },
+    {
+      "name": "cash_plus_escrow_conservation",
+      "status": "pass",
+      "details": {
+        "initial_cash_minor": 2044400,
+        "latest_minor": 2044400,
+        "ledger_net_minor": 0,
+        "opening_minor": 2044400
+      }
+    },
+    {
+      "name": "offered_choice_index",
+      "status": "pass",
+      "details": {
+        "accepted_without_offered_index": 0,
+        "ambiguous_matches": 0,
+        "bounded_integer_choices": 6,
+        "invalid_indices": 0,
+        "matching_rule": "exact fixed JSON params and inclusive int32 bounded values; original menu unchanged",
+        "missing_context": 0,
+        "request_count": 512,
+        "result_count": 512,
+        "unfinished_requests": 0
+      }
+    },
+    {
+      "name": "daily_flow_reconciliation",
+      "status": "unknown",
+      "details": {
+        "reason": "Daily aggregate flow records are not part of audit.v1; individual transfers retained."
+      }
+    }
+  ],
+  "not_verified": [
+    "production Neon wiring",
+    "365-day complete capture",
+    "50000-agent scale",
+    "production deployment"
+  ]
+}

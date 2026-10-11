@@ -1,0 +1,11 @@
+Model Information:
+* title:	Cargo Ship
+* source:	https://sketchfab.com/3d-models/cargo-ship-d115cec9378d495ca72005e4e3aae8d5
+* author:	Pinkie (https://sketchfab.com/timur.prm)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Cargo Ship" (https://sketchfab.com/3d-models/cargo-ship-d115cec9378d495ca72005e4e3aae8d5) by Pinkie (https://sketchfab.com/timur.prm) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

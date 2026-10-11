@@ -1,145 +1,194 @@
-# Connecting Kenny's renderer
+﻿# GEarth renderer
 
-This feature is prepared on `codex/weekly-renderer-export`; the live VM does not
-serve these endpoints yet. Use the sample files until this branch is merged and deployed.
+The native C++20 / Vulkan viewer plays completed GEarth simulations from the
+existing `gearth.renderer.v1` export. Run the simulation, export its recorded
+states and events, then open that recording to animate it on the renderer's own
+clock. No running simulation or API connection is needed during file playback.
 
-Copy `client.mjs` into the renderer repository. The versioned contract is
-`gearth.renderer.v1`; `frame.schema.json` describes each frame. The client has no
-dependencies and uses browser or Node fetch. Neon credentials stay on the backend.
+## Build
 
-```js
-import { createReplayClient } from "./client.mjs";
+On Windows, install Visual Studio's Desktop Development with C++ workload,
+CMake 3.26+, the Vulkan SDK, and Node 22+. Open a new terminal after installing
+the SDK so `VULKAN_SDK` is available.
 
-const abort = new AbortController();
-const replay = createReplayClient({
-  baseUrl: "https://8-34-212-187.sslip.io",
-  runId: selectedRunId,
-  signal: abort.signal,
-  onEvents: events => renderer.queueEvents(events),
-  onFrame: frame => renderer.showWeek(frame.snapshot, {
-    week: frame.week,
-    tick: frame.tick,
-    partial: frame.frame_kind === "terminal" && !frame.complete_week,
-  }),
-});
-const metadata = await replay.manifest();
-// Display a history gap when metadata.captured_from_opening is false.
-await replay.sync({ throughRevision: metadata.checkpoint_revision });
-// Or await replay.follow({ onError: error => renderer.showConnectionError(error) });
-// abort.abort() stops polling; it does not stop the simulation.
+```powershell
+cmake -S renderer -B renderer/build
+cmake --build renderer/build --config Release --parallel 8
 ```
 
-Kenny implements `queueEvents` and `showWeek` in his renderer. Event pages arrive
-before the corresponding frame; queue them for animation between authoritative
-states. Callbacks are awaited, so the renderer controls backpressure. Persist both
-values from `replay.cursor()` to resume. Failed callbacks do not advance their
-cursor; deduplicate event IDs if a callback partially applies a page before throwing.
-`sync` delivers all recorded frames through the revision pin. For a timeline slider,
-fetch a frame directly from its descriptor; playback speed belongs to the renderer.
-`replay.current()` can display an old run's latest checkpoint without implying replay.
+CMake downloads the exact pinned dependency sources into `build/_deps` on the
+first configuration (about 110 MB, plus simdjson). Internet access is required
+for that first build; later builds reuse the local copies. The snapshot's SHA-256
+is checked before extraction. Only the selected libraries are built, not the
+upstream tutorial applications. ImGui remains in `third_party` because this
+renderer uses a newer version than the snapshot.
 
-## Read-only API
+Library licenses accompany their sources; model/texture credits are included.
+The build copies shaders, assets, models and SDL's DLL beside the executable.
+No npm install is needed for the launcher.
 
-All paths start with `/api/runs/{run_id}/renderer`. Cross-origin GETs work without
-cookies. These endpoints never mutate simulation state.
+The viewer requires a Vulkan 1.3 GPU and a desktop surface, including for hidden
+smoke captures. This port has been exercised on Windows; other platforms have
+not been qualified. Use `--exe PATH` for a different build location.
 
-| Path | Result |
-|---|---|
-| `/manifest` | Version, seed, status, capture coverage and current checkpoint revision |
-| `/frames?after_revision=0&limit=20` | Ordered descriptors, `next_after_revision`, `has_more`; max 50 descriptors |
-| `/frames/{revision}` | One immutable frame; unknown/uncommitted revisions return 404 |
-| `/events?after_seq=0&through_seq=N&limit=500` | Ordered event pages pinned to the frame's event sequence; max 500 events |
-| `/current` | Latest committed state with all agents; historical coverage is not implied |
+## Open a simulation
 
-Descriptors contain `run_id`, `revision`, `tick`, `week`, `frame_kind`,
-`through_event_sequence`, `checkpoint_digest` and `part_count`. Revision is a cursor,
-not a week number. Frame and event sequences differ. Events carry their own ticks.
-Reject unknown major versions and mixed run identities; accept additive fields.
-Replace entity maps from complete frames using stable IDs, not array positions.
+After the simulation finishes, export it with the existing pipeline, package it
+once, then open the resulting recording file:
 
-## Fields to draw
-
-| Field | Meaning |
-|---|---|
-| `snapshot.countries`, `.locations`, `.routes` | Layout and route topology; the renderer supplies any needed visual placement |
-| `snapshot.agents` | Every agent, including citizens: employment, ownership, needs, health, cash, deposits, resource inventories and estate fields |
-| `snapshot.nations` | Government, employment, budgets, quotas and country outcomes |
-| `snapshot.banks[].state` | Reserves, deposits, equity, loans, continuation and interest suspension |
-| `snapshot.shipments` | Cargo status, route plan, edge index and remaining edge travel time |
-| `snapshot.loans` | Borrower, lender, principal, status and credit creation flag |
-| `snapshot.metrics` | Production, consumption, goods loss, base cash and escrow |
-| `events[].event_type`, `.entity_ids`, `.cause_ids`, `.payload` | Recorded activity and causal links |
-
-One tick is one day; seven days form a week. Money is integer minor units: 100 per
-WLD. Deposits are claims distinct from base cash and cargo escrow. Null means unknown.
-Closed firms remain identities (`role="defunct"`, `closed=true`); hungry residents
-become nearly ineffective and can recover, rather than disappearing. Walking and
-individual payments without matching events are illustrative, not recorded facts.
-Shipments have recorded routes. No interpolated visual state should be used as an
-economic measurement or fed back into the engine.
-
-## Capture and offline export
-
-Fresh normal society runs automatically capture tick 0, post-payroll ticks 7, 14,
-21, etc., and terminal states even when the last week is partial. Capture works
-without `--verbose` or `--analytics`. A post-payroll checkpoint is added each week;
-existing pre-payroll fork checkpoints remain. Neon stages bounded, hash-verified
-checkpoint parts and registers the renderer frame in the same successful checkpoint
-transaction. Failed/uncommitted saves are not exposed. Local storage has the same
-visibility rule. Capture changes persistence cadence, not economic rules.
-
-```sh
-.venv/bin/python ops/export_renderer.py RUN_ID /tmp/gearth-renderer-RUN_ID \
-  --api https://8-34-212-187.sslip.io
+```powershell
+py -3.11 ops/export_renderer.py YOUR_RUN_ID artifacts/local/my-replay --api http://127.0.0.1:5080
+node renderer/recording.mjs artifacts/local/my-replay artifacts/local/my-replay.gearth
+node renderer/run.mjs --export artifacts/local/my-replay.gearth
 ```
 
-The folder contains frame JSON files, bounded event-page JSON files and a manifest
-written last with hashes. Live exports pin the initial checkpoint revision. Existing
-folders and incomplete event coverage are rejected. Consumers verify hashes, accept
-safe relative paths and apply files in manifest order: events precede their frame.
-Kenny can load this folder or use the HTTP callbacks once connected; no external
-receiver is assumed. `fixtures/week-1.json` is a small synthetic parser example,
-not a real simulation or a complete population.
+If you receive a `.gearth` file, only the last command is needed. That one file
+contains the checkpoints, events and inspector data. It opens directly without
+unpacking or creating a temporary copy. The original export folder also remains
+supported with `--export FOLDER`.
+For the saved local full-year RULE recording (days 0-365, including all agents):
 
-For offline playback, `playExport` verifies the files and uses the same callbacks:
-
-```js
-import { playExport } from "./client.mjs";
-await playExport({
-  manifest: downloadedManifest,
-  loadFile: path => uploadedFiles.get(path).arrayBuffer(),
-  onEvents: events => renderer.queueEvents(events),
-  onFrame: frame => renderer.showWeek(frame.snapshot, { week: frame.week }),
-});
+```powershell
+node renderer/run.mjs --export artifacts/local/renderer-year365/year-365.gearth
 ```
 
-Here `uploadedFiles` is the renderer's map of selected file names to browser
-`File` objects. Alternatively load bytes from a hosted export folder or Node files.
-Browser hash verification uses Web Crypto on HTTPS or localhost.
+Playback starts at the first recorded day. The full year plays in **60 seconds**
+by default. Change **Replay length** to play the recording over 10-600 seconds.
+Recordings repeat with **Loop** enabled. Use **Pause/Play**, **Restart**, and
+**Day** to seek. With Loop disabled, playback stops at the end; Play restarts it.
+The recorded run's `completed` status describes the simulation, not playback.
 
-## Existing runs and release status
+### Create a new 365-day recording on Windows
 
-Older runs have no automatic weekly archive. `/current` and events remain usable,
-but absent week states are not fabricated. `world_20261011_092034_dabda2` started
-on the preceding release without verbose or analytics capture. This feature does
-not interrupt or upgrade that run; fresh runs after deployment capture weeks.
-Forks share their parent's operational IDs, so appending to parent replays is disabled.
-Separate fork identities remain future work. The default 1,100-agent payload is the
-immediate target; 50,000-agent frame transport/memory still needs qualification.
+For a local RULE run with 1,100 agents, open PowerShell at the repository root:
 
-## Verification, 2026-10-11
+```powershell
+$env:GEARTH_WORLD = 'true'
+$env:GEARTH_LIVE = 'false'
+$env:GEARTH_STORAGE = 'local'
+$env:GEARTH_POPULATION = '1100'
+$env:GEARTH_TICKS = '365'
+$env:GEARTH_INTERVAL_MS = '0'
+$env:GEARTH_PORT = '5087'
+$env:GEARTH_RUNS_DIRECTORY = "$PWD/artifacts/local/renderer-recordings/runs"
+dotnet run --project backend/GEarth.Api --no-launch-profile
+```
 
-- `dotnet test GEarth.sln --no-restore`: 255 passed, including archive visibility,
-  failed-save competing writers, Neon transport retries, hash verification,
-  all-agent frames and cross-origin read-only HTTP endpoints.
-- Agent/analytics/operations Python subset: 205 passed. Export tests cover pinned
-  revisions, hashes, missing events, output-directory collisions and fixture schema.
-- Five renderer-client tests passed, including offline integrity and cursor recovery.
-  Existing observer/control tests passed, with the existing live-browser test skipped.
-- A real local RULE run of 200 agents for 15 days delivered ticks `[0,7,14,15]`
-  and 1,377 ordered events through both HTTP callbacks and a verified offline export.
-  All four frame files passed the published schema. This is a parser/integration
-  check, not model-behavior or large-population performance evidence.
+Use a fresh terminal with no saved-run/resume settings. Fresh runs capture renderer
+history automatically; `--verbose` and analytics capture are not required. Zero
+interval removes the deliberate wait between simulation days; it does not set
+the renderer's playback speed. This runs without AI model services.
 
-Neon persistence is covered by protocol tests; this feature has not been deployed
-or tested against production Neon. The active model simulation remains untouched.
+Leave that terminal running. Once the simulation finishes, use a second terminal:
+
+```powershell
+$health = Invoke-RestMethod 'http://127.0.0.1:5087/api/health'
+if ($health.run_status -ne 'completed' -or $health.tick -ne 365) { throw 'Wait for the 365-day run to finish' }
+$recording = "artifacts/local/renderer-recordings/$($health.run_id)"
+py -3.11 ops/export_renderer.py $health.run_id $recording --api http://127.0.0.1:5087
+if ($LASTEXITCODE -ne 0) { throw 'Export failed' }
+node renderer/recording.mjs $recording "$recording.gearth"
+if ($LASTEXITCODE -ne 0) { throw 'Recording packaging failed' }
+node renderer/run.mjs --export "$recording.gearth"
+```
+
+After export completes, the API can be stopped with Ctrl+C. Keep the `.gearth`
+file for later playback. For an AI-driven recording, use the configured live
+simulation with a 365-tick limit, then export its completed run the same way.
+
+The launcher verifies file hashes, run identity, ordering and complete event
+coverage when packaging; it verifies the hashes on every open, and the native
+parser checks the run, sequence and state coverage. Raw frames are preserved, and
+complete entity lists replace earlier lists. A packed file has no temporary
+handoff. Folder/API handoffs are removed when the launcher exits. Interrupted
+exports without a complete manifest cannot open.
+
+## Optional API connection
+
+To follow a simulation while it is running, use its run ID from `/api/runs` or
+the observer:
+
+```powershell
+node renderer/run.mjs --run YOUR_RUN_ID --api http://127.0.0.1:5080
+```
+
+For a remote server, substitute its HTTPS origin. The server must serve the
+renderer endpoints in this repository; this port does not deploy or restart the
+shared cloud simulation. A server on an older release will report an HTTP error.
+
+The launcher downloads captured history, starts the viewer, and polls every five
+seconds until the run completes, stops or fails. New weekly and terminal states
+appear without restarting the viewer. Closing the viewer stops its local polling;
+it does not stop the simulation. Connection errors are shown in the viewer while
+the last valid state remains available, and polling retries automatically.
+
+Use **Play**, **Day**, and **Replay length** to replay; **Follow incoming data** follows
+the newest recorded state. One tick remains one day, including partial final weeks.
+The nation table and night lights use the last authoritative checkpoint at or
+before the selected day. The inspector includes every agent, banks, loans,
+shipments, metrics, routes, relationships, policies, countries, locations and raw
+events. Select a record by its stable ID; money remains in integer minor units
+(100 per WLD), with cash and bank deposits separate.
+
+Cargo starts from the recorded shipment state at each checkpoint. Dispatch,
+reroute, delivery and failure events update it between checkpoints. Movement and
+ship/plane choices are illustrative; they are never measurements or inputs to the
+simulation. Peace responses clear conflict overlays and resolved offers. The
+world's ten capital coordinates must match the current GEarth scenario; mismatched
+geography is rejected. Display names come from the run.
+
+Older runs without archived weeks open through `/current`. They are explicitly
+labeled as having a history gap, and show the latest snapshot without inventing
+missing weeks. Do not interpret a recorded `LIVE` mode as a live model connection
+from the viewer.
+
+The pipeline's API, persistence rules and frame schema are described in
+[PIPELINE.md](PIPELINE.md). The public contract and backend capture cadence are
+unchanged. `stream.mjs` is only the local handoff to the native process.
+
+## Graphics and earlier replay formats
+
+Run `renderer/build/Release/renderer.exe` for the labeled demo globe. The original
+mesh viewer, ocean, cockpit, ship, lighting and camera controls remain available;
+see [GRAPHICS.md](GRAPHICS.md). Legacy `--events` and `--replay` inputs and their
+Python converters remain supported. History conversion validates completion and
+replaces its output atomically, so invalid input cannot overwrite a good replay.
+
+Model and texture credits are in [assets/CREDITS.md](assets/CREDITS.md), with source
+origins in [SOURCE_ORIGINS.md](SOURCE_ORIGINS.md). Preserve these credits when
+redistributing the renderer or sharing footage.
+
+## Tests
+
+Recorded results and local artifact locations are in [VALIDATION.md](VALIDATION.md).
+
+```powershell
+$env:GEARTH_RENDERER_EXE = (Resolve-Path renderer/build/Release/renderer.exe).Path
+$env:GEARTH_RENDERER_GPU_TESTS = '1'
+npm.cmd run test:renderer
+ctest --test-dir renderer/build -C Release --output-on-failure
+py -3.11 renderer/tests/smoke.py renderer/build/Release/renderer.exe --output artifacts/local/renderer-smoke
+py -3.11 renderer/tools/history_to_replay.py --self-test
+py -3.11 renderer/tools/snapshot_to_replay.py --self-test
+py -3.11 renderer/tools/neon_to_events.py --self-test
+py -3.11 -m pytest ops/test_export_renderer.py -q
+dotnet test backend/GEarth.Tests/GEarth.Tests.csproj --filter FullyQualifiedName~Renderer
+```
+
+Without `GEARTH_RENDERER_EXE`, Node runs transport/bridge checks and explicitly
+skips the native integration test. The live reconnect GPU test additionally needs
+`GEARTH_RENDERER_GPU_TESTS=1`; it opens a hidden window and serves a local fixture
+API that drops a request before publishing new frames. The exporter tests need pytest and jsonschema.
+The native `--check-stream DIRECTORY --tick DAY` command checks the actual parser
+and cargo reconstruction without creating a window or GPU device.
+
+For an end-to-end hidden GPU capture using either source:
+
+```powershell
+node renderer/run.mjs --export artifacts/local/my-replay --smoke --capture artifacts/local/gearth.ppm
+```
+
+The immediate workload is the default 1,100-agent simulation. The native viewer
+retains recorded snapshots and events in memory, and reloads them at published
+checkpoint boundaries. Long/large runs need separate memory and performance
+qualification; the event parser currently rejects more than 250,000 events.

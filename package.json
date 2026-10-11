@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "test:observer": "node --test tests/observer.test.cjs tests/controls.test.cjs tests/experiments.test.cjs",
+    "renderer": "node renderer/run.mjs",
+    "test:renderer": "node --test tests/renderer-client.test.mjs tests/renderer-stream.test.mjs tests/renderer-recording.test.mjs tests/renderer-launch.test.mjs",
     "test:data": "node --test tests/data.test.cjs"
   },
   "devDependencies": {

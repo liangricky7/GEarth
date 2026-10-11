@@ -100,7 +100,7 @@ public static class SocietyEconomy
                 Produce(world, nation, firm, SocietyLabor.Workers(world, firm), residents.Length);
             foreach (var clinic in firms.Where(firm => firm.Specialty == "clinic"))
             {
-                var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek), 1);
+                var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek * (1 + PhaseContracts.Boost(nation, "clinic_capacity"))), 1);
                 society.VisitsServedToday[clinic.Id] = -capacity; // counts up to zero as visits are served
                 AcquireInput(world, clinic, "medicine", Math.Max(0, capacity * 2 - clinic.Inventory["medicine"]));
             }
@@ -568,6 +568,7 @@ public static class SocietyEconomy
         };
         if (nation.CrisisUntilTick > world.Tick && nation.CrisisGood == good)
             multiplier *= 0.35;
+        multiplier *= 1 + PhaseContracts.Boost(nation, good);
         return multiplier * nation.Productivity;
     }
 

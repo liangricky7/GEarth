@@ -18,7 +18,7 @@ public sealed class WorkerClientTests
 
     private static (World World, DecisionJob Job) CreateJob()
     {
-        var world = SocietyFactory.Create("worker_metrics", true, 170);
+        var world = SocietyFactory.Create("worker_metrics", true, 200);
         return (world, SocietyEngine.Observe(world, "aster_citizen_00001", DateTimeOffset.UtcNow));
     }
 

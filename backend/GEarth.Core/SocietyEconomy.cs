@@ -102,7 +102,7 @@ public static class SocietyEconomy
                 SocietyResources.SchoolDay(world, school);
             foreach (var clinic in firms.Where(firm => firm.Specialty == "clinic"))
             {
-                var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek), 1);
+                var capacity = SocietyPlanning.Cap(world, nation, clinic, (int)(SocietyLabor.ServiceCapacity(world, clinic) / SocietyLabor.DaysPerWeek * (1 + PhaseContracts.Boost(nation, "clinic_capacity"))), 1);
                 society.VisitsServedToday[clinic.Id] = -capacity; // counts up to zero as visits are served
                 AcquireInput(world, clinic, "medicine", Math.Max(0, capacity * 2 - clinic.Inventory["medicine"]));
             }
@@ -212,9 +212,10 @@ public static class SocietyEconomy
             if (SocietyLabor.IsPlanned(nation) && SocietyBank.Liquid(world, government) < government.LastWeekOutMinor)
                 SocietyBank.BorrowForTreasury(world, nation, government.LastWeekOutMinor - SocietyBank.Liquid(world, government));
             // The state owns every firm in a planned economy, and the school everywhere: it takes surplus above four
-            // weeks of payroll and covers shortfalls. The state bank is left alone: its cash is depositors' reserves.
+            // weeks of payroll and covers shortfalls (the contractor settles in SocietyInfrastructure). The state bank
+            // is left alone: its cash is depositors' reserves.
             foreach (var firm in agents.Where(agent => agent.Role == "business" && !SocietyBank.IsBank(agent) && agent.OwnerId is null
-                         && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
+                         && agent.Specialty != PhaseContracts.Construction && (SocietyLabor.IsPlanned(nation) || agent.Specialty == "school")))
                 {
                     var payroll = SocietyLabor.Staff(world, firm).Sum(worker => worker.SalaryMinor);
                     var operations = payroll + SocietyResources.InputWorkingCapital(world, nation, firm);
@@ -648,6 +649,7 @@ public static class SocietyEconomy
         };
         if (nation.CrisisUntilTick > world.Tick && nation.CrisisGood == good)
             multiplier *= 0.35;
+        multiplier *= 1 + PhaseContracts.Boost(nation, good);
         return multiplier * nation.Productivity;
     }
 

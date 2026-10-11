@@ -26,7 +26,7 @@ public sealed class Project
 }
 
 // Builders, build ticks and cost per level-1 project. Effects are read through Boost(): sector ids add output
-// (0.05 = +5%), "shipping" cuts import shipping cost, "clinic_capacity" adds clinic visits, "missile_defense"
+// (0.05 = +5%), "shipping" cuts import transit time, "clinic_capacity" adds clinic visits, "missile_defense"
 // cuts the chance an incoming missile hits. A missile is not infrastructure: when complete it becomes one
 // missile in the war stockpile (Phase 3) and is removed from the list.
 public sealed record ProjectSpec(string Type, int Builders, int Ticks, long CostMinor, int MaxLevel, Dictionary<string, double> Effects);

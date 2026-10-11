@@ -16,7 +16,7 @@ public static class SocietyResources
     public const int FixedShippingMinor = 20;
     public const double ShippingRatePerDistance = 0.01; // ponytail: tune after resource runs
     public const int ServiceSessionsPerEnergy = 10;
-    public const string Note = "Ore and fuel are industrial inputs, not household needs: energy uses fuel, tools use ore and energy, and extraction depends on each country's endowment, and raw-material founders respond to market opportunity. Shipping costs 20 plus quantity times route distance/100, discounted by ports; import tariffs are 5% (zero with an agreement), and input prices include landed costs. ";
+    public const string Note = "Ore and fuel are industrial inputs, not household needs: energy uses fuel, tools use ore and energy, and extraction depends on each country's endowment, and raw-material founders respond to market opportunity. Shipping costs 20 plus quantity times route distance/100 (a port speeds delivery instead); import tariffs are 5% (zero with an agreement), and input prices include landed costs. ";
 
     // Three rich, four middling and three poor countries per material; rich farmland or a rich raw material
     // in every country. Patterns cross government profiles and never leave a material entirely absent.
@@ -57,8 +57,7 @@ public static class SocietyResources
     {
         if (quantity < 1)
             throw new ArgumentOutOfRangeException(nameof(quantity));
-        var discount = Math.Clamp(PhaseContracts.Boost(world.Society!.Nations[buyer.CountryId], "shipping"), 0, 1);
-        return checked((long)Math.Ceiling((FixedShippingMinor + quantity * ShippingRatePerDistance * path.CostMinor) * (1 - discount)));
+        return checked((long)Math.Ceiling(FixedShippingMinor + quantity * ShippingRatePerDistance * path.CostMinor));
     }
 
     // Per unit after the currency adjustment, freight and tariff.

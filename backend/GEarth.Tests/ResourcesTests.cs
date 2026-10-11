@@ -172,7 +172,7 @@ public sealed class ResourcesTests
     }
 
     [Fact]
-    public void ShippingScalesWithQuantityDistanceAndCompletedPortCondition()
+    public void ShippingScalesWithQuantityAndDistanceButNotPorts()
     {
         var world = Create();
         var buyer = world.Agents["aster_tools"];
@@ -181,16 +181,8 @@ public sealed class ResourcesTests
         Assert.Equal(30, SocietyResources.ShippingCost(world, buyer, shortPath, 10));
         Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
         Assert.Equal(40, SocietyResources.ShippingCost(world, buyer, longPath, 10));
-        var project = new Project { Type = "port", Level = 1 };
-        world.Society!.Nations["aster"].Infrastructure.Add(project);
-        Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
-        project.Complete = true;
-        Assert.Equal(90, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
-        project.Condition = 0;
-        Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
-        project.Condition = 100;
-        project.Level = 2;
-        Assert.Equal(72, SocietyResources.ShippingCost(world, buyer, shortPath, 100));
+        world.Society!.Nations["aster"].Infrastructure.Add(new Project { Type = "port", Level = 2, Complete = true });
+        Assert.Equal(120, SocietyResources.ShippingCost(world, buyer, shortPath, 100)); // a port speeds cargo instead
         Assert.Throws<ArgumentOutOfRangeException>(() => SocietyResources.ShippingCost(world, buyer, shortPath, 0));
     }
 
@@ -217,6 +209,28 @@ public sealed class ResourcesTests
         Assert.Equal(0, SocietyTrade.Tariff(world, buyer, seller, value));
         Assert.Equal((value + shipping) / (double)quantity, SocietyResources.LandedUnitCost(world, buyer, seller, path, quantity));
         SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void CompletedPortCutsImportTransitTime()
+    {
+        int Arrival(bool port)
+        {
+            var world = Create();
+            world.Society!.Nations["cinder"].Plan["mine"] = 0;
+            if (port)
+                world.Society.Nations["aster"].Infrastructure.Add(new Project { Type = "port", Level = 3, Complete = true });
+            SocietyTrade.Dispatch(world, world.Agents["aster_tools"], world.Agents["cinder_mine"], "ore", 20, "cheapest", null);
+            var cargo = world.Society.Cargo.Last();
+            while (cargo.Status == "in_transit")
+            {
+                world.Tick++;
+                SocietyTrade.Advance(world);
+            }
+            Assert.Equal("delivered", cargo.Status);
+            return world.Tick;
+        }
+        Assert.True(Arrival(true) < Arrival(false));
     }
 
     [Fact]

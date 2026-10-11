@@ -7,7 +7,7 @@ public static class SocietyActions
 {
     public const int MaxTaxBasisPoints = 6000;
     public const int BudgetTurnDays = 28; // income tax changes only at a budget turn every four weeks
-    public const int MaxTaxStepPoints = 5; // whole percentage points a budget can move income tax
+    public const int TaxStepPoints = 2; // whole percentage points a budget moves income tax
 
     public static Candidate[] Available(World world, Agent agent)
     {
@@ -77,7 +77,9 @@ public static class SocietyActions
                 options.Add(Make("publish", new { text, observed_tick = world.Tick }));
                 break;
         }
-        if (agent.Role is not ("government" or "defunct" or "planner") && SocietyLabor.DecidesForItself(agent))
+        // People pay whom they choose; a state firm's manager cannot hand out the state's cash (it pays wages
+        // and returns surplus to the treasury), so firms are never offered pay.
+        if (agent.Role is not ("government" or "defunct" or "planner" or "business") && SocietyLabor.DecidesForItself(agent))
             SocietyPayments.AddOptions(world, agent, options);
         return Shuffle(world, agent, options);
     }
@@ -128,19 +130,25 @@ public static class SocietyActions
             return;
         }
         LoanOptions(world, firm, options);
-        // A change that the price limits (half to three times the base price) would undo is not offered. Each
-        // option says what it should do to weekly sales and margin if competitors keep their prices.
+        // A change that the price limits (half to three times the base price) would undo is not offered, nor one
+        // forecast to sell no more and earn less than holding. Each option says what it should do to weekly sales
+        // and margin if competitors keep their prices, and how that margin compares with now.
         var spec = SocietyLabor.SectorOf(firm.Specialty!);
         if (spec.BasePrice > 0 && spec.Id != "school")
         {
             var unitCost = SocietyLabor.UnitCost(world, world.Society!.Nations[firm.CountryId], firm);
-            string Forecast(int price) => $"about {SocietyEconomy.ExpectedUnits(world, firm, price)} sold a week, margin about {(long)(SocietyEconomy.ExpectedUnits(world, firm, price) * (price - unitCost))}";
+            (long Units, long Margin) Forecast(int price) =>
+                (SocietyEconomy.ExpectedUnits(world, firm, price), (long)(SocietyEconomy.ExpectedUnits(world, firm, price) * (price - unitCost)));
+            var now = Forecast(firm.PriceMinor);
             foreach (var change in new[] { -10, 10 })
             {
                 var price = SocietyLabor.ClampPrice(spec, firm.PriceMinor * (100 + change) / 100);
-                if (price != firm.PriceMinor)
-                    options.Add(Make("set_price", new { business_id = id, change_pct = change,
-                        effect = $"price {firm.PriceMinor} -> {price}: {Forecast(price)} (now {Forecast(firm.PriceMinor)})" }));
+                var (units, margin) = Forecast(price);
+                if (price == firm.PriceMinor || units <= now.Units && margin < now.Margin)
+                    continue;
+                var versus = margin == now.Margin ? "the same as now" : $"{Math.Abs(margin - now.Margin)} {(margin > now.Margin ? "more" : "less")} than now";
+                options.Add(Make("set_price", new { business_id = id, change_pct = change,
+                    effect = $"price {firm.PriceMinor} -> {price}: about {units} sold a week (now {now.Units}), margin about {margin} a week, {versus}" }));
             }
         }
         foreach (var change in new[] { -10, 10 })
@@ -238,23 +246,37 @@ public static class SocietyActions
         var nation = society.Nations[agent.CountryId];
         if (society.Policies.Any(policy => policy.CountryId == nation.Id) || !SocietyDiplomacy.HasAuthority(world, nation))
             return;
+        // Budget levers are a cut and a raise from the level in force (holding is the hold option), each saying
+        // what it should do to the weekly budget, as price options do for owners: a model offered a free range
+        // kept echoing the current level. Indexation can carry a benefit past its usual ceiling.
+        var people = world.InCountry(nation.Id).Where(SocietyLabor.IsResident).ToArray();
+        var citizens = people.Count(person => person.Role == "citizen");
+        void Lever(string action, string key, int now, int step, int max, Func<int, string> effect)
+        {
+            foreach (var level in new[] { Math.Max(0, now - step), Math.Min(Math.Max(max, now), now + step) }.Where(level => level != now).Distinct())
+                options.Add(new(action, new JsonObject { [key] = level, ["effect"] = effect(level) }));
+        }
+        string Weekly(long change, string what) => $"about {Math.Abs(change)} a week {(change >= 0 ? "more" : "less")} {what}";
         // Income tax is set at a budget turn every four weeks, as a new whole-percent rate near the current one.
         if (world.Tick - nation.TaxChangedTick >= BudgetTurnDays)
         {
+            var payroll = people.Where(person => person.EmployerId is not null).Sum(person => person.SalaryMinor);
             var now = (int)Math.Round(nation.TaxBasisPoints / 100.0);
-            options.Add(new("adjust_tax", new JsonObject
-            {
-                ["income_tax_percent"] = Range(Math.Max(0, now - MaxTaxStepPoints), Math.Min(MaxTaxBasisPoints / 100, now + MaxTaxStepPoints), now)
-            }));
+            Lever("adjust_tax", "income_tax_percent", now, TaxStepPoints, MaxTaxBasisPoints / 100,
+                level => $"income tax {now}% -> {level}%: {Weekly(payroll * (level - now) / 100, "in income tax")}");
         }
-        // Budget levers are ranges showing the current level, so a raise and a cut are told apart.
-        // Indexation can carry a benefit past its usual ceiling, so the range always includes the current level.
-        options.Add(new("set_unemployment_benefit", new JsonObject { ["amount_minor"] = Range(0, Math.Max(900, nation.UnemploymentBenefitMinor), nation.UnemploymentBenefitMinor) }));
-        options.Add(new("set_welfare", new JsonObject { ["amount_minor"] = Range(0, Math.Max(200, nation.WelfareMinor), nation.WelfareMinor) }));
-        options.Add(new("set_sales_tax", new JsonObject { ["sales_tax_basis_points"] = Range(0, 1000, nation.SalesTaxBasisPoints) }));
-        options.Add(new("fund_services", new JsonObject { ["amount_minor"] = Range(0, 150, nation.ServiceBudgetPerResidentMinor) }));
+        Lever("set_unemployment_benefit", "amount_minor", nation.UnemploymentBenefitMinor, 300, 900, level =>
+            $"benefit {nation.UnemploymentBenefitMinor} -> {level} a week each: {Weekly((long)nation.Unemployed * (level - nation.UnemploymentBenefitMinor), $"for the {nation.Unemployed} out of work now")}");
+        Lever("set_welfare", "amount_minor", nation.WelfareMinor, 50, 200, level =>
+            $"welfare {nation.WelfareMinor} -> {level} a week each: {Weekly((long)citizens * (level - nation.WelfareMinor), $"for {citizens} residents")}");
+        var essentials = (long)(people.Length * SocietyLabor.LivingCost(world, nation));
+        Lever("set_sales_tax", "sales_tax_basis_points", nation.SalesTaxBasisPoints, 200, 1000, level =>
+            $"sales tax {nation.SalesTaxBasisPoints / 100.0:0.#}% -> {level / 100.0:0.#}%: {Weekly(essentials * (level - nation.SalesTaxBasisPoints) / 10000, "in tax on food and energy alone")}, raising shop prices");
+        Lever("fund_services", "amount_minor", nation.ServiceBudgetPerResidentMinor, 50, 150, level =>
+            $"services {nation.ServiceBudgetPerResidentMinor} -> {level} a resident: {Weekly((long)people.Length * (level - nation.ServiceBudgetPerResidentMinor), "paid to clinics")}; health part of quality of life now {nation.QolParts.GetValueOrDefault("health"):0.00}");
         if (SocietyBank.Liquid(world, agent) >= 1500 && nation.Productivity < 2 && SocietyLabor.Firms(world, nation.Id, "tools").Any())
             options.Add(Make("invest", new { amount_minor = 1500 }));
+        SocietyInfrastructure.AddOptions(world, nation, agent, options);
         // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
         // a food subsidy when residents went hungry with food on the shelves, and schooling when people are
         // out of work (each also shows while in force, so it can be changed or ended).

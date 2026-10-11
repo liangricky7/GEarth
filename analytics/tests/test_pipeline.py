@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from analytics.export import canonical, export_run
+from analytics.delta_validation import assert_coverage
 from analytics.report import build_report
 from analytics.transform import typed_record
 from analytics.validate import file_sha256, validate
@@ -80,6 +81,22 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["record_count"], len(self.records))
         self.assertEqual(len(json.loads(manifest_path.read_text())["files"]), 4)
 
+    def test_large_context_rotates_by_uncompressed_bytes(self):
+        self.records[4]["payload"]["job"]["observation"]["large_context"] = "x" * 5000
+        self.records[5]["payload"]["result"]["provider_response"] = "y" * 3000
+        manifest = export_run("http://localhost", self.metadata["run_id"], self.root / "export", page_size=3,
+                              chunk_rows=10000, chunk_bytes=6000, fetch=fake_fetch(self.metadata, self.records))
+        self.assertGreater(len(manifest["files"]), 1)
+        self.assertTrue(all(entry["row_count"] < 10000 and entry["uncompressed_bytes"] <= 6000 for entry in manifest["files"]))
+        self.assertEqual(sum(entry["row_count"] for entry in manifest["files"]), len(self.records))
+        validate(self.root / "export" / "manifest.json")
+
+    def test_single_row_limit_is_enforced(self):
+        self.records[4]["payload"]["job"]["observation"]["large_context"] = "x" * (2 * 1024 * 1024)
+        with self.assertRaisesRegex(ValueError, "bounded-record limit"):
+            self.export()
+        self.assertFalse((self.root / "export" / "manifest.json").exists())
+
     def test_same_tick_final_states_and_no_double_count(self):
         report = build_report(self.export())
         self.assertEqual(report["summary"]["transaction_count"], 2)
@@ -91,6 +108,37 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(report["agents"][0]["cash_minor"], 85)
         self.assertTrue(report["completeness"]["synthetic"])
 
+    def test_corrupted_day_cannot_hide_behind_correct_final_balance(self):
+        self.records[7]["payload"]["cash_minor"] = 79
+        report = build_report(self.export())
+        checks = {row["name"]: row for row in report["checks"]}
+        self.assertEqual(checks["ledger_account_reconciliation"]["status"], "pass")
+        self.assertEqual(checks["daily_account_reconciliation"]["status"], "fail")
+        self.assertEqual(checks["daily_account_reconciliation"]["details"]["mismatches"], 1)
+        self.assertEqual(checks["daily_account_reconciliation"]["details"]["examples"][0]["expected_minor"], 80)
+
+    def test_delta_aggregate_qualification_rejects_missing_rows(self):
+        manifest_path = self.export()
+        manifest = json.loads(manifest_path.read_text())
+        from analytics.transform import TABLES
+        bronze = {"rows": len(self.records), "unique_sequences": len(self.records), "first_sequence": 1, "last_sequence": len(self.records)}
+        silver = {}
+        for kind, name in TABLES.items():
+            count = manifest["counts_by_kind"].get(kind, 0)
+            bronze["kind_" + kind] = count
+            silver[name] = {"rows": count, "unique_sequences": count}
+        derived = {"decision_options": 1, "event_edges": 0}
+        for name, count in derived.items():
+            silver[name] = {"rows": count, "unique_keys": count}
+        assert_coverage(manifest, bronze, silver, derived)
+        silver["agent_daily"]["rows"] -= 1
+        with self.assertRaisesRegex(ValueError, "Silver kind"):
+            assert_coverage(manifest, bronze, silver, derived)
+        silver["agent_daily"]["rows"] += 1
+        bronze["unique_sequences"] -= 1
+        with self.assertRaisesRegex(ValueError, "Bronze coverage"):
+            assert_coverage(manifest, bronze, silver, derived)
+
     def test_nonterminal_refused(self):
         for status in ("running", "paused"):
             self.metadata["status"] = status
@@ -101,6 +149,42 @@ class PipelineTests(unittest.TestCase):
         self.metadata.update(analytics_enabled=False, audit_available=False, audit_from_tick_zero=False, through_sequence=0)
         with self.assertRaisesRegex(ValueError, "tick zero"):
             self.export()
+
+    def test_neon_control_and_changed_forks_refused_before_manifest(self):
+        for index, change in enumerate((None, {"country": "n1", "government": "dictatorship"})):
+            records = copy.deepcopy(self.records)
+            records.append({"run_id": self.metadata["run_id"], "sequence": len(records) + 1, "tick": 1, "revision": 2,
+                            "kind": "event", "payload": {"event_id": "fork-event", "seq": 2, "event_type": "timeline_forked",
+                            "payload": {"timeline": "synthetic-fork", "change": change}}})
+            metadata = dict(self.metadata, through_sequence=len(records), through_event_sequence=2)
+            destination = self.root / ("fork-" + str(index))
+            with self.assertRaisesRegex(ValueError, "does not support Neon fork timelines"):
+                export_run("http://localhost", metadata["run_id"], destination, fetch=fake_fetch(metadata, records))
+            self.assertFalse((destination / "manifest.json").exists())
+
+    def test_uploaded_fork_is_rejected_before_report_generation(self):
+        # Simulate a pre-guard exporter with valid compressed hashes/counts, proving
+        # that importer/report preflight also rejects rather than trusting metadata.
+        manifest_path = self.export()
+        manifest = json.loads(manifest_path.read_text())
+        last_entry = manifest["files"][-1]
+        chunk = manifest_path.parent / last_entry["path"]
+        rows = [json.loads(line) for line in gzip.open(chunk, "rt", encoding="utf-8")]
+        row = rows[-1]
+        old_kind = row["kind"]
+        row.update(kind="event", payload={"event_id": "fork-event", "seq": 2, "event_type": "timeline_forked", "payload": {"timeline": "synthetic-control-fork", "change": None}})
+        with gzip.open(chunk, "wb") as stream:
+            for record in rows:
+                stream.write(canonical(record) + b"\n")
+        last_entry.update(sha256=file_sha256(chunk), bytes=chunk.stat().st_size)
+        manifest["counts_by_kind"][old_kind] -= 1
+        manifest["counts_by_kind"]["event"] += 1
+        manifest["run"]["through_event_sequence"] = 2
+        manifest_path.write_bytes(canonical(manifest) + b"\n")
+        with self.assertRaisesRegex(ValueError, "does not support Neon fork timelines"):
+            validate(manifest_path)
+        with self.assertRaisesRegex(ValueError, "does not support Neon fork timelines"):
+            build_report(manifest_path)
 
     def test_stopped_snapshot_partial_run(self):
         self.metadata["status"] = "stopped"

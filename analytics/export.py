@@ -14,6 +14,8 @@ from urllib.request import Request, urlopen
 
 FORMAT = "faultline.run-export.v1"
 TERMINAL = {"completed", "stopped", "failed"}
+MAX_ROW_BYTES = 2 * 1024 * 1024
+DEFAULT_CHUNK_BYTES = 64 * 1024 * 1024
 KINDS = {"opening_balance", "agent_day", "nation_day", "transaction", "decision_request", "decision_result", "action_effect", "event", "run_metadata"}
 
 
@@ -37,6 +39,8 @@ def record_check(record, run_id, revision, through_sequence):
         raise ValueError("record exceeds pinned final cursor")
     if record.get("kind") not in KINDS or not isinstance(record.get("payload"), dict):
         raise ValueError("unsupported record kind or payload")
+    if record["kind"] == "event" and record["payload"].get("event_type") == "timeline_forked":
+        raise ValueError("faultline.run-export.v1 does not support Neon fork timelines; stable branch/timeline identity is required")
     # Reject lossy floating money at all nesting depths; money can be negative in deltas.
     def monetary_leaves(node, key):
         if node is None:
@@ -61,14 +65,14 @@ def record_check(record, run_id, revision, through_sequence):
     money_check(record["payload"])
 
 
-def export_run(base_url, run_id, destination, *, token=None, page_size=1000, chunk_rows=10000, fetch=None):
+def export_run(base_url, run_id, destination, *, token=None, page_size=1000, chunk_rows=10000, chunk_bytes=DEFAULT_CHUNK_BYTES, fetch=None):
     """Export pinned terminal snapshot; no credentials enter files or error messages.
 
     fetch(path, params) injectable for offline fixtures. At most one page is retained.
     An interrupted export deliberately has no manifest and is never importable.
     """
-    if not 1 <= page_size <= 2000 or chunk_rows < 1:
-        raise ValueError("page_size must be 1..2000 and chunk_rows positive")
+    if not 1 <= page_size <= 2000 or chunk_rows < 1 or chunk_bytes < 1:
+        raise ValueError("page_size must be 1..2000 and chunk_rows/chunk_bytes positive")
     parsed = urlparse(base_url)
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("API URL must not contain credentials, query or fragment")
@@ -104,11 +108,12 @@ def export_run(base_url, run_id, destination, *, token=None, page_size=1000, chu
     after = 0
     output = None
     rows = 0
+    uncompressed_bytes = 0
     first = None
     previous_revision = 0
 
     def finish_chunk():
-        nonlocal output, rows
+        nonlocal output, rows, uncompressed_bytes
         if output is None:
             return
         output.close()
@@ -118,9 +123,10 @@ def export_run(base_url, run_id, destination, *, token=None, page_size=1000, chu
             for block in iter(lambda: data.read(1024 * 1024), b""):
                 digest.update(block)
         files.append({"path": name, "sha256": digest.hexdigest(), "bytes": path.stat().st_size,
-                      "row_count": rows, "first_sequence": first, "last_sequence": after})
+                      "uncompressed_bytes": uncompressed_bytes, "row_count": rows, "first_sequence": first, "last_sequence": after})
         output = None
         rows = 0
+        uncompressed_bytes = 0
 
     try:
         while after < through:
@@ -135,12 +141,20 @@ def export_run(base_url, run_id, destination, *, token=None, page_size=1000, chu
                 record_check(record, run_id, revision, through)
                 if record["sequence"] != after + 1 or record["revision"] < previous_revision:
                     raise ValueError("audit sequence gap/duplicate or revision regression")
+                line = canonical(record) + b"\n"
+                if len(line) > MAX_ROW_BYTES:
+                    raise ValueError("audit row exceeds the 2 MiB bounded-record limit")
+                # Gzip input is unsplittable in Spark; bound uncompressed size as
+                # well as rows. A single valid row can exceed a smaller custom cap.
+                if output is not None and uncompressed_bytes + len(line) > chunk_bytes:
+                    finish_chunk()
                 if output is None:
                     name = f"audit-{len(files):06d}.ndjson.gz"
                     output = gzip.GzipFile(filename=str(root / name), mode="wb", mtime=0)
                     first = record["sequence"]
-                output.write(canonical(record) + b"\n")
+                output.write(line)
                 rows += 1
+                uncompressed_bytes += len(line)
                 after = record["sequence"]
                 previous_revision = record["revision"]
                 counts[record["kind"]] += 1
@@ -177,9 +191,10 @@ def main():
     parser.add_argument("--token-env", help="environment variable containing optional API bearer token")
     parser.add_argument("--page-size", type=int, default=1000)
     parser.add_argument("--chunk-rows", type=int, default=10000)
+    parser.add_argument("--chunk-bytes", type=int, default=DEFAULT_CHUNK_BYTES, help="uncompressed bytes per gzip chunk (default 64 MiB)")
     args = parser.parse_args()
     manifest = export_run(args.api, args.run_id, args.destination, token=os.environ.get(args.token_env) if args.token_env else None,
-                          page_size=args.page_size, chunk_rows=args.chunk_rows)
+                          page_size=args.page_size, chunk_rows=args.chunk_rows, chunk_bytes=args.chunk_bytes)
     print(f"Exported {manifest['record_count']} audit rows in {len(manifest['files'])} files")
 
 

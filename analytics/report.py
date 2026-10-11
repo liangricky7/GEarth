@@ -13,7 +13,7 @@ from .export import canonical
 from .transform import typed_record
 from .validate import file_sha256, iter_records, read_manifest, validate
 
-ANALYSIS_VERSION = "1.0.0"
+ANALYSIS_VERSION = "1.1.0"
 
 
 def build_report(manifest_path, *, max_agents=100, work_directory=None):
@@ -34,6 +34,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
     accepted_without_offered_index = 0
     countries = {}
     evidence = []
+    daily_counts = {"agent_snapshots": 0, "escrow_snapshots": 0, "mismatches": 0, "unknown_openings": 0}
+    daily_examples = []
+    daily_evidence = []
     with tempfile.TemporaryDirectory(prefix="faultline-analysis-", dir=work_directory) as temp:
         db = sqlite3.connect(str(Path(temp) / "checks.sqlite"))
         db.executescript("""
@@ -50,6 +53,20 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             if not isinstance(account_id, str) or not account_id:
                 raise ValueError("missing account identifier")
             db.execute("INSERT OR IGNORE INTO accounts(id) VALUES (?)", (account_id,))
+
+        def daily_check(account_id, actual, record, account_type):
+            opening, net = db.execute("SELECT opening,net FROM accounts WHERE id=?", (account_id,)).fetchone()
+            daily_counts["escrow_snapshots" if account_type == "escrow" else "agent_snapshots"] += 1
+            ref = {"run_id": run["run_id"], "sequence": record["sequence"], "kind": record["kind"]}
+            if len(daily_evidence) < 2:
+                daily_evidence.append(ref)
+            if opening is None:
+                daily_counts["unknown_openings"] += 1
+            elif actual != opening + net:
+                daily_counts["mismatches"] += 1
+                if len(daily_examples) < 20:
+                    daily_examples.append({"account_id": account_id, "tick": record["tick"], "frame_kind": record["payload"].get("frame_kind"),
+                        "expected_minor": opening + net, "actual_minor": actual, "evidence_ref": ref})
 
         for record in iter_records(manifest_path, manifest):
             kind = record["kind"]
@@ -88,6 +105,7 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 transaction_count += 1
             elif kind == "agent_day":
                 account(row["agent_id"])
+                daily_check(row["agent_id"], row["cash_minor"], record, "agent")
                 db.execute("UPDATE accounts SET latest=?,sequence=? WHERE id=?", (row["cash_minor"], row["sequence"], row["agent_id"]))
                 db.execute("INSERT OR REPLACE INTO agents VALUES (?,?,?,?,?,?,?,?,?)", (row["agent_id"], row["sequence"], row["tick"], row["role"],
                            row["country_id"], row["cash_minor"], row["health"], row["wellbeing"], row["decision_maker"]))
@@ -100,6 +118,11 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                         "evidence_ref": {"run_id": run["run_id"], "sequence": row["sequence"], "kind": kind}}
                 for escrow in payload.get("escrow_accounts", []):
                     account(escrow["account_id"])
+                    # New cargo accounts have zero cash before their funding transfer,
+                    # as specified by SocietyTrade.Dispatch. Existing cargo openings
+                    # retain their explicitly captured balance.
+                    db.execute("UPDATE accounts SET opening=0 WHERE id=? AND opening IS NULL", (escrow["account_id"],))
+                    daily_check(escrow["account_id"], escrow["balance_minor"], record, "escrow")
                     db.execute("UPDATE accounts SET latest=?,sequence=?,account_type='escrow' WHERE id=?",
                                (escrow["balance_minor"], row["sequence"], escrow["account_id"]))
             elif kind in {"decision_request", "decision_result"}:
@@ -157,6 +180,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             {"name": "ledger_account_reconciliation", "status": check_status,
              "details": {"mismatched_accounts": mismatch, "missing_openings": missing_opening, "missing_final_balances": missing_final,
                          "examples": mismatches}, "evidence_refs": []},
+            {"name": "daily_account_reconciliation", "status": "fail" if daily_counts["mismatches"] else "unknown" if daily_counts["unknown_openings"] else "pass",
+             "details": {**daily_counts, "examples": daily_examples, "basis": "opening plus running ledger net at each snapshot audit sequence"},
+             "evidence_refs": daily_evidence + [row["evidence_ref"] for row in daily_examples]},
             {"name": "cash_plus_escrow_conservation", "status": "unknown" if missing_opening or missing_final else "pass" if sums[0] == sums[1] == run.get("initial_cash_minor") and sums[2] == 0 else "fail",
              "details": {"opening_minor": sums[0], "latest_minor": sums[1], "ledger_net_minor": sums[2], "initial_cash_minor": run.get("initial_cash_minor")}, "evidence_refs": []},
             {"name": "offered_choice_index", "status": "fail" if choice_errors else "unknown" if missing_context or decision_pending or accepted_without_offered_index or not counts["decision_request"] else "pass",

@@ -20,6 +20,12 @@ Export refuses to overwrite an existing directory. An interrupted export has no
 manifest and must not be imported. Optional HTTP authentication uses
 `--token-env VARIABLE_NAME`; credentials never appear in exports or notebook
 configuration. URL userinfo/query/fragment are rejected.
+Each gzip chunk is bounded by both `--chunk-rows` (default 10,000) and
+`--chunk-bytes` (default 64 MiB uncompressed). Rotation happens before a row would
+exceed the byte cap. Individual records are limited to 2 MiB; a valid single row
+may occupy its own chunk when an operator chooses a smaller custom byte cap.
+The importer verifies optional per-chunk `uncompressed_bytes` and limits decoder
+line length, so a gzip file never hides an unbounded record in the driver.
 
 Upload every exported file to a single run directory under
 `/Volumes/workspace/faultline_bronze/run_exports/`. Upload the helper ZIP to
@@ -33,6 +39,10 @@ Review before executing; the code creates managed Delta tables/views.
    `report-<first12charactersofmanifestSHA256>.json` beside the export and a Gold
    `import_receipts` row last. A receipt certifies import coverage, not that every
    economic check passed. Reconciliation failures and unknown checks remain visible.
+   Before emitting report/receipt, scalar Delta aggregates verify stored Bronze
+   count/distinct sequence/range and kind counts against the manifest; every Silver
+   kind and derived option/edge count must match. Source hashes are cross-checked.
+   `qualification-<manifestprefix>.json` records the bounded table counts for replay.
 2. `02_agent_investigation.py`: parameters `run_id`, `agent_id`. Displays the
    exact original observations, ordered options, results/reasons, transfers and
    engine-linked effects. Displays explicit offered-option denominators and 1/7
@@ -41,14 +51,25 @@ Review before executing; the code creates managed Delta tables/views.
 3. `03_government_comparison.py`: all imported runs. Descriptive country facts
    include partial runs; matched comparisons require known configuration and all
    five rotations for the same seed. Shows independent run/seed sample counts.
-4. `04_data_checks.py`: parameter `run_id`. Checks all accounts including cargo
-   escrow and displays row/key counts for replay verification.
+4. `04_data_checks.py`: parameter `run_id`; optional `export_directory` and
+   `library_zip`. Checks all accounts including cargo escrow, every day/end
+   snapshot against a running transfer window, and row/key counts for replay.
+   With the manifest directory, writes `qualification-checks-<manifestprefix>.json`
+   with exact source provenance, table counts and daily reconciliation results.
+   This includes available Gold receipt/view counts; only scalar aggregates enter
+   the qualification file, enabling before/after replay comparisons.
 
 Publish the resulting JSON with the operational operator report-publication CLI
 and the exact source `manifest.json`. Publication validates the checkpoint and
 manifest hash; website clients only read the cached report. `ops/analyze_run.py`
 provides orchestration when available. Local report generation is deterministic
 in facts/provenance; `generated_at` varies with execution time.
+The current analysis version is `1.1.0`. A changed analysis version may replace the
+derived current report alias only for identical manifest/run pins; the previous
+report is preserved as `report-<manifestprefix>-<analysisversion>.json`. Conflicting
+facts at the same analysis version and conflicting archives are refused. Export
+chunks/manifests remain immutable. Import receipt `analysis_version` records the
+first successful import; the current report records the latest analysis version.
 
 ## HTTP and file contracts
 
@@ -57,6 +78,16 @@ checkpoint. V1 export requires `analytics_enabled`, `audit_available`, and
 `audit_from_tick_zero` to be true, `audit_schema_version=1`, nonzero audit cursor,
 and status `completed`, `stopped`, or `failed`. Paused/running and historical
 aggregate-only runs cannot satisfy the complete v1 audit contract.
+
+**Temporary fork limit:** `faultline.run-export.v1` supports original run timelines
+only. Neon control and changed forks preserve the parent `World.Id`, while the
+current Delta keys are run-scoped. Any authoritative `timeline_forked` event
+therefore rejects export before manifest finalization and rejects import/report
+preflight before table writes. Inherited parent metadata does not establish a
+new experimental condition. Do not rename IDs in exported records to bypass the
+guard. Fork analysis requires a reviewed next-version contract with stable source
+project/branch/timeline identity, parent lineage and fork point in every table key,
+manifest, report and evidence reference; original operational IDs must remain intact.
 
 `GET /api/runs/{id}/analytics/audit?after=N&limit=L&through_revision=R&through_sequence=S`
 returns `{run_id,through_revision,through_sequence,records,next_after,has_more}`.
@@ -133,6 +164,9 @@ latest `end` agent state and authoritative escrow snapshots. Unknown account
 openings/closing snapshots remain unknown; delayed outcomes are not assigned to
 the nearest earlier decision. Daily aggregate flow reconciliation is explicitly
 unknown because audit.v1 does not retain the optional old daily-flow buffer.
+`daily_account_reconciliation` independently checks each agent/day/end and escrow
+snapshot against the opening balance plus transfers already recorded at that exact
+audit sequence. A correct final balance cannot conceal a corrupted daily balance.
 
 An initial 50,000-agent, 365-day scenario produces 18.25 million daily rows plus
 opening/final snapshots, decisions, effects, events and every transfer leg.

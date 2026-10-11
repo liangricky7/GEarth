@@ -15,6 +15,7 @@ sys.path.insert(0, dbutils.widgets.get("library_zip"))
 from analytics.validate import validate, read_manifest, safe_file
 from analytics.export import canonical
 from analytics.report import build_report
+from analytics.delta_validation import qualify_delta
 from pyspark.sql import functions as F
 from delta.tables import DeltaTable
 
@@ -98,6 +99,13 @@ for entry in manifest["files"]:
             insert_only(options, "workspace.faultline_silver.decision_options", ["run_id", "decision_id", "option_index"])
 
 # COMMAND ----------
+# Fail before Gold views, cached report and receipt if the stored tables disagree.
+qualification = qualify_delta(spark, manifest, manifest_hash)
+qualification_path = export_directory / ("qualification-" + manifest_hash[:12] + ".json")
+qualification_path.write_bytes(canonical(qualification) + b"\n")
+display(spark.createDataFrame([(name, stats["rows"]) for name, stats in qualification["silver"].items()], ["silver_table", "rows"]))
+
+# COMMAND ----------
 # Views preserve exactly one daily observation and the later terminal observation.
 spark.sql("""CREATE OR REPLACE VIEW workspace.faultline_gold.agent_days AS
 SELECT * FROM workspace.faultline_silver.agent_daily WHERE frame_kind='day'""")
@@ -126,8 +134,23 @@ if report_path.exists() and report_path.read_bytes() != report_bytes:
     # Report generated_at changes between executions; facts/provenance remain stable.
     import json
     previous = json.loads(report_path.read_text())
-    if any(previous[key] != report[key] for key in ("source_manifest_sha256", "analysis_version", "summary", "checks")):
-        raise ValueError("Existing cached report has conflicting analysis")
+    if any(previous[key] != report[key] for key in ("run_id", "through_revision", "through_sequence", "source_manifest_sha256")):
+        raise ValueError("Existing cached report has conflicting source provenance")
+    if previous["analysis_version"] == report["analysis_version"]:
+        if any(previous[key] != report[key] for key in ("summary", "checks", "completeness", "agents", "countries", "government_comparison", "evidence_refs")):
+            raise ValueError("Existing cached report has conflicting analysis at the same version")
+    else:
+        import re
+        previous_version = previous["analysis_version"]
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,50}", previous_version):
+            raise ValueError("Unsafe prior analysis version")
+        archive = export_directory / ("report-" + manifest_hash[:12] + "-" + previous_version + ".json")
+        old_bytes = report_path.read_bytes()
+        if archive.exists() and archive.read_bytes() != old_bytes:
+            raise ValueError("Prior analysis report archive conflicts")
+        if not archive.exists():
+            archive.write_bytes(old_bytes)
+        report_path.write_bytes(report_bytes)
 else:
     report_path.write_bytes(report_bytes)
 receipt = {"run_id": run["run_id"], "through_revision": run["through_revision"], "through_sequence": run["through_sequence"],

@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from .export import FORMAT, TERMINAL, integer, record_check
+from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check
 from .transform import typed_record
 
 
@@ -72,6 +72,8 @@ def read_manifest(path):
             raise ValueError("file entry must be an object")
         for key in ("bytes", "row_count", "first_sequence", "last_sequence"):
             integer(entry.get(key), key, 1)
+        if "uncompressed_bytes" in entry:
+            integer(entry["uncompressed_bytes"], "uncompressed_bytes", 1)
         digest = entry.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64 or any(value not in "0123456789abcdef" for value in digest):
             raise ValueError("file digest must be lowercase SHA256")
@@ -96,9 +98,16 @@ def iter_records(manifest_path, manifest=None):
         if file_sha256(path) != entry.get("sha256") or path.stat().st_size != entry.get("bytes"):
             raise ValueError("chunk hash/size mismatch")
         rows = 0
+        uncompressed_bytes = 0
         first = None
-        with gzip.open(path, "rt", encoding="utf-8") as stream:
-            for line in stream:
+        with gzip.open(path, "rb") as stream:
+            while True:
+                line = stream.readline(MAX_ROW_BYTES + 1)
+                if not line:
+                    break
+                if len(line) > MAX_ROW_BYTES:
+                    raise ValueError("audit row exceeds the 2 MiB bounded-record limit")
+                uncompressed_bytes += len(line)
                 if not line.strip():
                     raise ValueError("blank audit row")
                 record = json.loads(line)
@@ -116,6 +125,8 @@ def iter_records(manifest_path, manifest=None):
                 yield record
         if rows != entry.get("row_count") or first != entry.get("first_sequence") or after != entry.get("last_sequence"):
             raise ValueError("chunk count/sequence range mismatch")
+        if "uncompressed_bytes" in entry and uncompressed_bytes != entry["uncompressed_bytes"]:
+            raise ValueError("chunk uncompressed byte count mismatch")
     if after != run["through_sequence"] or after != manifest.get("record_count"):
         raise ValueError("manifest coverage does not reach final committed cursor")
     if dict(counts) != manifest.get("counts_by_kind"):

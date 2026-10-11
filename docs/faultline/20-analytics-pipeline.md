@@ -12,7 +12,9 @@ Add `--analytics` to a new world run. For an isolated rule baseline:
 
 For an approved Neon run, use `--storage neon` and the existing private `DATABASE_URL` configuration. Analytics is off by default. Old runs without complete audit capture cannot be upgraded into complete historical decision/transaction evidence.
 
-Capture preserves opening balances, daily and final states, original decision contexts and menus, accepted/rejected/fallback/canceled outcomes, individual transfer legs, events and immediate engine-linked effects. Money is integer minor units. Proposed policies and enacted policies are separate events. Unknown links and model metadata remain unknown.
+Capture preserves opening balances, daily and final states, original decision contexts and menus, accepted/rejected/fallback/canceled outcomes, individual transfer legs, events and immediate engine-linked effects. Money is integer minor units. Proposed policies and enacted policies are separate events. Unknown links and model metadata remain unknown. The launcher records the engine commit only when source is clean.
+
+This version supports normal runs. Neon forks keep the original run ID; combining them would mix timelines. Analytics capture/export therefore refuses forks until a separate timeline identity and lineage contract are added. Ordinary forks without analytics retain main's behavior.
 
 An audit revision becomes visible only with its successful checkpoint commit. Export accepts committed completed, stopped or failed runs. Stopped/failed runs retain a complete captured snapshot but remain partial runs.
 
@@ -26,7 +28,7 @@ python3 ops/analyze_run.py RUN_ID /tmp/faultline-export-RUN_ID --storage neon --
 
 The observer defaults to `http://127.0.0.1:5080`; use `--api` for another address. The publication subprocess must have the same storage configuration as the observer. Local tests use `--storage local` and `FAULTLINE_RUNS_DIRECTORY` pointing to their isolated run directory. `--dotnet` and `--databricks` accept explicit executable paths.
 
-The command exports into a new directory, verifies file hashes and snapshot coverage, uploads chunks then the final manifest, installs versioned notebooks, submits one serverless import, and downloads its report only after success. Publication checks the exact manifest digest and committed run revision. The website reads the cached report; it never runs Databricks on a page request.
+The command exports into a new directory, verifies file hashes and snapshot coverage, uploads chunks then the final manifest, installs versioned notebooks, submits one serverless import, and downloads its report only after success. Delta row counts and source identities must match the manifest before a completion receipt is written. Publication checks the exact manifest digest and committed run revision. The website reads the cached report; it never runs Databricks on a page request.
 
 The export directory records the remote job ID. If execution fails or times out, preserve it, inspect the job in Databricks, and correct the specific cause before retrying. No report is published after an unsuccessful job. Reimporting identical keys is harmless; conflicting records fail rather than overwrite evidence.
 
@@ -38,8 +40,8 @@ For separate export, investigation and publication steps, see [the analytics con
 
 Measure a representative short run at the intended population before extending it to a year: database bytes, compressed export bytes, import time, query time and peak memory. Full original observations can dominate size. Driver validation/reconciliation uses disk-backed SQLite; this needs enough temporary disk and runtime. Databricks Free Edition quotas can limit a large import.
 
-Neon checkpoint transport uses bounded parts, but retains historical checkpoint parts as well as the operational JSONB state and audit. Retention/cleanup is a separate decision; no automatic deletion is enabled. Existing automatic run notes still read the complete event history at finalization, so their memory use also needs measurement.
+Neon checkpoint transport uses bounded parts, but retains historical checkpoint parts as well as the operational JSON state and audit. JSON preserves the engine's iteration order for main's deterministic forks. Scalar headers allow export paging without parsing the entire world. Retention/cleanup is a separate decision; no automatic deletion is enabled. Existing automatic run notes still read the complete event history at finalization, so their memory use also needs measurement.
 
-The ledger reconciles opening to final account balances, including escrow. A second comparison against the optional legacy verbose daily-flow buffer remains unavailable because its frame boundary differs from the audit boundary; the report labels that check `unknown`. Each individual transfer remains available. The upstream full-year economic calibration test remains failing and is separate from pipeline verification.
+The ledger reconciles every recorded daily/final account balance, including escrow, against opening balances and ordered transfers. A second comparison against the optional legacy verbose daily-flow buffer remains unavailable because its frame boundary differs from the audit boundary; the report labels that check `unknown`. Each individual transfer remains available. The upstream full-year economic calibration test remains failing and is separate from pipeline verification.
 
 Public report reads are bounded and read-only. Report publication is an operator command with private database configuration; no unauthenticated write endpoint is exposed. Do not put credentials in notebooks, exports, Git or screenshots.

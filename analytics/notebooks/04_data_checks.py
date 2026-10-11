@@ -7,6 +7,8 @@
 
 # COMMAND ----------
 dbutils.widgets.text("run_id", "")
+dbutils.widgets.text("export_directory", "", "Optional manifest/export directory for qualification JSON")
+dbutils.widgets.text("library_zip", "/Volumes/workspace/faultline_bronze/run_exports/_code/faultline-analytics.zip")
 from pyspark.sql import functions as F, Window
 run_id = dbutils.widgets.get("run_id")
 if not run_id:
@@ -44,3 +46,48 @@ duplicates = transactions.groupBy("transaction_id").count().where("count > 1")
 if duplicates.limit(1).count():
     raise ValueError("Duplicate transfer identities in Silver")
 print("Rerun import notebook with unchanged manifest, then rerun this notebook; rows and keys must remain identical.")
+
+# COMMAND ----------
+# Reconcile every observation using a running transfer window at its exact audit
+# sequence. This avoids joining each snapshot to every earlier ledger row.
+daily_agents = table("agent_daily").select(F.col("agent_id").alias("account_id"), "sequence", "tick", "frame_kind", F.col("cash_minor").alias("actual_minor"))
+daily_escrow = table("country_daily").select("sequence", "tick", "frame_kind", F.explode(F.from_json(F.get_json_object("payload_json", "$.escrow_accounts"), "array<struct<account_id:string,balance_minor:bigint>>")).alias("account")).select("sequence", "tick", "frame_kind", F.col("account.account_id").alias("account_id"), F.col("account.balance_minor").alias("actual_minor"))
+observations = daily_agents.unionByName(daily_escrow).withColumn("net_minor", F.lit(0).cast("long")).withColumn("row_order", F.lit(1))
+movements = transactions.select(F.col("recipient_account_id").alias("account_id"), "sequence", "tick", F.lit(None).cast("string").alias("frame_kind"), F.lit(None).cast("long").alias("actual_minor"), F.col("amount_minor").alias("net_minor")).unionByName(
+    transactions.select(F.col("sender_account_id").alias("account_id"), "sequence", "tick", F.lit(None).cast("string").alias("frame_kind"), F.lit(None).cast("long").alias("actual_minor"), (-F.col("amount_minor")).alias("net_minor"))).withColumn("row_order", F.lit(0))
+running = observations.unionByName(movements).withColumn("running_net_minor", F.sum("net_minor").over(Window.partitionBy("account_id").orderBy("sequence", "row_order").rowsBetween(Window.unboundedPreceding, Window.currentRow)))
+daily_checks = running.where(F.col("actual_minor").isNotNull()).join(all_openings, "account_id", "left").withColumn("status",
+    F.when(F.col("opening_minor").isNull(), "unknown").when(F.col("actual_minor") == F.col("opening_minor") + F.col("running_net_minor"), "pass").otherwise("fail"))
+daily_summary = daily_checks.agg(F.count("*").alias("snapshots"),
+    F.sum(F.when(F.col("status") == "fail", 1).otherwise(0)).alias("mismatches"),
+    F.sum(F.when(F.col("status") == "unknown", 1).otherwise(0)).alias("unknown_openings")).first().asDict()
+display(daily_checks.groupBy("status").count())
+display(daily_checks.where("status != 'pass'").limit(100))
+
+# COMMAND ----------
+export_directory = dbutils.widgets.get("export_directory")
+if export_directory:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, dbutils.widgets.get("library_zip"))
+    from analytics.validate import validate, read_manifest
+    from analytics.delta_validation import qualify_delta
+    from analytics.export import canonical
+    manifest_path = Path(export_directory) / "manifest.json"
+    integrity = validate(manifest_path)
+    manifest = read_manifest(manifest_path)
+    if manifest["run"]["run_id"] != run_id:
+        raise ValueError("Selected run differs from source manifest")
+    qualification = qualify_delta(spark, manifest, integrity["source_manifest_sha256"])
+    qualification["gold"] = {}
+    for name in ("import_receipts", "agent_days", "agent_latest", "country_days", "agent_timeline"):
+        target_table = "workspace.faultline_gold." + name
+        qualification["gold"][name] = {"available": spark.catalog.tableExists(target_table)}
+        if qualification["gold"][name]["available"]:
+            qualification["gold"][name]["rows"] = spark.table(target_table).where(F.col("run_id") == run_id).count()
+    qualification["daily_account_reconciliation"] = {
+        "status": "fail" if daily_summary["mismatches"] else "unknown" if daily_summary["unknown_openings"] else "pass",
+        "details": daily_summary}
+    target = Path(export_directory) / ("qualification-checks-" + integrity["source_manifest_sha256"][:12] + ".json")
+    target.write_bytes(canonical(qualification) + b"\n")
+    print("Qualification JSON:", target)

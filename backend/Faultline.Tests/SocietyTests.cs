@@ -160,14 +160,14 @@ public sealed class SocietyTests
     public void DifferentInstitutionsEnactTheSamePolicyWithDifferentDelays()
     {
         var world = SocietyFactory.Create("policy", false, 1000);
-        var action = new ActionProposal("adjust_tax", new JsonObject { ["change_basis_points"] = -50 }, "Test policy.", []);
+        var action = new ActionProposal("adjust_tax", new JsonObject { ["income_tax_percent"] = 12 }, "Test policy.", []);
         SocietyDiplomacy.Propose(world, world.Agents["aster_government"], action, "cause");
         SocietyDiplomacy.Propose(world, world.Agents["dune_government"], action, "cause");
-        Assert.Equal(950, world.Society!.Nations["dune"].TaxBasisPoints); // the dictatorship acts at once
+        Assert.Equal(1200, world.Society!.Nations["dune"].TaxBasisPoints); // the dictatorship acts at once
         Assert.Equal(1500, world.Society.Nations["aster"].TaxBasisPoints);
         for (var tick = 0; tick < 3; tick++)
             SocietyEngine.Advance(world);
-        Assert.Equal(1450, world.Society.Nations["aster"].TaxBasisPoints);
+        Assert.Equal(1200, world.Society.Nations["aster"].TaxBasisPoints);
         Assert.Equal("adjust_tax", world.Society.Nations["aster"].LastPolicyAction);
         SocietyEconomy.AssertConservation(world);
     }

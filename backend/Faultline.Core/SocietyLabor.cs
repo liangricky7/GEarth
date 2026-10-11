@@ -43,7 +43,9 @@ public static class SocietyLabor
     ];
 
     public const int CourseDays = 28;
+    public const int PartTimeCourseDays = 56; // half days while keeping the job, at half pay
     public const double GraduateOutputBoost = 1.25; // ponytail: tunable; one course, no stacking
+    public const int GraduatePayPremiumPct = 15; // employers keep the rest of the graduate's extra output
 
     public static Sector SectorOf(string id) => Sectors.Single(sector => sector.Id == id);
 
@@ -94,14 +96,20 @@ public static class SocietyLabor
         .Concat(firm.OwnerId is { } owner && world.Agents[owner] is { Role: "entrepreneur" } boss && OwnerWorks(boss, firm) ? [boss] : [])
         .ToArray();
 
-    // Output factor for one working day: a striker or someone too sick to work produces nothing; overtime
-    // adds a quarter; a graduate produces a quarter more.
+    // Output factor for one working day: a striker, someone owed two weeks of wages or someone too sick to
+    // work produces nothing; overtime adds a quarter; a graduate produces a quarter more; a part-time student
+    // works half days.
     public static double DayEffort(World world, Agent worker)
     {
-        if (worker.WorkEffort == 0 || SocietyEconomy.TooSick(worker))
+        if (worker.WorkEffort == 0 || OnArrearsStrike(worker) || SocietyEconomy.TooSick(worker))
             return 0;
-        return (WorksOvertime(world, worker) ? OvertimeOutput : 1) * (worker.Graduated ? GraduateOutputBoost : 1);
+        return (WorksOvertime(world, worker) ? OvertimeOutput : 1) * (worker.Graduated ? GraduateOutputBoost : 1)
+            * (worker.PartTimeStudent && IsStudent(worker) ? 0.5 : 1);
     }
+
+    public const int ArrearsStrikeWeeks = 2;
+
+    public static bool OnArrearsStrike(Agent worker) => worker.ArrearsWeeks >= ArrearsStrikeWeeks;
 
     // Overtime needs the employer's offer and the worker's consent (effort 2); owners decide for themselves.
     public static bool WorksOvertime(World world, Agent worker) => worker.WorkEffort == 2
@@ -487,7 +495,12 @@ public static class SocietyLabor
         var staff = Staff(world, firm);
         int cuts = 0, layoffs = 0;
         var revenue = society.PeriodRevenueMinor.GetValueOrDefault(firm.Id);
-        if (!planned && staff.Where(worker => worker.WorkEffort > 0).Sum(worker => worker.SalaryMinor) > firm.CashMinor)
+        // A banking firm draws on its deposit for the week's pay; a state-run employer owes what it cannot pay.
+        var stateRun = firm.OwnerId is null && !SocietyBank.IsBank(firm);
+        if (SocietyBank.Banks(firm))
+            SocietyBank.Draw(world, firm, staff.Sum(worker => worker.SalaryMinor)
+                + TableWage.GetValueOrDefault(firm.OwnerId is { } id ? world.Agents[id].FormerOccupation ?? "" : "", 0));
+        if (!planned && !stateRun && staff.Where(worker => worker.WorkEffort > 0).Sum(worker => worker.SalaryMinor) > firm.CashMinor)
         {
             // Short of cash: first a 10% pay cut, then lay off the most expensive workers.
             foreach (var worker in staff)
@@ -507,15 +520,21 @@ public static class SocietyLabor
             firm.DistressWeeks = revenue == 0 && firm.CashMinor < TableWage[SectorOf(firm.Specialty!).Occupation]
                 ? firm.DistressWeeks + 1 : 0;
         var paid = 0L;
+        var dues = new List<(Agent Worker, long Wage)>();
         foreach (var worker in staff)
         {
             // Overtime worked this week is paid at time and a half on top of the salary.
             var overtime = worker.SalaryMinor * worker.OvertimeDays * OvertimePayEighths / (8 * DaysPerWeek);
             worker.OvertimeDays = 0;
-            if (worker.WorkEffort > 0) // strikers forfeit the week's pay
-                paid += SocietyEconomy.PayWage(world, nation, government, firm, worker,
-                    Math.Min(SocietyEconomy.EarnedWage(worker, worker.SalaryMinor) + overtime, firm.CashMinor));
+            if (worker.WorkEffort == 0) // strikers forfeit the week's pay
+                continue;
+            var wage = OnArrearsStrike(worker) ? 0 : SocietyEconomy.EarnedWage(worker, worker.SalaryMinor) + overtime;
+            if (stateRun)
+                dues.Add((worker, wage));
+            else
+                paid += SocietyEconomy.PayWage(world, nation, government, firm, worker, Math.Min(wage, firm.CashMinor));
         }
+        paid += SocietyEconomy.PayOwed(world, nation, government, firm, dues);
         // A graduate on staff earns the firm the government's hiring bonus, if one is offered.
         var bonus = Math.Min(government.CashMinor, (long)nation.HiringBonusMinor * staff.Count(worker => worker.Graduated));
         if (bonus > 0 && firm.OwnerId is not null)
@@ -538,9 +557,11 @@ public static class SocietyLabor
                 var draw = Math.Min(afterTax, wage) + Math.Max(0, afterTax - wage) * OwnerDrawBasisPoints / 10000;
                 SocietyEconomy.Transfer(world, firm, owner, Math.Min(firm.CashMinor, draw), "owner_draw");
             }
-            // Dividends: cash beyond a buffer of several weeks' payroll goes to the owner instead of idling.
+            // Dividends: cash and deposits beyond a buffer of several weeks' payroll go to the owner instead of idling.
             var buffer = Math.Max(10000, DividendBufferWeeks * Staff(world, firm).Sum(worker => worker.SalaryMinor));
-            dividend = SocietyBank.IsBank(firm) ? SocietyBank.Dividend(world, firm) : Math.Max(0, firm.CashMinor - buffer);
+            dividend = SocietyBank.IsBank(firm) ? SocietyBank.Dividend(world, firm) : Math.Max(0, firm.CashMinor + firm.DepositMinor - buffer);
+            SocietyBank.Draw(world, firm, dividend);
+            dividend = Math.Min(dividend, firm.CashMinor);
             SocietyEconomy.Transfer(world, firm, owner, dividend, "dividend");
             nation.DividendsPaidMinor += dividend;
         }
@@ -571,8 +592,13 @@ public static class SocietyLabor
         double step;
         if (spec.Good is { } good)
         {
+            // Shoppers who wanted the good but could not afford this seller are lost sales: when more than a
+            // tenth of custom walks away, the price comes down (never below marginal cost) before anything else.
             var stockDays = StockDays(world, firm, good);
-            step = stockDays < 7 ? MaxPriceStepPct * (7 - stockDays) / 7
+            var lost = society.TurnedAwayThisWeek.GetValueOrDefault(firm.Id);
+            var lostShare = lost / (double)Math.Max(1, sold + lost);
+            step = lostShare > 0.1 && firm.PriceMinor > marginalCost ? -Math.Min(MaxPriceStepPct, 50 * lostShare)
+                : stockDays < 7 ? MaxPriceStepPct * (7 - stockDays) / 7
                 : stockDays > 21 ? -Math.Min(MaxPriceStepPct, MaxPriceStepPct * (stockDays - 21) / 42)
                 : losing ? 5 : 0;
         }
@@ -587,9 +613,11 @@ public static class SocietyLabor
                 : losing ? 5
                 : turnedAway == 0 && utilization < 0.6 ? -MaxPriceStepPct * (0.6 - utilization) / 0.6 : 0;
         }
-        var price = (int)Math.Round(firm.PriceMinor * (100 + step) / 100);
-        firm.PriceMinor = Math.Clamp(price, spec.BasePrice / 2, spec.BasePrice * 3);
+        firm.PriceMinor = ClampPrice(spec, (int)Math.Round(firm.PriceMinor * (100 + step) / 100));
     }
+
+    // Prices stay between half and three times the sector's base price.
+    public static int ClampPrice(Sector spec, int price) => Math.Clamp(price, spec.BasePrice / 2, spec.BasePrice * 3);
 
     // Closing repays the firm's bank loans, then returns its cash to its owner; a competitor buys stock at
     // half price, and whatever is not bought goes to the owner. Nothing is created or destroyed.
@@ -622,6 +650,7 @@ public static class SocietyLabor
                 continue;
             firm.Inventory[good] = 0;
         }
+        SocietyBank.Withdraw(world, firm, firm.DepositMinor);
         SocietyBank.Recover(world, nation, firm);
         if (owner is not null)
         {
@@ -660,7 +689,7 @@ public static class SocietyLabor
         person.EmployerId = firm.Id;
         if (!(Unskilled.Contains(occupation) && !Unskilled.Contains(person.Occupation)))
             person.Occupation = occupation;
-        person.SalaryMinor = firm.WageOfferMinor;
+        person.SalaryMinor = firm.WageOfferMinor * (100 + (person.Graduated ? GraduatePayPremiumPct : 0)) / 100;
         person.UnemployedSinceTick = -1;
         person.OvertimeDays = 0;
     }

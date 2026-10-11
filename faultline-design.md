@@ -59,7 +59,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
 | World engine | C#/.NET 10; 10 countries; 1,100 agents by default (software range 170–100,000); one tick = one day | No maximum population qualified for live inference |
 | Economy | Labor market, fixed salaries, entrepreneurs, 13 competing firms in 8 sectors per country, quality of life with a steep health penalty, too sick to work, always-staffed clinics with capitation, pharmacy medicine, hunger penalty, automatic input and food imports, startup grants, food and tuition subsidies, school and graduates, planned-economy quotas set by a planner, tax steps, overtime by consent, wage/sales/profit tax, welfare, unemployment and sick benefit ([5.10](#510-public-services-batch)) | Live behavior of the new levers; product quality |
 | Trade and politics | Physical shipments with escrow, freight firms, tariffs, routes; diplomacy, borders, conflict, migration, elections, five government profiles | Tick-based political durations not rescaled to days |
-| Banking | Full bank (deposits, interest, insurance, bank runs) merged, but **temporarily paused** (`SocietyBank.Paused`) so the public-services batch can be measured alone | Re-enable by reverting the pause commit, then compare runs |
+| Banking | Full bank (deposits, interest, insurance, bank runs) merged | Live calibration with the public-services batch |
 | Agents and prompts | Seeded traits and endowments; role-specific observations; compact numbered menus; `{choice, reason}` answers | Behavioral effect of traits and endowments not evaluated |
 | Scheduling | Weekly cohorts (institutions weekly, citizens every 8 weeks); weekly barrier before payroll; bounded, cancellable queue | Sustained live throughput of the weekly system |
 | Compute | Spark A: Qwen3-8B (institutions) + Qwen3-4B (citizens), verified; AMD Qwen3-4B, verified | Spark B; AMD's second model |
@@ -86,7 +86,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
   - Then a slump set in: 21–55% unemployment, no startups or closures, and firms hoarding cash.
   - This drove the redesign in [13.4](#134-redesign-after-kennedys-run).
 - **Rule-mode 365-day run before the public-services batch:** health reached 0 in 7 of 10 countries and both planned treasuries emptied.
-- **The same run after the batch (in-process, banking paused):** all 10 countries keep average health 77–85 and quality of life 64–81, with exact conservation; unemployment 0–20% (highest in monarchies, which pay no benefit). `MoneyKeepsCirculatingForAFullYear` passes.
+- **The same run after the batch (in-process):** all 10 countries keep average health 77–85 and quality of life 64–81, with exact conservation; unemployment 0–20% (highest in monarchies, which pay no benefit). `MoneyKeepsCirculatingForAFullYear` passes.
 - **A stopped hybrid live run** used both Qwen models but accumulated HTTP-error fallbacks; the cause is still unexplained.
 
 ---
@@ -207,9 +207,9 @@ Voting and approval are not weighted by wealth. Profiles are paired by ordinal a
 
 | Role | Goal | Model decisions |
 |---|---|---|
-| Citizen | Keep their own quality of life high | Household stock target; work effort (0 strike, 1 normal, 2 accept offered overtime); doctor threshold (0/50/70/85); visit a doctor now (health below 70); enroll in school (an employee leaves their job); seek a better job (any raise for 28 days); express support; migrate (arrives unemployed); pay a local resident, government or employer; buy extra food or energy; start any business where residents feel a gap and the market shows one |
+| Citizen | Keep their own quality of life high | Household stock target; work effort (0 strike, 1 normal, 2 accept offered overtime); doctor threshold (0/50/70/85); visit a doctor now (health below 70); enroll in school full time (an employee leaves their job) or part time (keeping it), with a student loan if needed; seek a better job (any raise for 28 days); express support; migrate (arrives unemployed); pay a local resident, government or employer; buy extra food or energy; start any business where residents feel a gap and the market shows one |
 | Entrepreneur | Keep their one business profitable while meeting their own needs | Citizen choices plus, for the business: price ±10%, wage ±10% (applies to current staff), headcount −1/+1/+2, imports in three sizes |
-| Government | Meet public needs with a funded budget | Income tax in steps of ±0.25/0.5/1 point (0–60%), sales tax (0/5/10%), weekly welfare (0/100/200), unemployment benefit (0/300/600), clinic capitation (0/50/150 per resident), productivity investment, and when they apply: startup grants for an empty essential sector, food subsidy (0/25/50/75%), tuition subsidy (0/50/100%), student stipend, graduate hiring bonus (0/100/200); borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Sees last week's budget, the last policy's effect, the treasury in weeks of spending, hunger and quality of life by part |
+| Government | Meet public needs with a funded budget | Income tax as a new whole-percent rate within 5 points, at a budget turn every 4 weeks (0–60%), sales tax (0/5/10%), weekly welfare (0/100/200), unemployment benefit (0/300/600), clinic capitation (0/50/150 per resident), productivity investment, and when they apply: startup grants for an empty essential sector, food subsidy (0/25/50/75%), tuition subsidy (0/50/100%), student stipend, graduate hiring bonus (0/100/200); borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Sees last week's budget, the last policy's effect, the treasury in weeks of spending, hunger and quality of life by part |
 | Planner (planned economy) | Meet needs without shortages or waste | Every 4 weeks, one `set_plan` with a free weekly quota per sector (food, energy, tools, medicine, clinic visits, entertainment). Sees each sector's quota, sales, stock or queue, workers and capacity |
 | State firm (planned economy) | Supply its sector | Imports; prices and wages are fixed by the state |
 | Owned firm | — | No turns of its own; acts through its entrepreneur |
@@ -349,7 +349,7 @@ All amounts are integers. Cash plus shipment escrow, and goods held plus goods i
 
 ### 5.8 Legacy credit
 
-Businesses can request a working-capital loan, and the bank agent approves it. Loans accrue 5% interest and mature after 60 days as repaid or defaulted. In practice almost no loans happen. The full bank design is in [12.1](#121-banking-built-on-hold).
+Businesses can request a working-capital loan, and the bank agent approves it. Loans accrue 5% interest and mature after 60 days as repaid or defaulted. In practice almost no loans happen. The full bank design is in [12.1](#121-banking).
 
 ### 5.9 Old tick durations (open)
 
@@ -365,7 +365,7 @@ Rescaling them is a design decision ([14](#14-known-problems-and-open-questions)
 
 ### 5.10 Public services batch
 
-Built on October 11, 2026 after the hosted live run `world_20261011_004205_8e1892`, in which health fell to 0 in every market country: a clinic laid off its only doctor, energy-poor countries lost their power plants and with them all food output, and governments flipped tax rates weekly while their treasuries grew. Banking is paused while this batch is measured alone.
+Built on October 11, 2026 after the hosted live run `world_20261011_004205_8e1892`, in which health fell to 0 in every market country: a clinic laid off its only doctor, energy-poor countries lost their power plants and with them all food output, and governments flipped tax rates weekly while their treasuries grew.
 
 - **Health and work:** decay, the health curve, too sick to work and pharmacy medicine ([5.5](#55-households-and-quality-of-life), [5.6](#56-health-and-public-services)).
 - **Hunger:** a resident who missed their last meal produces 99% less until they eat again. Farm workers eat first from their employer's stock, paying cash or, when broke, owing it from the next wage. Governments see hungry and priced-out residents and the share of working days lost.
@@ -374,7 +374,45 @@ Built on October 11, 2026 after the hosted live run `world_20261011_004205_8e189
 - **Food subsidy:** offered when at least 10% of residents went hungry with food on the shelves; the treasury pays 25, 50 or 75% of households' food and farms still receive the full price.
 - **School:** a state-owned school in every country (private schools allowed through the gap check). A citizen who is not studying or graduated enrolls for a fixed 2,000 tuition; an employee leaves their job to do so. The course lasts 28 days without pay (a stipend if offered). Graduates produce 25% more (tunable) and are hired first. Each working teacher takes 5 students; the state school grows when classes fill and keeps its teachers when they don't. The old national education factor is gone.
 - **Planned economies:** a planner sets each sector's weekly quota every four weeks with free numbers; state firms make or serve their share at fixed prices, so mistakes show as queues or unsold stock rather than as a built-in penalty. Without a model the rule default raises a quota 10% after shortages and lowers it 10% after gluts.
-- **Taxes:** income tax moves in ±0.25/0.5/1-point steps; the government sees what its last policy did to the weekly budget.
+- **Taxes:** income tax moves in ±0.25/0.5/1-point steps; the government sees what its last policy did to the weekly budget. Replaced in [5.11](#511-fixes-after-the-no-bank-run).
+
+### 5.11 Fixes after the no-bank run
+
+Built on October 11, 2026 after the live no-bank run `world_20261011_033639_b47aba` (365 days). In that run, health held (65–75 in market countries) but:
+- owners chose a 10% price rise on all 4,662 turns, so every market firm sat at the 3× price cap;
+- 30–40% of residents were priced out of food every week, and median citizen savings fell to 0.56 WLD;
+- 8 of 10 governments cut income tax to 0–0.5% (the model read `change_basis_points=25` as a cut, and at temperature 0 every government made the same choice);
+- nobody enrolled in school;
+- planned treasuries drained.
+
+- **Prices:**
+  - Owners see their units sold, customers lost, profit, share of sector sales, competitors' prices and sales, and what their last price change did to sales.
+  - No price change is offered that the price limits would undo.
+  - A household that could not afford a seller, but could pay a price a fifth lower, counts as a sale lost to price. When lost sales exceed a tenth of custom, the price review cuts the price (never below marginal cost) before any shortage rise.
+- **Menus:**
+  - Every agent's options are shown in a seeded order per agent and day.
+  - `action_accepted` logs `choice_index` and `menu_size`.
+  - Citizens' model calls use temperature 0.5 (institutions stay at 0), so a population does not act as one.
+- **Income tax:**
+  - One `adjust_tax` option with a free whole-percent rate within 5 points of the current one, offered only at a budget turn every 28 days.
+  - The government sees the rate as a percent and the next budget tick.
+- **School:**
+  - Full time (28 days, an employee leaves their job) or part time (56 days at half hours and half pay, keeping the job).
+  - Graduates are paid 15% more (on hire, or at once if they kept their job).
+  - Each option shows tuition, pay given up, the raise and the weeks to pay it back.
+  - A student who cannot pay borrows the tuition from the bank. Repayment starts after the course. After three missed payments the government pays the bank and takes over the debt.
+- **Empty treasury:**
+  - Public and state-firm wages that cannot be paid are owed as arrears, everyone getting the same fraction.
+  - Two weeks owed and the worker strikes (no output) until paid.
+  - Welfare, benefits and capitation already stop when the treasury is empty.
+  - Governments see how many weeks the treasury will last at the current rate, what happens when it runs out, total arrears and state-bank debt.
+  - A planned state short of a week's spending first borrows from its state bank (one growing loan, repaid over 26 weeks).
+- **Banking (with [12.1](#121-banking)):**
+  - Private firms deposit cash above two weeks of payroll and draw on it for wages and dividends.
+  - Moving one's own savings is not counted as income or spending.
+  - A failed firm's owner covers its loan from their savings, and the rest becomes their personal debt to the bank, collected weekly.
+  - Deposit insurance is capped per depositor across withdrawals.
+  - War costs are paid to soldiers instead of the bank.
 
 ---
 
@@ -723,21 +761,21 @@ Not claimed:
 
 ## 12. Deferred and planned designs
 
-### 12.1 Banking (built, on hold)
+### 12.1 Banking
 
-The full bank is on `labor-market-potential-bank` (commit `6363e82`). It waits until the pre-banking economy is analyzed and calibrated.
+The full bank is merged. It was paused (`SocietyBank.Paused`) for the no-bank run and is back on with the fixes in [5.11](#511-fixes-after-the-no-bank-run).
 
 **Ricky's decisions:**
-- **Borrowers:** would-be entrepreneurs and businesses can borrow.
+- **Borrowers:** would-be entrepreneurs, businesses and students can borrow (student loans are government-guaranteed); a planned state borrows from its state bank.
 - **Deposits:**
   - Savings earn interest, and deposits fund lending, so bank runs are possible.
-  - An automatic weekly sweep keeps 2 weeks of pay in cash and deposits the rest.
+  - An automatic weekly sweep keeps 2 weeks of pay in cash and deposits the rest; private firms keep 2 weeks of payroll and deposit the rest.
   - Residents choose whether to keep savings in the bank.
 - **Ownership and staff:**
   - One owner-run bank per country (state-owned in planned economies).
   - A banker occupation, with each banker managing 10 loans.
 - **Bank runs:** happen only when people choose to withdraw.
-- **Default:** limited liability. The firm owes the loan, and the owner keeps their savings.
+- **Default:** the firm owes the loan, and its owner personally guarantees it: the owner's savings cover what the firm cannot, and the rest becomes the owner's debt.
 
 **Mechanics:**
 - **Reserve:** 10%.
@@ -762,8 +800,8 @@ The full bank is on `labor-market-potential-bank` (commit `6363e82`). It waits u
 
 Collapsing countries fell from 8 to 6.
 
-**To settle before merging:**
-- War costs still pay into the bank.
+**Still open:**
+- Interest rates do not follow inflation (deferred until the price fixes are seen in a run).
 - The dictatorship authority check reads bank cash, which becomes depositors' reserves.
 - One bank per country means no competition for deposits.
 - Loss-making rate settings are allowed.
@@ -949,7 +987,7 @@ The redesign added:
 ## 14. Known problems and open questions
 
 **Known problems**
-1. **Year-long collapse (addressed, awaiting a live run).** Before the public-services batch, 7–8 of 10 countries reached health 0 within a rule-mode year. The batch ([5.10](#510-public-services-batch)) keeps all ten healthy in rule mode with banking paused; a Spark run without banks, then one with banks, should confirm it under model decisions.
+1. **Year-long collapse (addressed, awaiting a live run).** Before the public-services batch, 7–8 of 10 countries reached health 0 within a rule-mode year. The batch ([5.10](#510-public-services-batch)) keeps all ten healthy in rule mode; a Spark run should confirm it under model decisions.
 2. **Planned treasuries still drain slowly** (about 0.6k a day in a rule-mode year with banking on): households' savings pile up in the state bank while the state covers firm losses. The planner's quotas and, later, bank lending should be watched for this.
 3. **Monarchies idle up to a fifth of their factory workers** in a decision-free year: they pay no unemployment benefit, so the jobless cannot buy household goods.
 4. **The hybrid live run's HTTP-error fallbacks** are unexplained.

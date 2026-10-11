@@ -12,10 +12,11 @@ public sealed class PublicServicesTests
         .Where(agent => agent.CountryId == country && agent.Role == "citizen" && agent.EmployerId is { } employer
             && world.Agents[employer].Specialty == sector).OrderBy(agent => agent.Id).First();
 
-    private static DecisionRecord Decide(World world, Agent agent, string actionType, Func<JsonObject, JsonObject>? edit = null)
+    private static DecisionRecord Decide(World world, Agent agent, string actionType, Func<JsonObject, JsonObject>? edit = null,
+        Func<Candidate, bool>? pick = null)
     {
         var job = SocietyEngine.Observe(world, agent.Id, DateTimeOffset.UtcNow);
-        var candidate = job.Candidates.First(item => item.ActionType == actionType);
+        var candidate = job.Candidates.First(item => item.ActionType == actionType && (pick?.Invoke(item) ?? true));
         var parameters = SocietyActions.Resolve(candidate);
         return SocietyEngine.Apply(world, job, new DecisionResult(job.RequestId,
             new ActionProposal(actionType, edit?.Invoke(parameters) ?? parameters, "test", []), "model", "test", 0), DateTimeOffset.UtcNow);
@@ -151,7 +152,7 @@ public sealed class PublicServicesTests
         var school = Assert.Single(SocietyLabor.Firms(world, "aster", "school"));
         var schoolCash = school.CashMinor;
 
-        Assert.True(Decide(world, student, "enroll_school").Accepted);
+        Assert.True(Decide(world, student, "enroll_school", pick: FullTime).Accepted);
         Assert.Null(student.EmployerId);
         Assert.True(SocietyLabor.IsStudent(student));
         Assert.Equal(schoolCash + 2000, school.CashMinor);
@@ -164,6 +165,109 @@ public sealed class PublicServicesTests
         student.Health = 100;
         student.WorkEffort = 1;
         Assert.Equal(SocietyLabor.GraduateOutputBoost, SocietyLabor.DayEffort(world, student));
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    private static bool FullTime(Candidate candidate) => !candidate.Params["part_time"]!.GetValue<bool>();
+
+    // Part time keeps the job at half hours and half pay for eight weeks; graduates are paid 15% more, and the
+    // option shows the cost, the raise and the payback.
+    [Fact]
+    public void PartTimeStudentsKeepTheirJobAndGraduatesEarnMore()
+    {
+        var world = NewWorld();
+        var student = Employee(world, "aster", "tools");
+        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], student, 5000);
+        var (employer, salary) = (student.EmployerId, student.SalaryMinor);
+        var offer = SocietyActions.Available(world, student).Single(candidate => candidate.ActionType == "enroll_school" && !FullTime(candidate));
+        var raise = salary * SocietyLabor.GraduatePayPremiumPct / 100;
+        Assert.Equal(raise, offer.Params["raise_minor_per_week"]!.GetValue<long>());
+        Assert.Equal((2000 + 4 * salary + raise - 1) / raise, offer.Params["payback_weeks"]!.GetValue<long>());
+
+        Assert.True(Decide(world, student, "enroll_school", pick: candidate => !FullTime(candidate)).Accepted);
+        Assert.Equal(employer, student.EmployerId);
+        student.Health = 100;
+        student.WorkEffort = 1;
+        Assert.Equal(0.5, SocietyLabor.DayEffort(world, student));
+        Assert.Equal(salary / 2, SocietyEconomy.EarnedWage(student, salary));
+
+        Assert.Equal(world.Tick + SocietyLabor.PartTimeCourseDays, student.StudentUntilTick);
+        SocietySchool.Graduate(world, student); // still in the same job: the premium is paid at once
+        Assert.Equal(salary + raise, student.SalaryMinor);
+        Assert.False(student.PartTimeStudent);
+        var hired = world.Agents.Values.First(person => person.Role == "citizen" && person.EmployerId is null && !person.Graduated);
+        hired.Graduated = true;
+        SocietyLabor.Hire(world, world.Agents["aster_tools"], hired, "factory_worker");
+        Assert.Equal(world.Agents["aster_tools"].WageOfferMinor * 115 / 100, hired.SalaryMinor);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    // A student who cannot pay borrows the tuition; repayment starts after the course, and after three missed
+    // payments the government pays the bank and takes the debt over.
+    [Fact]
+    public void StudentLoansAreGuaranteedByTheGovernment()
+    {
+        var world = NewWorld();
+        var student = Employee(world, "aster", "tools");
+        var government = world.Agents["aster_government"];
+        var bank = world.Agents["aster_bank"];
+        SocietyEconomy.Transfer(world, student, government, student.CashMinor);
+
+        Assert.True(Decide(world, student, "enroll_school", pick: candidate => FullTime(candidate) && candidate.Params.ContainsKey("student_loan_minor")).Accepted);
+        var loan = Assert.Single(world.Society!.Credit, credit => credit.Kind == "student");
+        Assert.Equal(2000, loan.PrincipalMinor);
+        SocietyBank.Week(world, world.Society.Nations["aster"]);
+        Assert.Equal(2000, loan.PrincipalLeftMinor); // nothing is due while studying
+
+        SocietySchool.Graduate(world, student);
+        var bankBefore = bank.CashMinor;
+        for (var week = 0; week < SocietyBank.MissedPaymentsToDefault; week++)
+            SocietyBank.Week(world, world.Society.Nations["aster"]);
+        Assert.Equal(government.Id, loan.BankId);
+        Assert.Equal(bankBefore + 2000, bank.CashMinor);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    // A state employer that cannot pay owes the wages; two weeks owed and the worker strikes until paid.
+    [Fact]
+    public void UnpaidPublicWagesBecomeArrearsAndAStrike()
+    {
+        var world = NewWorld();
+        var government = world.Agents["aster_government"];
+        var school = Assert.Single(SocietyLabor.Firms(world, "aster", "school"));
+        var teacher = SocietyLabor.Staff(world, school).First();
+        var sink = world.Agents["aster_journalist"];
+        SocietyEconomy.Transfer(world, government, sink, government.CashMinor);
+        SocietyEconomy.Transfer(world, school, sink, school.CashMinor);
+
+        for (var day = 0; day < 2 * SocietyLabor.DaysPerWeek; day++)
+            SocietyEngine.Advance(world);
+        Assert.True(teacher.ArrearsMinor > 0);
+        Assert.True(SocietyLabor.OnArrearsStrike(teacher));
+        Assert.Equal(0, SocietyLabor.DayEffort(world, teacher));
+
+        SocietyEconomy.Transfer(world, sink, government, sink.CashMinor);
+        for (var day = 0; day < SocietyLabor.DaysPerWeek; day++)
+            SocietyEngine.Advance(world);
+        Assert.Equal(0, teacher.ArrearsMinor);
+        Assert.False(SocietyLabor.OnArrearsStrike(teacher));
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    // A planned state short of a week's spending borrows from its state bank before wages go unpaid.
+    [Fact]
+    public void APlannedTreasuryBorrowsFromItsStateBank()
+    {
+        var world = NewWorld();
+        var government = world.Agents["cinder_government"];
+        for (var day = 0; day < SocietyLabor.DaysPerWeek; day++)
+            SocietyEngine.Advance(world);
+        SocietyEconomy.Transfer(world, government, world.Agents["cinder_journalist"], government.CashMinor);
+        for (var day = 0; day < SocietyLabor.DaysPerWeek; day++)
+            SocietyEngine.Advance(world);
+        var loan = Assert.Single(world.Society!.Credit, credit => credit.Kind == "treasury");
+        Assert.Equal(government.Id, loan.BorrowerId);
+        Assert.Contains(world.Events, item => item.EventType == "treasury_borrowed");
         SocietyEconomy.AssertConservation(world);
     }
 
@@ -209,15 +313,25 @@ public sealed class PublicServicesTests
         Assert.Equal(8 * SocietyLabor.TableWage["farmer"], SocietyLabor.StartupCost("food"));
     }
 
-    // Income tax moves in small steps chosen by the government.
+    // Income tax is one option, a new whole-percent rate near the current one, offered only at a budget turn
+    // every four weeks.
     [Fact]
-    public void GovernmentsAdjustTaxInSmallSteps()
+    public void GovernmentsSetTaxAtABudgetTurn()
     {
         var world = NewWorld();
-        var steps = SocietyActions.Available(world, world.Agents["aster_government"])
-            .Where(candidate => candidate.ActionType == "adjust_tax")
-            .Select(candidate => candidate.Params["change_basis_points"]!.GetValue<int>()).Order().ToArray();
-        Assert.Equal([-100, -50, -25, 25, 50, 100], steps);
-        Assert.DoesNotContain(SocietyActions.Available(world, world.Agents["aster_government"]), candidate => candidate.ActionType == "set_tax");
+        var government = world.Agents["aster_government"];
+        var nation = world.Society!.Nations["aster"];
+        var tax = Assert.Single(SocietyActions.Available(world, government), candidate => candidate.ActionType == "adjust_tax");
+        var range = tax.Params["income_tax_percent"]!;
+        Assert.Equal([10, 20, 15], new[] { range["min"]!.GetValue<int>(), range["max"]!.GetValue<int>(), range["default"]!.GetValue<int>() });
+
+        var action = new ActionProposal("adjust_tax", new JsonObject { ["income_tax_percent"] = 13 }, "Test policy.", []);
+        SocietyDiplomacy.Propose(world, government, action, "cause");
+        for (var tick = 0; tick < Governments.Get(nation.GovernmentId).PolicyDelay; tick++)
+            SocietyEngine.Advance(world);
+        Assert.Equal(1300, nation.TaxBasisPoints);
+        Assert.DoesNotContain(SocietyActions.Available(world, government), candidate => candidate.ActionType == "adjust_tax");
+        world.Tick = nation.TaxChangedTick + SocietyActions.BudgetTurnDays;
+        Assert.Contains(SocietyActions.Available(world, government), candidate => candidate.ActionType == "adjust_tax");
     }
 }

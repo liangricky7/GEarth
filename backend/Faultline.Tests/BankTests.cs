@@ -4,9 +4,6 @@ namespace Faultline.Tests;
 
 public sealed class BankTests
 {
-    // TEMPORARY: banking is paused for the public-services batch; reverting the pause commit restores these.
-    private const string Paused = "Banking paused (SocietyBank.Paused)";
-
     // 400 agents = 10 countries x (25 residents + 15 institutions). Aster is a market democracy
     // (deposits insured to 50,000); Dune is a dictatorship (no deposit insurance).
     private static World NewWorld() => SocietyFactory.Create("bank_test", false, 400);
@@ -37,7 +34,9 @@ public sealed class BankTests
     private static (Agent Firm, Agent Bank, Credit Loan) FundLoan(World world)
     {
         var firm = world.Agents["aster_tools"];
-        Decide(world, firm.OwnerId!, "request_loan");
+        var smallest = SocietyActions.Available(world, world.Agents[firm.OwnerId!]).Where(candidate => candidate.ActionType == "request_loan")
+            .Min(candidate => candidate.Params["amount_minor"]!.GetValue<long>());
+        Decide(world, firm.OwnerId!, "request_loan", candidate => candidate.Params["amount_minor"]!.GetValue<long>() == smallest);
         world.Society!.PeriodRevenueMinor[firm.Id] = 100000;
         var bank = world.Agents["aster_bank"];
         var (bankBefore, firmBefore) = (bank.CashMinor, firm.CashMinor);
@@ -60,13 +59,13 @@ public sealed class BankTests
         var deposit = Deposit(world, resident, 20000);
 
         Assert.Equal((long)(2 * SocietyEconomy.WeeklyPay(resident)), resident.CashMinor);
-        Assert.Equal(bankBefore + deposit, bank.CashMinor);
+        Assert.Equal(bankBefore + SocietyBank.Deposits(world, "aster"), bank.CashMinor); // firms bank their spare cash too
         SocietyBank.Week(world, world.Society!.Nations["aster"]);
         Assert.Equal(deposit + (long)Math.Round(deposit * 3 / 5200.0), resident.DepositMinor); // 3% a year, weekly
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Fact(Skip = Paused)]
+    [Fact]
     public void BusinessLoanIsRepaidInWeeklyInstallmentsWithInterest()
     {
         var world = NewWorld();
@@ -83,14 +82,15 @@ public sealed class BankTests
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Fact(Skip = Paused)]
-    public void ThreeMissedInstallmentsCloseTheFirmAndTheBankBooksTheLoss()
+    [Fact]
+    public void ThreeMissedInstallmentsCloseTheFirmAndTheOwnerOwesTheRest()
     {
         var world = NewWorld();
-        var (firm, _, loan) = FundLoan(world);
+        var (firm, bank, loan) = FundLoan(world);
         var government = world.Agents["aster_government"];
         var owner = world.Agents[firm.OwnerId!];
         SocietyEconomy.Transfer(world, firm, government, firm.CashMinor);
+        SocietyEconomy.Transfer(world, owner, government, owner.CashMinor - 1000); // the owner can cover only 1,000
         foreach (var good in SocietyFactory.Goods) // nothing left to sell on closure
         {
             government.Inventory[good] += firm.Inventory[good];
@@ -101,14 +101,55 @@ public sealed class BankTests
             SocietyBank.Week(world, world.Society!.Nations["aster"]);
 
         Assert.Equal("defunct", firm.Role);
-        Assert.Equal("defaulted", loan.Status);
-        Assert.Equal(1, world.Society!.Nations["aster"].DefaultedLoans);
-        Assert.Equal(loan.PrincipalMinor, world.Events.Single(item => item.EventType == "loan_settled").Payload["loss_minor"]!.GetValue<long>());
-        Assert.Equal("citizen", owner.Role); // limited liability: the owner keeps their own savings
+        Assert.Equal("citizen", owner.Role);
+        Assert.Equal(0, owner.CashMinor + owner.DepositMinor); // the owner's savings went to the bank first
+        Assert.Equal(0, world.Society!.Nations["aster"].DefaultedLoans); // nothing written off
+        var debt = Assert.Single(world.Society.Credit, credit => credit.Kind == "owner_debt");
+        Assert.Equal((owner.Id, bank.Id, loan.PrincipalMinor - 1000), (debt.BorrowerId, debt.BankId, debt.PrincipalLeftMinor));
+
+        Give(world, owner, 5000); // the owner earns again: the debt is collected weekly
+        SocietyBank.Week(world, world.Society.Nations["aster"]);
+        Assert.Equal(loan.PrincipalMinor - 1000 - debt.WeeklyPrincipalMinor, debt.PrincipalLeftMinor);
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Fact(Skip = Paused)]
+    // Private firms bank their cash above two weeks of payroll and draw on it for wages.
+    [Fact]
+    public void FirmsDepositSpareCashAndDrawOnItForPayroll()
+    {
+        var world = NewWorld();
+        var firm = world.Agents["aster_tools"];
+        SocietyEconomy.Transfer(world, world.Agents["aster_bank"], firm, 30000);
+        SocietyBank.Sweep(world, world.Society!.Nations["aster"], []);
+        Assert.Equal(SocietyBank.FirmBuffer(world, firm), firm.CashMinor);
+        Assert.True(firm.DepositMinor > 0);
+
+        SocietyEconomy.Transfer(world, firm, world.Agents["aster_government"], firm.CashMinor);
+        SocietyBank.Draw(world, firm, 3000);
+        Assert.Equal(3000, firm.CashMinor);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    // Deposit insurance pays each depositor up to the limit in total, however many withdrawals they make.
+    [Fact]
+    public void DepositInsuranceLimitIsPerDepositor()
+    {
+        var world = NewWorld();
+        var resident = Resident(world, "ember"); // a monarchy: deposits insured up to 10,000
+        var bank = world.Agents["ember_bank"];
+        var limit = Governments.Get("monarchy").DepositInsuranceMinor;
+        SocietyEconomy.Transfer(world, bank, resident, 3 * limit);
+        SocietyBank.Sweep(world, world.Society!.Nations["ember"], [resident]);
+        SocietyEconomy.Transfer(world, bank, world.Agents["ember_journalist"], bank.CashMinor); // the reserves are gone
+
+        Assert.Equal(limit * 3 / 5, SocietyBank.Withdraw(world, resident, limit * 3 / 5));
+        Assert.Equal(limit * 2 / 5, SocietyBank.Withdraw(world, resident, limit * 3 / 5));
+        Assert.Equal(0, SocietyBank.Withdraw(world, resident, limit));
+        Assert.Equal(limit, resident.InsuredMinor);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
     public void StartupLoanLetsAFounderWithOnlyTheDownPaymentOpenABusiness()
     {
         var world = NewWorld();
@@ -132,7 +173,7 @@ public sealed class BankTests
         SocietyEconomy.AssertConservation(world);
     }
 
-    [Theory(Skip = Paused)]
+    [Theory]
     [InlineData("aster", true)]
     [InlineData("dune", false)]
     public void BankRunIsPaidFromReservesThenByDepositInsurance(string country, bool insured)

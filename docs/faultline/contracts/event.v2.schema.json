@@ -77,7 +77,15 @@
         "run_stopped",
         "decision_accounting_started",
         "decision_requested",
-        "decision_canceled"
+        "decision_canceled",
+        "enrolled",
+        "graduated",
+        "loan_guaranteed",
+        "owner_debt",
+        "plan_set",
+        "startup_grant",
+        "timeline_forked",
+        "treasury_borrowed"
       ]
     },
     "source": {

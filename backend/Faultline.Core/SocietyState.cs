@@ -76,6 +76,8 @@ public sealed class Nation
     public string? LastPolicyAction { get; set; }
     public System.Text.Json.Nodes.JsonObject? LastPolicyParams { get; set; }
     public int LastPolicyTick { get; set; } = -1;
+    // Income tax changes only at a budget turn, every four weeks.
+    public int TaxChangedTick { get; set; } = -SocietyActions.BudgetTurnDays;
     public long NetBeforeLastPolicyMinor { get; set; }
     public int SalesTaxBasisPoints { get; set; } = 500;
     public int ProfitTaxBasisPoints { get; set; } = 2000;
@@ -145,10 +147,14 @@ public sealed class Cargo
 }
 
 // A bank loan: requested, then active (repaid in weekly installments of principal plus flat interest),
-// then repaid or defaulted; a request can also be rejected. Startup loans name the sector to open.
+// then repaid or defaulted; a request can also be rejected. Startup loans name the sector to open. Kind is
+// "business" (a firm, or a founder's startup), "student" (tuition, government-guaranteed), "owner_debt" (what
+// a closed firm's owner still owes) or "treasury" (a planned state borrowing from its state bank). Loans to
+// people and the state never close anything when payments are missed; they are collected when there is cash.
 public sealed class Credit
 {
     public string Id { get; set; } = "";
+    public string Kind { get; set; } = "business";
     public string BankId { get; set; } = "";
     public string BorrowerId { get; set; } = "";
     public long PrincipalMinor { get; set; }

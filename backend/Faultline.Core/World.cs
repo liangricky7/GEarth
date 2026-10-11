@@ -101,7 +101,8 @@ public record DecisionJob(string RequestId, string RunId, string AgentId, int Ob
     DateTimeOffset Deadline, Dictionary<string, int> Dependencies, string[] EvidenceIds,
     JsonNode Observation, Candidate[] Candidates);
 public record DecisionResult(string RequestId, ActionProposal Action, string Source, string Model,
-    double LatencyMs, string? Error = null, string? Backend = null);
+    double LatencyMs, string? Error = null, string? Backend = null,
+    double? CoordinatorLatencyMs = null, string? ErrorCategory = null, int? ErrorHttpStatus = null);
 public record DecisionRecord(DecisionJob Job, DecisionResult Result, bool Accepted, string Code);
 public record WorldEvent(int SchemaVersion, string EventId, string RunId, int Tick, long Seq,
     string EventType, string Source, string[] EntityIds, string[] CauseIds, JsonNode Payload);

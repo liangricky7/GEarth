@@ -70,7 +70,10 @@
         "shipment_failed",
         "shipment_rerouted",
         "world_initialized",
-        "run_stopped"
+        "run_stopped",
+        "decision_accounting_started",
+        "decision_requested",
+        "decision_canceled"
       ]
     },
     "source": {

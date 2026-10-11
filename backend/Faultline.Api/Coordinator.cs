@@ -1,6 +1,4 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json.Nodes;
 using Faultline.Core;
 
 namespace Faultline.Api;
@@ -136,6 +134,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             world = SocietyFactory.Create(id, live, population,
                 ReadNumber("FAULTLINE_SEED", 20261010, 1, int.MaxValue),
                 ReadNumber("FAULTLINE_GOVERNMENT_ROTATION", 0, 0, 4));
+            world.Emit("decision_accounting_started", "rule", [world.Id], new { version = 1 });
         }
         else
         {
@@ -211,6 +210,11 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
                 var job = SocietyEngine.Observe(world, agent.Id, now);
                 if (pending.TryStart(job, (request, token) => Decide(request, live, token)))
                 {
+                    world.Emit("decision_requested", "rule", [agent.Id], new
+                    {
+                        decision_id = job.RequestId, requested_at = now,
+                        observation_tick = job.ObservationTick, job.Deadline, mode = world.Mode
+                    });
                     agent.LastAttemptAt = now;
                     agent.LastAttemptTick = world.Tick;
                     started.Add(agent.Id);
@@ -296,14 +300,20 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            var abandoned = await pending.CancelAndDrain();
+            var abandoned = await pending.CancelAndDrainRequests();
+            foreach (var job in abandoned)
+                world.Emit("decision_canceled", "rule", [job.AgentId], new
+                {
+                    decision_id = job.RequestId, observation_tick = job.ObservationTick,
+                    canceled_at = DateTimeOffset.UtcNow, reason = "host_shutdown"
+                });
             var queued = queue.Count;
             queue.Clear();
             world.Status = "stopped";
             world.Emit("run_stopped", "rule", [world.Id], new
             {
                 reason = "host_shutdown",
-                canceled_pending_requests = abandoned,
+                canceled_pending_requests = abandoned.Length,
                 canceled_queued_requests = queued,
                 canceled_requests_applied = false
             });
@@ -339,42 +349,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         return selected;
     }
 
-    private async Task<DecisionResult> Decide(DecisionJob job, bool live, CancellationToken cancellationToken)
-    {
-        if (!live)
-        {
-            var stageTwo = job.Observation["world_stage"]?.GetValue<int>() == 2;
-            var choice = System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes($"{job.AgentId}:{job.ObservationTick}"))[0] % job.Candidates.Length;
-            var candidate = stageTwo ? job.Candidates[choice]
-                : job.Candidates.FirstOrDefault(item => item.ActionType is "purchase" or "choose_route") ?? job.Candidates[0];
-
-            var action = new ActionProposal(candidate.ActionType, (JsonObject)candidate.Params.DeepClone(),
-                "Deterministic rule choice; no model inference.", []);
-
-            return new DecisionResult(job.RequestId, action, "rule", "none", 0);
-        }
-
-        try
-        {
-            using var response = await worker.PostAsJsonAsync("http://127.0.0.1:8100/decide", job,
-                Wire.Json, cancellationToken);
-
-            response.EnsureSuccessStatusCode();
-
-            return await response.Content.ReadFromJsonAsync<DecisionResult>(Wire.Json, cancellationToken)
-                ?? throw new InvalidOperationException("Empty worker result");
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException
-            or System.Text.Json.JsonException or InvalidOperationException)
-        {
-            var action = new ActionProposal("hold", new JsonObject(),
-                "Inference unavailable; explicit fallback hold.", []);
-
-            return new DecisionResult(job.RequestId, action, "rule_fallback", "none", 0,
-                exception.GetType().Name);
-        }
-    }
+    private Task<DecisionResult> Decide(DecisionJob job, bool live, CancellationToken cancellationToken)
+        => WorkerClient.Decide(worker, job, live, cancellationToken);
 
     private static int ReadNumber(string name, int defaultValue, int minimum, int maximum)
     {

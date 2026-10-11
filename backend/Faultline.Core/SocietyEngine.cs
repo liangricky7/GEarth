@@ -178,7 +178,9 @@ public static class SocietyEngine
             [job.AgentId], new
             {
                 decision_id = job.RequestId, code, action = result.Action, result.Model, result.Backend,
-                result.LatencyMs, result.Error, observation_tick = job.ObservationTick
+                result.LatencyMs, result.Error, result.CoordinatorLatencyMs,
+                result.ErrorCategory, result.ErrorHttpStatus, result_request_id = result.RequestId,
+                applied_at = now, observation_tick = job.ObservationTick
             });
         if (!accepted)
             return record;

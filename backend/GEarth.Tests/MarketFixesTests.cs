@@ -84,6 +84,7 @@ public sealed class MarketFixesTests
         Assert.NotEmpty(soldiers);
         var relation = SocietyDiplomacy.Relation(world, "dune", "ionia");
         relation.Tension = 80;
+        relation.DiplomacyFailedTick = world.Tick;
         var (bankBefore, soldiersBefore) = (bank.CashMinor, soldiers.Sum(soldier => soldier.CashMinor));
 
         SocietyDiplomacy.Propose(world, government, new ActionProposal("declare_conflict",

@@ -207,9 +207,9 @@ Voting and approval are not weighted by wealth. Profiles are paired by ordinal a
 
 | Role | Goal | Model decisions |
 |---|---|---|
-| Citizen | Keep their own quality of life high | Household stock target; work effort (0 strike, 1 normal, 2 accept offered overtime); doctor threshold (0/50/70/85); visit a doctor now (health below 70); enroll in school full time (an employee leaves their job) or part time (keeping it), with a student loan if needed; seek a better job (any raise for 28 days); express support; migrate (arrives unemployed); pay a local resident, government or employer; buy extra food or energy; start any business where residents feel a gap and the market shows one |
+| Citizen | Keep their own quality of life high | Household stock target; work effort (0 strike, 1 normal, 2 accept offered overtime); doctor threshold (0/50/70/85); visit a doctor now (health below 70); enroll in school full time (an employee leaves their job) or part time (keeping it), with a student loan if needed; seek a better job (any raise for 28 days); express support; migrate (arrives unemployed); pay a local resident, government or employer; buy extra food or energy; start any business where the market gap check passes |
 | Entrepreneur | Keep their one business profitable while meeting their own needs | Citizen choices plus, for the business: price ±10%, wage ±10% (applies to current staff), headcount −1/+1/+2, imports in three sizes |
-| Government | Meet public needs with a funded budget | Income tax as a new whole-percent rate within 5 points, at a budget turn every 4 weeks (0–60%), sales tax (0/5/10%), weekly welfare (0/100/200), unemployment benefit (0/300/600), clinic capitation (0/50/150 per resident), productivity investment, and when they apply: startup grants for an empty essential sector, food subsidy (0/25/50/75%), tuition subsidy (0/50/100%), student stipend, graduate hiring bonus (0/100/200); borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Sees last week's budget, the last policy's effect, the treasury in weeks of spending, hunger and quality of life by part |
+| Government | Meet public needs with a funded budget | Income tax as a new whole-percent rate within 5 points, at a budget turn every 4 weeks (0–60%), integer ranges showing the current value for sales tax (0–1000 basis points), weekly welfare (0–200), unemployment benefit (0–900), clinic capitation (0–150 per resident), productivity investment, and when they apply: startup grants for an empty essential sector, food subsidy (0/25/50/75%), tuition subsidy (0/50/100%), student stipend, graduate hiring bonus (0/100/200); borders, trade agreements, conflict and peace, payments; all through the profile's policy delay. Sees last week's budget, the last policy's effect, the treasury in weeks of spending, hunger and quality of life by part |
 | Planner (planned economy) | Meet needs without shortages or waste | Every 4 weeks, one `set_plan` with a free weekly quota per sector (food, energy, tools, medicine, clinic visits, entertainment). Sees each sector's quota, sales, stock or queue, workers and capacity |
 | State firm (planned economy) | Supply its sector | Imports; prices and wages are fixed by the state |
 | Owned firm | — | No turns of its own; acts through its entrepreneur |
@@ -281,12 +281,13 @@ All amounts are integers. Cash plus shipment escrow, and goods held plus goods i
 - **Salaries are fixed agreements.** Employers set wage offers; the occupation table sets the differences between jobs.
 - **Hiring:** firms hire toward a headcount target. They take unemployed workers first (graduates first), then workers who would gain at least 10% in pay (any raise while seeking a better job). Students are not hired.
 - **Shortage pay:** in a shortage, farms, power plants, pharma and clinics raise wage offers as fast as prices may rise (up to 20% a week, to twice the table wage); other firms by 5% a week, to 1.5×.
+- **Cost-of-living pay review:** every 28 days profitable firms pass 50% of the rise in the sales-weighted food and energy basket into salaries and wage offers. This review never cuts pay. Planned economies and banks are excluded.
 - **Changing trades:**
   - After 14 days unemployed, anyone can take unskilled work.
   - Skilled workers (doctors, researchers) keep their trade and return when a matching job pays more.
   - Public workers stay in the public sector.
 - **Distress and closure:**
-  - A payroll shortfall triggers 10% pay cuts, then layoffs, and counts as a distress week.
+  - A payroll shortfall triggers layoffs down to a minimum crew of one unless the owner can do the work, then a 10% pay cut if still short. It counts as a distress week.
   - Four distress weeks close a market firm.
   - Weekly review can refill an empty viable sector.
 - **Overtime by consent:**
@@ -303,11 +304,11 @@ All amounts are integers. Cash plus shipment escrow, and goods held plus goods i
   - Then cash above an eight-week payroll buffer, as a dividend.
 - **Starting a business:**
   - A citizen with savings can start a firm in any sector except banking and freight.
-  - **Gap check:** the option appears only where residents feel the shortfall (the national quality-of-life part the sector serves is below 60% of its best: food and energy → needs, clinic and medicine → health, tools and entertainment → comfort, school → security) **and** the market shows it (no firm, high prices, empty shelves or customers turned away). An empty sector always counts.
+  - **Gap check:** the sales-weighted average price must be at least 1.5× average unit cost, with unmet demand (food buyers priced out, customers turned away, shelves holding less than a week of sales, or services at least 80% full) and an idle worker who could staff the firm. Empty shelves count even before any sales. Schools use occupied seats and waive the margin test because tuition is fixed. An empty sector always counts. National quality of life does not gate entry.
   - A clinic, pharma or school needs someone qualified to work in it: the founder or a resident free to hire. Owners work in their firm only in a trade they could be hired for.
   - It costs 8 weeks of the sector's table wage for a goods firm and 4 weeks for a service.
   - The new firm launches 10% below the cheapest incumbent.
-- **Failure:** if the firm closes, the owner returns to a citizen role and takes the remaining cash.
+- **Failure:** a small non-bank firm (at most one employee) also closes when its owner goes hungry and receives neither a draw nor a dividend for two consecutive weeks, and its cash plus deposits cannot cover another week of staff payroll plus the owner's former table wage. Larger firms use the distress rule. On closure the owner returns to their old trade and receives cash left after loan recovery; the unpaid-hunger counter resets.
 
 ### 5.4 Prices and demand
 
@@ -409,10 +410,13 @@ Built on October 11, 2026 after the live no-bank run `world_20261011_033639_b47a
   - A planned state short of a week's spending first borrows from its state bank (one growing loan, repaid over 26 weeks).
 - **Banking (with [12.1](#121-banking)):**
   - Private firms deposit cash above two weeks of payroll and draw on it for wages and dividends.
+  - A private bank owner stakes 15% of the opening bank cash and holds the other 85% as a deposit. Planned state banks retain their full opening equity.
   - Moving one's own savings is not counted as income or spending.
   - A failed firm's owner covers its loan from their savings, and the rest becomes their personal debt to the bank, collected weekly.
   - Deposit insurance is capped per depositor across withdrawals.
   - War costs are paid to soldiers instead of the bank.
+
+The signed-off follow-up from the first banks-on run is recorded in [post-bank patch decisions](docs/gearth/gearth-post-bank-patch-decisions.md).
 
 ---
 
@@ -443,7 +447,7 @@ Built on October 11, 2026 after the live no-bank run `world_20261011_033639_b47a
 - **Diplomacy:** governments propose and answer trade agreements and peace, and close borders.
 - **Conflict:**
   - It is abstract: borders close, inventory is lost, and upkeep is paid. There is no territorial conquest.
-  - Declaring conflict costs 5,000 up front plus 1,000 a week, currently paid into the domestic bank. That destination is an open question.
+  - Declaring conflict requires a refused or expired offer between the pair, tension at least 60 and funding, checked again at enactment. The menu explains that trade stops, both sides lose stock weekly and tension rises to 100. It costs 5,000 up front plus 1,000 a week, paid to domestic soldiers.
   - War features are a stretch goal.
 - **Migration:** costs 100, paid to the destination government. Migrants arrive unemployed.
 - **Elections:** follow the profile's authority rules.

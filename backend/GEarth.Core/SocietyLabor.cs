@@ -165,9 +165,13 @@ public static class SocietyLabor
         var spec = SectorOf(sector);
         var sold = incumbents.Sum(firm => firm.LastWeekUnitsSold);
         var turnedAway = incumbents.Sum(firm => firm.LastWeekTurnedAway) > 0;
+        var capacity = spec.Good is not null ? 0 : spec.Id == "school" ? incumbents.Sum(firm => Seats(world, firm))
+            : incumbents.Sum(firm => ServiceCapacity(world, firm));
+        var utilization = spec.Id == "school" ? incumbents.Sum(firm => Students(world, firm).Length) : sold;
         var demand = spec.Good is { } good
-            ? turnedAway || good == "food" && nation.PricedOutLastWeek > 0 || incumbents.Sum(firm => firm.Inventory[good]) < sold
-            : turnedAway || sold >= 0.8 * incumbents.Sum(firm => ServiceCapacity(world, firm));
+            ? turnedAway || good == "food" && nation.PricedOutLastWeek > 0
+                || incumbents.Sum(firm => firm.Inventory[good]) == 0 || incumbents.Sum(firm => firm.Inventory[good]) < sold
+            : turnedAway || capacity > 0 && utilization >= 0.8 * capacity;
         // School tuition is a fixed fee, so only demand counts there.
         var margin = spec.Id == "school"
             || AveragePrice(incumbents) >= EntryMarkup * incumbents.Average(firm => UnitCost(world, nation, firm));
@@ -444,7 +448,8 @@ public static class SocietyLabor
         foreach (var firm in firms.Where(firm => firm.Role == "business" && !SocietyBank.IsBank(firm) && Profitable(world, firm)))
         {
             var table = TableWage[SectorOf(firm.Specialty!).Occupation];
-            firm.WageOfferMinor = Math.Min(table * 3, firm.WageOfferMinor * (10000 + basisPoints) / 10000);
+            firm.WageOfferMinor = Math.Max(firm.WageOfferMinor,
+                Math.Min(table * 3, firm.WageOfferMinor * (10000 + basisPoints) / 10000));
             foreach (var worker in Staff(world, firm))
                 worker.SalaryMinor = worker.SalaryMinor * (10000 + basisPoints) / 10000;
         }
@@ -629,9 +634,8 @@ public static class SocietyLabor
             dividend = Math.Min(dividend, firm.CashMinor);
             SocietyEconomy.Transfer(world, firm, owner, dividend, "dividend");
             nation.DividendsPaidMinor += dividend;
-            // The owner of a small venture (at most one employee) who goes hungry while it pays them nothing, and it
-            // could not afford another week of payroll and their pay, gives up after a couple of weeks; larger firms
-            // in trouble go through the distress rule instead.
+            // A small venture's owner gives up after two hungry, unpaid weeks when the firm cannot fund
+            // another week of its crew's pay and the owner's former trade's wage. Larger firms use distress.
             var staffNow = Staff(world, firm);
             var failing = staffNow.Length <= 1 && firm.CashMinor + firm.DepositMinor
                 < staffNow.Sum(worker => worker.SalaryMinor) + TableWage.GetValueOrDefault(owner.FormerOccupation ?? "", 0);
@@ -755,6 +759,7 @@ public static class SocietyLabor
         owner.Role = "citizen";
         owner.Occupation = owner.FormerOccupation ?? "factory_worker";
         owner.OwnedBusinessId = null;
+        owner.UnpaidHungryWeeks = 0;
         owner.EmployerId = null;
         owner.UnemployedSinceTick = world.Tick;
         owner.Goal = SocietyFactory.CitizenGoal(owner.Occupation);

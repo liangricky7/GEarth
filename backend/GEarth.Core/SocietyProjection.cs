@@ -44,6 +44,34 @@ public static class SocietyProjection
             };
         }).ToArray();
 
+    // Exact citizen totals with a stable, bounded visual sample. Sampling never changes the totals.
+    public static object[] Constellation(World world)
+    {
+        var citizens = world.Agents.Values.Where(agent => agent.Role == "citizen")
+            .GroupBy(agent => agent.CountryId).ToDictionary(group => group.Key,
+                group => group.OrderBy(agent => agent.Id, StringComparer.Ordinal).ToArray());
+        return world.Society!.Nations.Values.Select(nation =>
+        {
+            var residents = citizens.GetValueOrDefault(nation.Id) ?? [];
+            var count = Math.Min(48, residents.Length);
+            return (object)new
+            {
+                country_id = nation.Id,
+                citizen_count = residents.Length,
+                met = residents.Count(agent => agent.NeedsMet == 2),
+                partial = residents.Count(agent => agent.NeedsMet == 1),
+                unmet = residents.Count(agent => agent.NeedsMet == 0),
+                unknown = residents.Count(agent => agent.NeedsMet is < 0 or > 2),
+                citizens = Enumerable.Range(0, count).Select(index =>
+                {
+                    var agent = residents[(int)((long)index * residents.Length / count)];
+                    return new { agent.Id, agent.CountryId, agent.Occupation, agent.NeedsMet,
+                        agent.Health, agent.Wellbeing, agent.Hungry, agent.EmployerId, agent.SchoolId };
+                }).ToArray()
+            };
+        }).ToArray();
+    }
+
     public static object Snapshot(World world)
     {
         var society = world.Society ?? throw new InvalidOperationException("Society state missing");
@@ -74,6 +102,7 @@ public static class SocietyProjection
             policies = society.Policies,
             shipments = society.Cargo,
             loans = society.Credit,
+            constellation = Constellation(world),
             agents_summary = new
             {
                 spawned = world.Agents.Count,

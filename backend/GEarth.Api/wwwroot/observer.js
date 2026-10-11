@@ -706,6 +706,7 @@ async function showProfile() {
 }
 
 function clearRunView() {
+  document.dispatchEvent(new CustomEvent("gearth-view-cleared"));
   for (const id of [
     "map",
     "events",
@@ -854,6 +855,7 @@ async function refresh() {
       : "No active medicine route plan.";
     element("message").textContent = paused ? health.error ?? "" : "";
     drawMap(snapshot);
+    document.dispatchEvent(new CustomEvent("gearth-snapshot", { detail: { snapshot, events: displayedEvents } }));
     showEventFilters(snapshot);
     showEvents(snapshot);
     showWorld(snapshot);

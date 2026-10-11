@@ -80,6 +80,8 @@ For a completed world being served, `ops/check_world.py` checks conservation, du
 
 ## Observer and reports
 
+The agent network adds a rotating abstract field of country clusters and a fullscreen presentation view. Bright small dots are sampled citizens; larger nodes are institutions. A bounded layer of up to 2,400 ambient particles and decorative mesh adds density without creating simulated agents or affecting needs totals. Fine structural links show country membership, employment and schooling, while moving signals show recorded trade, diplomacy, conflict and closed borders. Select a country, agent or interaction to inspect it, or color the whole network by citizen food and energy needs. Needs totals include every citizen; rendering uses bounded samples and follows the selected live or saved run. Foreground lighting gives the sphere depth, recorded trade and policy events ripple through affected clusters, and presentation controls fade while idle. Rotation, zoom and motion controls work without external graphics dependencies.
+
 The [HTTPS cloud observer](https://8-34-212-187.sslip.io/) stays available when the laptop closes. Saved runs can be selected from its run menu. The earlier laptop sharing supervisor is documented separately in [sharing operations](docs/gearth/09-sharing.md).
 
 Completed, gracefully stopped and paused runs produce behavior observations, country outcomes, model/backend counts, inequalities, examples of attributed reasoning and inference errors. Reports distinguish accepted model actions, engine rules and fallbacks, with event references and limits on interpretation. Markdown/JSON reports live under ignored `.data/run-notes/` and in configured storage. The observer exposes structured notes and a Markdown download.

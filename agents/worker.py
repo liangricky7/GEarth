@@ -60,11 +60,14 @@ def is_range(value) -> bool:
     return isinstance(value, dict) and "min" in value and "max" in value
 
 
+MISSING_VALUES = object()
+
+
 def fill_values(candidate: dict, values) -> dict:
     # Free numeric fields ({"min","max"}) take the model's integers; every other parameter is fixed.
     ranges = {key for key, value in candidate["params"].items() if is_range(value)}
     if not ranges:
-        if values is not None:
+        if values is not MISSING_VALUES:
             raise ValueError("INVALID_SCHEMA")
         return candidate["params"]
     if not isinstance(values, dict) or set(values) != ranges:
@@ -91,7 +94,7 @@ def validate_action(action: dict, job: DecisionJob) -> dict:
         candidate = job.candidates[choice]
         return {
             "action_type": candidate["action_type"],
-            "params": fill_values(candidate, action.get("values")),
+            "params": fill_values(candidate, action.get("values", MISSING_VALUES)),
             "reason": reason.strip(),
             "evidence_ids": job.evidence_ids[:1],
         }

@@ -16,6 +16,8 @@ public sealed class AnalyticsService(IWorldStore store)
     public const string ReportSchema = "faultline.analytics-report.v1";
     public const int MaximumReportBytes = 8 * 1024 * 1024;
     public const int MaximumManifestBytes = 16 * 1024 * 1024;
+    private static readonly string[] PublicServicesMetadataFields =
+        ["capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration"];
 
     private static void ValidateRunId(string id)
     {
@@ -59,6 +61,8 @@ public sealed class AnalyticsService(IWorldStore store)
         if (!capturedFromStart) unknown.Add("audit_capture_start");
         foreach (var key in new[] { "initial_population", "government_rotation", "tick_limit", "engine_commit", "worker_capacity", "tick_interval_ms" })
             if (configuration[key] is null) unknown.Add(key);
+        foreach (var key in PublicServicesMetadataFields)
+            if (configuration[key] is null) unknown.Add(key);
         return new
         {
             run_id = world.Id, status = world.Status, world.Tick,
@@ -66,6 +70,9 @@ public sealed class AnalyticsService(IWorldStore store)
             through_event_sequence = world.Seq, world.Seed, world.Mode,
             population = world.Agents.Count, world.InitialCashMinor, world.ScenarioHash,
             initial_population = configuration["initial_population"], configuration,
+            capture_contract_version = configuration["capture_contract_version"], features = configuration["features"],
+            active_features = configuration["active_features"], banking_paused = configuration["banking_paused"],
+            economy_configuration = configuration["economy_configuration"],
             analytics_enabled = world.AnalyticsEnabled, audit_available = audit?.SupportsAudit == true,
             audit_from_tick_zero = capturedFromStart,
             audit_schema_version = world.AuditSchemaVersion, audit_start_tick = world.AuditStartTick,
@@ -143,6 +150,16 @@ public sealed class AnalyticsService(IWorldStore store)
             throw new AnalyticsException(400, "Publication requires a complete pinned audit export snapshot.");
         if (store is not IRunAuditStore { SupportsAudit: true } || !world.AnalyticsEnabled || world.AuditSequence < 1)
             throw new AnalyticsException(409, "Publication requires committed audit capture.");
+        var firstRecord = (await ((IRunAuditStore)store).ReadAudit(id, 0, 1, ct)).FirstOrDefault();
+        var captured = firstRecord?.Kind == "run_metadata" ? firstRecord.Payload : new JsonObject();
+        if (captured["features"]?["public_services"]?.GetValue<string>() == "v1" || report["public_services"] is not null)
+        {
+            var reportMetadata = Object(Object(report, "public_services"), "metadata");
+            foreach (var field in PublicServicesMetadataFields)
+                if (!JsonNode.DeepEquals(captured[field], reportMetadata[field])
+                    || !JsonNode.DeepEquals(captured[field], metadata[field]))
+                    throw new AnalyticsException(409, $"Public-services {field} does not match the captured run configuration.");
+        }
         if (store is not IAnalyticsReportStore cache)
             throw new AnalyticsException(409, "Analytics report storage is unavailable.");
         await cache.SaveAnalyticsReport(id, report, ct);
@@ -187,8 +204,59 @@ public sealed class AnalyticsService(IWorldStore store)
             String(item, "name"); Object(item, "details"); Array(item, "evidence_refs");
         }
         Array(report, "evidence_refs");
+        if (report["public_services"] is not null)
+            ValidatePublicServices(Object(report, "public_services"));
         ValidateEvidence(report, world);
         ValidateNumbers(report);
+    }
+
+    private static void ValidatePublicServices(JsonObject section)
+    {
+        var metadata = Object(section, "metadata");
+        foreach (var field in PublicServicesMetadataFields)
+            if (!metadata.ContainsKey(field))
+                throw new AnalyticsException(400, $"Public-services metadata requires {field}, or null when unknown.");
+        if (metadata["capture_contract_version"] is not null) String(metadata, "capture_contract_version");
+        if (metadata["features"] is not null) Object(metadata, "features");
+        if (metadata["active_features"] is not null)
+            foreach (var feature in Array(metadata, "active_features"))
+                if (feature is not JsonValue value || !value.TryGetValue<string>(out var name) || string.IsNullOrWhiteSpace(name))
+                    throw new AnalyticsException(400, "Active features must be nonempty strings.");
+        if (metadata["banking_paused"] is not null) Boolean(metadata, "banking_paused");
+        if (metadata["economy_configuration"] is not null) Object(metadata, "economy_configuration");
+        var summary = Object(section, "snapshot_summary");
+        var total = Nonnegative(summary, "latest_agent_count");
+        var residents = Nonnegative(summary, "resident_count");
+        if (residents > total) throw new AnalyticsException(400, "Resident count exceeds the agent count.");
+        String(summary, "denominator");
+        foreach (var field in new[] { "students", "graduates", "job_seekers", "hungry" })
+        {
+            var metric = Object(summary, field);
+            var observed = Nonnegative(metric, "observed_count");
+            var known = Nonnegative(metric, "eligible_known_count");
+            var missing = Nonnegative(metric, "missing_count");
+            if (observed > known || known > residents || missing != residents - known)
+                throw new AnalyticsException(400, "Public-services snapshot counts exceed their population.");
+        }
+        foreach (var transfer in Array(section, "transfers_by_kind"))
+        {
+            if (transfer is not JsonObject item) throw new AnalyticsException(400, "Transfer summary requires objects.");
+            String(item, "kind"); Nonnegative(item, "count"); Nonnegative(item, "amount_minor"); Array(item, "evidence_refs");
+        }
+        var coverage = Object(section, "coverage");
+        var captured = Nonnegative(coverage, "agent_snapshots_with_public_services_fields");
+        if (captured > Nonnegative(coverage, "agent_snapshot_count"))
+            throw new AnalyticsException(400, "Public-services coverage exceeds the captured snapshots.");
+        var count = Nonnegative(coverage, "agent_snapshot_count");
+        var expectedStatus = captured == 0 ? "unknown" : captured == count ? "pass" : "partial";
+        if (String(coverage, "status") != expectedStatus)
+            throw new AnalyticsException(400, "Public-services coverage status does not match its counts.");
+    }
+
+    private static long Nonnegative(JsonObject obj, string key)
+    {
+        var value = Number(obj, key);
+        return value >= 0 ? value : throw new AnalyticsException(400, $"Report {key} cannot be negative.");
     }
 
     private static void ValidateEvidence(JsonNode? node, World world)

@@ -73,6 +73,9 @@ public sealed class AnalyticsReportTests
         Assert.Equal(400, result["initial_population"]!.GetValue<int>());
         Assert.Equal("complete", result["completeness"]!.GetValue<string>());
         Assert.Contains("engine_commit", result["metadata_unknown"]!.AsArray().Select(item => item!.GetValue<string>()));
+        Assert.Null(result["banking_paused"]);
+        Assert.Null(result["features"]);
+        Assert.Contains("banking_paused", result["metadata_unknown"]!.AsArray().Select(item => item!.GetValue<string>()));
         Assert.Equal(1, store.LastLimit); // A bounded metadata lookup, never an entire audit reconstruction.
     }
 
@@ -148,6 +151,85 @@ public sealed class AnalyticsReportTests
         var changedManifest = JsonSerializer.SerializeToUtf8Bytes(manifestNode);
         report["source_manifest_sha256"] = Convert.ToHexString(SHA256.HashData(changedManifest)).ToLowerInvariant();
         Assert.Equal(409, (await Assert.ThrowsAsync<AnalyticsException>(() => service.Publish(report, changedManifest, default))).StatusCode);
+    }
+
+    [Fact]
+    public async Task PublicationAuthenticatesPublicServicesConfigurationAgainstCapturedMetadata()
+    {
+        var world = Finished(); var store = new TestStore(world); var service = new AnalyticsService(store);
+        var captured = SocietyFactory.Create(world.Id, false, 170);
+        RunAudit.Enable(captured);
+        store.Records = [captured.PendingAudit[0] with { Revision = 1 }];
+        var exported = Wire.Node(await service.ExportMetadata(world.Id, default));
+        Assert.True(exported["banking_paused"]!.GetValue<bool>());
+        Assert.Equal("v1", exported["features"]!["public_services"]!.GetValue<string>());
+        var report = Report(world);
+        report["public_services"] = PublicServicesSection(store.Records[0].Payload);
+        var manifestNode = Wire.Node(new
+        {
+            schema_version = "faultline.run-export.v1", record_schema_version = "faultline.audit.v1",
+            run = exported, record_count = world.AuditSequence, completeness = new { snapshot_complete = true }
+        });
+        byte[] Manifest()
+        {
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(manifestNode, Wire.Json);
+            report["source_manifest_sha256"] = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            return bytes;
+        }
+        await service.Publish(report, Manifest(), default);
+        Assert.Same(report, store.Report);
+        // Even an internally consistent forged manifest cannot override the captured banking pause.
+        report["public_services"]!["metadata"]!["banking_paused"] = false;
+        manifestNode["run"]!["banking_paused"] = false;
+        Assert.Equal(409, (await Assert.ThrowsAsync<AnalyticsException>(() => service.Publish(report, Manifest(), default))).StatusCode);
+        report.Remove("public_services");
+        manifestNode["run"]!["banking_paused"] = true;
+        Assert.Equal(400, (await Assert.ThrowsAsync<AnalyticsException>(() => service.Publish(report, Manifest(), default))).StatusCode);
+    }
+
+    [Fact]
+    public void PublicServicesReportCountsAndUnknownCoverageAreValidated()
+    {
+        var world = Finished(); var report = Report(world);
+        report["public_services"] = PublicServicesSection(new JsonObject());
+        AnalyticsService.ValidateReport(report, world); // Legacy capture declares configuration and fields unknown.
+        var section = report["public_services"]!.AsObject();
+        section["snapshot_summary"]!["students"]!["observed_count"] = 1;
+        Assert.Throws<AnalyticsException>(() => AnalyticsService.ValidateReport(report, world));
+        report["public_services"] = PublicServicesSection(new JsonObject());
+        report["public_services"]!["coverage"]!["status"] = "pass";
+        Assert.Throws<AnalyticsException>(() => AnalyticsService.ValidateReport(report, world));
+        report["public_services"] = PublicServicesSection(new JsonObject());
+        report["public_services"]!["metadata"]!["banking_paused"] = "unknown";
+        Assert.Throws<AnalyticsException>(() => AnalyticsService.ValidateReport(report, world));
+        report["public_services"] = PublicServicesSection(new JsonObject());
+        report["public_services"]!["transfers_by_kind"]!.AsArray().Add(new JsonObject
+        {
+            ["kind"] = "tuition_subsidy", ["count"] = 1, ["amount_minor"] = 1000,
+            ["evidence_refs"] = new JsonArray(new JsonObject { ["run_id"] = "foreign", ["sequence"] = 1, ["kind"] = "transaction" })
+        });
+        Assert.Throws<AnalyticsException>(() => AnalyticsService.ValidateReport(report, world));
+    }
+
+    private static JsonObject PublicServicesSection(JsonObject captured)
+    {
+        var metadata = new JsonObject();
+        foreach (var field in new[] { "capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration" })
+            metadata[field] = captured[field]?.DeepClone();
+        return Wire.Node(new
+        {
+            metadata,
+            snapshot_summary = new
+            {
+                latest_agent_count = 1, resident_count = 1, denominator = "resident roles: citizen, entrepreneur, planner",
+                students = new { observed_count = 0, eligible_known_count = 0, missing_count = 1 },
+                graduates = new { observed_count = 0, eligible_known_count = 0, missing_count = 1 },
+                job_seekers = new { observed_count = 0, eligible_known_count = 0, missing_count = 1 },
+                hungry = new { observed_count = 0, eligible_known_count = 0, missing_count = 1 }
+            },
+            transfers_by_kind = new object[0],
+            coverage = new { agent_snapshots_with_public_services_fields = 0, agent_snapshot_count = 1, status = "unknown" }
+        }).AsObject();
     }
 
     [Fact]

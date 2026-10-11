@@ -12,6 +12,12 @@
       "minLength": 1,
       "maxLength": 240,
       "pattern": "\\S"
+    },
+    "values": {
+      "description": "Required only for a selected option with bounded integer fields. Keys and bounds must match that exact menu option; fixed options must omit values.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "integer" }
     }
   }
 }

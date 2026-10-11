@@ -53,15 +53,20 @@ def record_check(record, run_id, revision, through_sequence):
                 monetary_leaves(value, key)
         elif isinstance(node, bool) or not isinstance(node, int):
             raise ValueError(f"{key} must contain integer minor units")
-    def money_check(node):
+    def money_check(node, path=()):
         if isinstance(node, dict):
             for key, value in node.items():
-                if key.lower().endswith("minor") and value is not None:
+                # These two metadata keys describe the accounting basis. They
+                # are definitions, not cash amounts; actual agent claims still
+                # require integer minor units everywhere else.
+                definition = (record["kind"] == "run_metadata" and path == ("economy_configuration", "accounting")
+                              and key in {"deposit_minor", "in_kind_minor"} and isinstance(value, str) and bool(value))
+                if key.lower().endswith("minor") and value is not None and not definition:
                     monetary_leaves(value, key)
-                money_check(value)
+                money_check(value, path + (key,))
         elif isinstance(node, list):
             for value in node:
-                money_check(value)
+                money_check(value, path)
     money_check(record["payload"])
 
 

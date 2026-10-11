@@ -40,7 +40,7 @@ def qualify_delta(spark, manifest, manifest_sha256):
             raise ValueError("Silver source-record identity/hash disagreement: " + table)
     derived = {
         "decision_options": bronze_frame.where(F.col("kind") == "decision_request").select(
-            F.explode(F.from_json(F.get_json_object("payload_json", "$.job.candidates"), "array<struct<action_type:string,params:map<string,string>>>"))).count(),
+            F.explode(F.from_json(F.get_json_object("payload_json", "$.job.candidates"), "array<struct<action_type:string>>"))).count(),
         "event_edges": bronze_frame.where(F.col("kind") == "event").select(
             F.explode(F.from_json(F.get_json_object("payload_json", "$.cause_ids"), "array<string>"))).count(),
     }

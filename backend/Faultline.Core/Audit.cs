@@ -29,6 +29,8 @@ public sealed class AnalyticsTimelineException() : InvalidOperationException(
 public static class RunAudit
 {
     public const int SchemaVersion = 1;
+    public const string PublicServicesContract = "faultline.public_services.v1";
+    public const string MenuContract = "fixed_or_bounded_integer.v1";
 
     public static void PrepareResume(World world, bool enableAnalytics)
     {
@@ -49,17 +51,28 @@ public static class RunAudit
         world.AuditSchemaVersion = SchemaVersion;
         world.AuditStartTick = world.Tick;
         world.AuditStartedAt = DateTimeOffset.UtcNow;
-        Append(world, "run_metadata", metadata ?? new
+        var configuration = Wire.Node(metadata ?? new
         {
             world.Seed, world.Mode, initial_population = world.Agents.Count,
             capture_started_at = world.AuditStartedAt, capture_start_tick = world.Tick,
             schema_version = SchemaVersion, engine_commit = (string?)null
+        }).AsObject();
+        configuration["capture_contract_version"] = PublicServicesContract;
+        configuration["features"] = Wire.Node(new
+        {
+            public_services = world.Society is null ? null : "v1",
+            bounded_integer_choices = "v1"
         });
+        configuration["active_features"] = Wire.Node(world.Society is null ? new[] { "bounded_integer_choices" }
+            : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices" });
+        configuration["banking_paused"] = world.Society is null ? null : JsonValue.Create(SocietyBank.Paused);
+        configuration["economy_configuration"] = world.Society is null ? null : Wire.Node(EconomyConfiguration());
+        Append(world, "run_metadata", configuration);
         foreach (var item in world.Events)
             Append(world, "event", item);
         foreach (var agent in world.Agents.Values)
             Append(world, "opening_balance", new { account_id = agent.Id, account_type = "agent",
-                balance_minor = agent.CashMinor, agent = AgentState(agent) });
+                balance_minor = agent.CashMinor, agent = AgentState(world, agent) });
         if (world.Society is { } society)
             foreach (var cargo in society.Cargo)
                 Append(world, "opening_balance", new { account_id = cargo.Id, account_type = "escrow",
@@ -75,7 +88,35 @@ public static class RunAudit
             Wire.Node(payload).AsObject()));
     }
 
-    public static object AgentState(Agent agent) => new
+    private static object EconomyConfiguration() => new
+    {
+        school = new { SocietyLabor.CourseDays, SocietyLabor.GraduateOutputBoost,
+            students_per_teacher = SocietyLabor.SectorOf("school").DailyOutput,
+            seeking_better_job_days = SocietyLabor.CourseDays },
+        health = new { SocietyEconomy.VisitHealthGain, SocietyEconomy.MedicineHealthGain,
+            SocietyEconomy.HealthDecayDays, SocietyEconomy.SickBelow, SocietyEconomy.DailyIllnessChance,
+            SocietyEconomy.HungerOutputFactor },
+        quality_of_life = new { SocietyEconomy.NeedsWeight, SocietyEconomy.HealthBonus,
+            SocietyEconomy.SickPenalty, SocietyEconomy.ComfortWeight, SocietyEconomy.SecurityWeight,
+            SocietyEconomy.LeisureWeight, SocietyEconomy.ComfortUnitsAtFull, SocietyEconomy.SecurityWeeksOfPay,
+            SocietyEconomy.SavingsHorizonWeeks, parts_basis = "snapshot_state_recomputed",
+            wellbeing_basis = "engine_smoothed_score", adjustment_divisor = 4 },
+        planning = new { SocietyPlanning.PlanningWeeks, SocietyPlanning.PlannedSectors },
+        banking = new { SocietyBank.Paused, SocietyBank.ReserveRatioPct, SocietyBank.CashBufferWeeks,
+            SocietyBank.LoanWeeks, SocietyBank.LoansPerBanker, SocietyBank.MissedPaymentsToDefault,
+            SocietyBank.WeeksPerYear, SocietyBank.DepositRates, SocietyBank.LoanRates,
+            lending_standards = SocietyBank.Standards.ToDictionary(pair => pair.Key, pair => new
+                { pair.Value.DownPaymentPct, pair.Value.RevenueSharePct }) },
+        accounting = new
+        {
+            conserved_money = "agent_cash_plus_cargo_escrow",
+            deposit_minor = "claim_on_bank_cash_not_additional_money",
+            in_kind_minor = "wage_deduction_owed_not_money_transfer",
+            bank_capture_scope = "cash_transfers_and_daily_claim_balances; loan_lifecycle_events_only"
+        }
+    };
+
+    public static object AgentState(World world, Agent agent) => new
     {
         id = agent.Id, agent_id = agent.Id, agent.Role, country = agent.CountryId, country_id = agent.CountryId,
         location_id = agent.LocationId, agent.Occupation, employer_id = agent.EmployerId,
@@ -84,7 +125,42 @@ public static class RunAudit
         agent.Inventory, agent.Specialty, agent.PriceMinor, agent.WageOfferMinor, agent.TargetHeadcount,
         closed = agent.Role == "defunct", agent.SalaryMinor, agent.UnemployedSinceTick, agent.FoundedTick,
         agent.HealthThreshold, agent.TargetStock, agent.WorkEffort, agent.SupportsLeadership,
-        agent.OvertimeOffered, agent.ModelDecisions, agent.LastDecisionTick, agent.LastAttemptTick
+        agent.OvertimeOffered, agent.ModelDecisions, agent.LastDecisionTick, agent.LastAttemptTick,
+        agent.FormerOccupation, agent.InvestedMinor, agent.DistressWeeks,
+        agent.LastWeekUnitsSold, agent.LastWeekTurnedAway, agent.OvertimeDays,
+        agent.GoodsBoughtLastWeek, agent.ServicesBoughtLastWeek, agent.LastWeekWellbeing,
+        agent.SickDays, agent.Hungry, agent.NeedsMet, agent.HungryThisWeek, agent.PricedOutThisWeek, agent.InKindMinor,
+        agent.StudentUntilTick, agent.SchoolId, agent.Graduated, agent.SeekingUntilTick,
+        is_student = SocietyLabor.IsStudent(agent), seeking_better_job = agent.SeekingUntilTick >= world.Tick,
+        too_sick = SocietyLabor.IsResident(agent) ? (bool?)SocietyEconomy.TooSick(agent) : null,
+        works_overtime = SocietyLabor.IsResident(agent) ? (bool?)SocietyLabor.WorksOvertime(world, agent) : null,
+        qol_parts_points = SocietyLabor.IsResident(agent)
+            ? SocietyEconomy.QolParts(agent, agent.NeedsMet, SocietyLabor.WorksOvertime(world, agent)) : null,
+        qol_target = SocietyLabor.IsResident(agent)
+            ? (int?)SocietyEconomy.QualityOfLife(agent, agent.NeedsMet, SocietyLabor.WorksOvertime(world, agent)) : null,
+        school_seats = agent.Role == "business" && agent.Specialty == "school" ? (int?)SocietyLabor.Seats(world, agent) : null,
+        enrolled_students = agent.Role == "business" && agent.Specialty == "school" ? (int?)SocietyLabor.Students(world, agent).Length : null,
+        planned_daily_quota = agent.Role == "business" && world.Society is { } society
+            ? SocietyPlanning.Quota(world, society.Nations[agent.CountryId], agent) : null,
+        agent.DepositMinor, agent.KeepsSavingsInBank, agent.DepositRatePct, agent.LoanRatePct,
+        agent.LendingStandard, agent.UnmetWithdrawalsMinor,
+        agent.WeekInMinor, agent.WeekOutMinor, agent.LastWeekInMinor, agent.LastWeekOutMinor
+    };
+
+    private static object NationState(Nation nation) => new
+    {
+        nation.TaxBasisPoints, nation.WelfareMinor, nation.UnemploymentBenefitMinor,
+        nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints, nation.ServiceBudgetPerResidentMinor, nation.Productivity,
+        nation.FoodSubsidyPct, nation.FoodSubsidyPaidMinor, nation.StartupGrantsPaidMinor, nation.CapitationPaidMinor,
+        nation.TuitionSubsidyPct, nation.StudentStipend, nation.HiringBonusMinor,
+        nation.HungryResidentsLastWeek, nation.PricedOutLastWeek, nation.HungryDays, nation.WorkerDays,
+        nation.OutputLostToHungerPct, nation.NeededSince, nation.Plan, nation.QolParts,
+        nation.LastPolicyAction, nation.LastPolicyParams, nation.LastPolicyTick, nation.NetBeforeLastPolicyMinor,
+        nation.TaxesCollectedMinor, nation.WelfarePaidMinor, nation.WagesPaidMinor, nation.TradeValueMinor,
+        nation.ProducedUnits, nation.LostUnits, nation.SalesTaxCollectedMinor, nation.ProfitTaxCollectedMinor,
+        nation.DoctorVisits, nation.PublicDoctorVisits, nation.DividendsPaidMinor, nation.UnemploymentPaidMinor,
+        nation.BusinessesStarted, nation.BusinessesClosed, nation.DepositInsurancePaidMinor,
+        nation.BankFailures, nation.DefaultedLoans
     };
 
     // Exactly one row per agent per simulated day. Call at the day's boundary, after late results.
@@ -95,7 +171,7 @@ public static class RunAudit
             return;
         foreach (var agent in world.Agents.Values)
         {
-            var payload = Wire.Node(AgentState(agent)).AsObject();
+            var payload = Wire.Node(AgentState(world, agent)).AsObject();
             payload["frame_kind"] = terminal ? "end" : "day";
             Append(world, "agent_day", payload);
         }
@@ -103,13 +179,21 @@ public static class RunAudit
             foreach (var nation in society.Nations.Values)
             {
                 var people = world.InCountry(nation.Id);
-                Append(world, "nation_day", new
+                var residents = people.Where(SocietyLabor.IsResident).ToArray();
+                var payload = Wire.Node(new
                 {
                     frame_kind = terminal ? "end" : "day",
                     nation_id = nation.Id, id = nation.Id, government = nation.GovernmentId,
                     escrow_accounts = society.Cargo.Where(cargo => world.Agents[cargo.BuyerId].CountryId == nation.Id)
                         .Select(cargo => new { account_id = cargo.Id, balance_minor = cargo.EscrowMinor }).ToArray(),
-                    residents = people.Count(SocietyLabor.IsResident), nation.Unemployed, nation.Approval,
+                    residents = residents.Length, nation.Unemployed, nation.Approval,
+                    students = residents.Count(SocietyLabor.IsStudent), graduates = residents.Count(agent => agent.Graduated),
+                    job_seekers = residents.Count(agent => agent.SeekingUntilTick >= world.Tick),
+                    hungry_residents = residents.Count(agent => agent.Hungry), too_sick_residents = residents.Count(SocietyEconomy.TooSick),
+                    average_health = residents.Length == 0 ? (double?)null : residents.Average(agent => agent.Health),
+                    average_wellbeing = residents.Length == 0 ? (double?)null : residents.Average(agent => agent.Wellbeing),
+                    bank_deposits_minor = people.Sum(agent => agent.DepositMinor),
+                    planning_view = SocietyLabor.IsPlanned(nation) ? SocietyPlanning.View(world, nation) : null,
                     government_cash_minor = world.Agents[nation.Id + "_government"].CashMinor,
                     gini = nation.GiniCash, unmet_needs = nation.UnmetNeedsLastCycle,
                     wars = society.Relations.Values.Count(relation => relation.AtWar
@@ -123,7 +207,10 @@ public static class RunAudit
                             cargo.EscrowMinor, cargo.Status,
                             edge = cargo.Plan?.EdgeIds.ElementAtOrDefault(cargo.EdgeIndex), cargo.EdgeRemainingTicks
                         }).ToArray()
-                });
+                }).AsObject();
+                foreach (var field in Wire.Node(NationState(nation)).AsObject())
+                    payload[field.Key] = field.Value?.DeepClone();
+                Append(world, "nation_day", payload);
             }
         if (!terminal)
             world.AuditDailyThroughTick = world.Tick;
@@ -138,7 +225,7 @@ public static class RunAudit
         {
             decision_id = job.RequestId, agent_id = job.AgentId, agent.Role, country_id = agent.CountryId,
             observation_tick = job.ObservationTick, dispatched_at = dispatchedAt,
-            job, prompt_contract_version = "faultline.numbered_menu.v1",
+            job, prompt_contract_version = "faultline.numbered_menu.v2", menu_parameter_contract = MenuContract,
             rules_note = job.Observation["note"]?.GetValue<string>(),
             // Worker renders this exact job; raw provider prompt/token counts are not returned to the engine.
             rendered_provider_prompt = (string?)null, token_usage = (object?)null,
@@ -150,27 +237,40 @@ public static class RunAudit
     {
         if (!world.AnalyticsEnabled)
             return;
-        var index = Array.FindIndex(job.Candidates, candidate => result.Action is not null
-            && candidate.ActionType == result.Action.ActionType && JsonNode.DeepEquals(candidate.Params, result.Action.Params));
+        var selection = Selection(job, result);
         Append(world, "decision_result", new
         {
             decision_id = job.RequestId, agent_id = job.AgentId, observation_tick = job.ObservationTick,
             applied_tick = world.Tick, result, accepted, code, status = accepted ? "accepted" : "rejected",
-            fallback = result.Source == "rule_fallback", selected_option_index = index >= 0 ? (int?)index : null,
-            selection_provenance = "matched exact returned action to original zero-based menu",
+            fallback = result.Source == "rule_fallback", selected_option_index = selection.Index,
+            selected_params = result.Action?.Params, selection_match_count = selection.Count,
+            selection_provenance = "matched returned action to original zero-based menu using fixed parameters and bounded integers",
             action_event_id = eventId
         });
     }
 
     public static void Canceled(World world, DecisionJob job, DecisionResult? result = null)
     {
+        var selection = Selection(job, result);
         Append(world, "decision_result", new
         {
             decision_id = job.RequestId, agent_id = job.AgentId, observation_tick = job.ObservationTick,
             applied_tick = (int?)null, result, accepted = false, code = "HOST_SHUTDOWN",
-            status = "canceled", fallback = result?.Source == "rule_fallback", selected_option_index = (int?)null,
+            status = "canceled", fallback = result?.Source == "rule_fallback", selected_option_index = selection.Index,
+            selected_params = result?.Action?.Params, selection_match_count = selection.Count,
+            selection_provenance = "matched returned action to original zero-based menu using fixed parameters and bounded integers",
             action_event_id = (string?)null
         });
+    }
+
+    private static (int? Index, int Count) Selection(DecisionJob job, DecisionResult? result)
+    {
+        var matches = result?.Action?.Params is { } parameters
+            ? Enumerable.Range(0, job.Candidates.Length)
+                .Where(index => SocietyActions.Matches(job.Candidates[index], result.Action.ActionType, parameters)).ToArray()
+            : [];
+        // The provider does not return its raw choice index. Only infer one when the returned action identifies it uniquely.
+        return (matches.Length == 1 ? matches[0] : null, matches.Length);
     }
 
     public static void Transaction(World world, string from, string to, long amount, string kind)
@@ -230,6 +330,16 @@ public static class RunAudit
         if (action.ActionType == "set_wage" && agent.OwnedBusinessId is { } firm)
             foreach (var worker in SocietyLabor.Staff(world, world.Agents[firm]))
                 ids.Add(worker.Id);
+        if (action.ActionType == "enroll_school" && SocietySchool.OpenSchool(world, agent.CountryId) is { } school)
+        {
+            ids.Add(school.Id);
+            ids.Add(agent.CountryId + "_government");
+            if (agent.DepositMinor > 0)
+                ids.Add(SocietyBank.BankOf(world, agent.CountryId).Id);
+        }
+        if (action.ActionType == "visit_doctor" && world.Society is { } services
+            && SocietyEconomy.OpenClinic(world, services.Nations[agent.CountryId]) is { } clinic)
+            ids.Add(clinic.Id);
         var before = Capture();
         return new Restore(() =>
         {
@@ -261,17 +371,15 @@ public static class RunAudit
         {
             var states = ids.ToDictionary(id => "a:" + id, id =>
             {
-                var state = Wire.Node(AgentState(world.Agents[id])).AsObject();
+                var state = Wire.Node(AgentState(world, world.Agents[id])).AsObject();
                 foreach (var field in new[] { "model_decisions", "last_decision_tick", "last_attempt_tick" })
                     state.Remove(field);
                 return (JsonNode)state;
             });
-            if (agent.Role == "government" && world.Society is { } society)
+            if (agent.Role is "government" or "planner" && world.Society is { } society)
             {
                 var nation = society.Nations[agent.CountryId];
-                states["n:" + nation.Id] = Wire.Node(new { nation.TaxBasisPoints, nation.WelfareMinor,
-                    nation.UnemploymentBenefitMinor, nation.SalesTaxBasisPoints, nation.ServiceBudgetPerResidentMinor,
-                    nation.Productivity });
+                states["n:" + nation.Id] = Wire.Node(NationState(nation));
                 if (action.Params["edge_id"]?.GetValue<string>() is { } edge)
                     states["r:" + edge] = Wire.Node(world.Routes[edge]);
                 if (action.Params["country_id"]?.GetValue<string>() is { } country)

@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check
+from .export import FORMAT, TERMINAL, MAX_ROW_BYTES, integer, record_check, canonical
 from .transform import typed_record
 
 
@@ -158,6 +158,10 @@ def validate(manifest_path):
                     metadata_count += 1
                     if record["sequence"] != 1:
                         raise ValueError("run_metadata must be first and unique")
+                    payload = record["payload"]
+                    for key in ("capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration"):
+                        if canonical(payload.get(key)) != canonical(run.get(key)):
+                            raise ValueError("source metadata differs from pinned manifest: " + key)
                 elif kind == "opening_balance":
                     db.execute("INSERT INTO opening VALUES (?,?)", (row["account_id"], row["account_type"]))
                     country_id = record["payload"].get("agent", {}).get("country_id")

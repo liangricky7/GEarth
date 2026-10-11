@@ -31,7 +31,8 @@ async def lifespan(application):
         timeout=TIMEOUT_SECONDS,
         trust_env=False,
         limits=httpx.Limits(
-            max_connections=CAPACITY, max_keepalive_connections=CAPACITY
+            max_connections=CAPACITY,
+            max_keepalive_connections=max(0, min(CAPACITY, int(os.environ.get("WORKER_KEEPALIVE_CONNECTIONS", CAPACITY)))),
         ),
     ) as client:
         application.state.model_client = client
@@ -247,11 +248,20 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         headers = {"Authorization": f"Bearer {provider.api_key}"}
 
         async with asyncio.timeout(min(TIMEOUT_SECONDS, remaining_seconds)):
-            response = await app.state.model_client.post(
-                f"{provider.base_url}/chat/completions",
-                headers=headers,
-                json=build_prompt(job, provider.model),
-            )
+            # SSH relays can close a reused connection between requests. Retry once
+            # inside the original deadline; a transient disconnect must not put a
+            # healthy model into cooldown and reject the remaining weekly cohort.
+            for attempt in range(2):
+                try:
+                    response = await app.state.model_client.post(
+                        f"{provider.base_url}/chat/completions",
+                        headers=headers,
+                        json=build_prompt(job, provider.model),
+                    )
+                    break
+                except httpx.RemoteProtocolError:
+                    if attempt == 1:
+                        raise
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
             action = validate_action(json.loads(content), job)

@@ -45,6 +45,8 @@ Saved-run inspection does not resume execution. Stage 1 remains available by omi
 
 ## Verify
 
+For unattended simulation experiments while developing locally, see the [Google Cloud deployment runbook](docs/faultline/22-google-cloud-deployment.md).
+
 ```bash
 dotnet test Faultline.sln
 .venv/bin/python -m pytest agents ops/test_amd_model_server.py ops/test_compute_config.py ops/test_spark_qwen.py -q

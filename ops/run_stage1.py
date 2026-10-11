@@ -103,6 +103,7 @@ def main():
     parser.add_argument("--ticks", type=int)
     parser.add_argument("--interval", type=float)
     parser.add_argument("--exit-on-complete", action="store_true")
+    parser.add_argument("--skip-build", action="store_true", help="Use an already built API (deployment/collection only)")
     options = parser.parse_args()
     signal.signal(signal.SIGTERM, handle_stop)
 
@@ -141,7 +142,7 @@ def main():
     os.chdir(ROOT)
     config = {
         key: value
-        for key, value in dotenv_values(ROOT / ".env.local").items()
+        for key, value in dotenv_values(ROOT / ".env.local", interpolate=False).items()
         if value is not None
     }
     if options.storage == "neon" and not config.get("DATABASE_URL"):
@@ -172,11 +173,12 @@ def main():
         for local_port, _ in managed_forwards:
             ensure_port_available(local_port)
 
-    subprocess.run(
-        ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
-        check=True,
-        cwd=ROOT,
-    )
+    if not options.skip_build:
+        subprocess.run(
+            ["dotnet", "build", "Faultline.sln", "--nologo", "-v", "quiet"],
+            check=True,
+            cwd=ROOT,
+        )
 
     logs = ROOT / ".logs"
     logs.mkdir(exist_ok=True)

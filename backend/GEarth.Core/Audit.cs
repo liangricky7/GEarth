@@ -30,7 +30,7 @@ public static class RunAudit
 {
     public const int SchemaVersion = 1;
     public const string PublicServicesContract = "gearth.public_services.v1";
-    public const string EconomyCaptureContract = "gearth.economy_capture.v2";
+    public const string EconomyCaptureContract = "gearth.economy_capture.v3";
     public const string MenuContract = "fixed_or_bounded_integer.v1";
 
     public static void PrepareResume(World world, bool enableAnalytics)
@@ -70,11 +70,12 @@ public static class RunAudit
             part_time_school = world.Society is null ? null : "v1",
             wage_arrears = world.Society is null ? null : "v1",
             price_response = world.Society is null ? null : "v1",
-            currency_trade = world.Society is null ? null : "v1"
+            currency_trade = world.Society is null ? null : "v1",
+            war_diplomacy = world.Society is null ? null : "phase3_v1"
         });
         configuration["active_features"] = Wire.Node(world.Society is null ? new[] { "bounded_integer_choices" }
             : new[] { "public_services", "school", "planner_quotas", "bounded_integer_choices", "deposit_creation", "resources", "labor_distribution",
-                "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade" });
+                "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy" });
         configuration["banking_paused"] = world.Society is null ? null : JsonValue.Create(SocietyBank.Paused);
         configuration["economy_configuration"] = world.Society is null ? null : Wire.Node(EconomyConfiguration());
         Append(world, "run_metadata", configuration);
@@ -137,14 +138,24 @@ public static class RunAudit
             SocietyInfrastructure.AdvanceShare, upkeep_cost_fraction_per_week = 0.01,
             unfunded_condition_loss_per_week = 2,
             progress_basis = "engine_remaining_schedule_ticks",
-            catalog = PhaseContracts.Catalog.Where(spec => spec.Type is not (PhaseContracts.Missile or PhaseContracts.Turret))
-                .Select(spec => new { spec.Type, spec.Builders, spec.Ticks, spec.CostMinor, spec.MaxLevel, spec.Effects,
+            catalog = PhaseContracts.Catalog.Select(spec => new { spec.Type, spec.Builders, spec.Ticks, spec.CostMinor, spec.MaxLevel, spec.Effects,
                     levels = Enumerable.Range(1, spec.MaxLevel).Select(level => new
                     { level, cost_minor = PhaseContracts.CostOf(spec.Type, level), materials = PhaseContracts.Materials(spec.Type, level) }) })
         },
         currency_trade = new { SocietyTrade.CurrencyStep, SocietyTrade.CurrencyFloor, SocietyTrade.CurrencyCeiling,
             balance_basis = "world_value_orders_current_week_exports_positive",
             planned_economy_rate = "fixed_official_index_1", rate_basis = "single_money_treasury_surcharge_rebate" },
+        war_diplomacy = new
+        {
+            SocietyWar.WarBelow, SocietyWar.EmbargoBelow, SocietyWar.GiftGainCap, SocietyWar.SoldierStep,
+            SocietyWar.TributeShare, SocietyWar.CessionShare, SocietyWar.ReparationsShare, SocietyWar.WoundedShare,
+            SocietyWar.SurrenderWeeks, SocietyWar.WearinessStep, SocietyWar.MaxWeariness, SocietyWar.WearySupportLoss,
+            SocietyWar.UnrestQol, SocietyWar.UnrestDays, SocietyWar.RevolutionSoldierShare, SocietyWar.SoldiersPerMissile,
+            SocietyWar.Readiness, peace_terms = SocietyWar.PeaceTerms,
+            relationship_score_basis = "minus_100_to_100; negative_is_hostile",
+            military_paid_basis = "positive_military_pay_within_7_days_no_arrears_and_positive_work_effort",
+            planned_to_market_ownership_transition = "deferred"
+        },
         banking = new { SocietyBank.Paused, SocietyBank.ReserveRatioPct, SocietyBank.CapitalRatioPct, SocietyBank.AccountingVersion, SocietyBank.CashBufferWeeks,
             automatic_topups = "best_effort_proportional_spare_reserves_no_insurance",
             foreign_goods_settlement = "cash_escrow_domestic_fees_deposits",
@@ -208,11 +219,13 @@ public static class RunAudit
         operating_cash_surplus_observed_weeks = agent.OperatingSurplusWeeksMinor.Count,
         agent.OperatingSurplusWeeksMinor, agent.EstateBeneficiaryId, agent.EstateCreditIds, agent.EstateFinalized,
         agent.DepositInterestSuspended, agent.EstateUnreportedPayoutMinor,
+        agent.WarWeariness, agent.MilitaryPaidTick, agent.MilitaryPayMinor,
         net_wealth_minor = SocietyLabor.IsResident(agent) ? (long?)SocietyMetrics.NetWealth(world, agent) : null
     };
 
     private static object NationState(World world, Nation nation) => new
     {
+        nation.GovernmentId, nation.LeadershipTerm, nation.NextElectionTick,
         nation.TaxBasisPoints, nation.WelfareMinor, nation.UnemploymentBenefitMinor,
         nation.SalesTaxBasisPoints, nation.ProfitTaxBasisPoints, nation.ServiceBudgetPerResidentMinor, nation.Productivity,
         nation.FoodSubsidyPct, nation.FoodSubsidyPaidMinor, nation.StartupGrantsPaidMinor, nation.CapitationPaidMinor,
@@ -231,10 +244,43 @@ public static class RunAudit
         nation.BorrowedBuilders, nation.CurrencyIndex, nation.TradeNetWeekMinor, nation.TradeGrossWeekMinor,
         nation.Endowment, nation.ResourceImports, nation.PoweredSessionsLeft, nation.ProductionInputCredits,
         nation.TaxChangedTick, nation.LivingCostAtReview, nation.CrisisUntilTick, nation.CrisisGood,
+        nation.Missiles, nation.WarWeeks, nation.NoFitSoldierWeeks, nation.WarWeariness, nation.UnrestSinceTick,
+        nation.TaxMarkMinor, nation.WarAccountingInitialized,
+        relationships = world.Society!.Relations.Values.Where(relation => relation.First == nation.Id || relation.Second == nation.Id)
+            .OrderBy(relation => relation.Id, StringComparer.Ordinal).ToArray(),
+        military = MilitaryState(world, nation),
+        mission = MissionState(world, nation),
         nation.EmployedResidents, nation.LaborForce, nation.Nonparticipants, nation.JoblessResidents,
         nation.GiniDisposableIncome, nation.GiniNetWealth, nation.EssentialsBasketMinor, nation.MedianRealDisposableIncomeMinor,
         labor_and_distribution = SocietyMetrics.View(nation)
     };
+
+    private static object MilitaryState(World world, Nation nation)
+    {
+        var soldiers = SocietyWar.Soldiers(world, nation);
+        var fit = soldiers.Count(SocietyWar.Fit);
+        return new
+        {
+            soldiers = soldiers.Length, soldiers_fit = fit,
+            soldiers_paid = soldiers.Count(soldier => SocietyWar.Paid(world, soldier)),
+            strength = fit + SocietyWar.SoldiersPerMissile * nation.Missiles,
+            soldiers_to_keep_order = SocietyWar.OrderLine(world, nation),
+            weekly_salary_minor = soldiers.Sum(soldier => soldier.SalaryMinor),
+            missile_defense_pct = (int)Math.Round(100 * PhaseContracts.Boost(nation, "missile_defense"))
+        };
+    }
+
+    private static object MissionState(World world, Nation nation)
+    {
+        var residents = world.InCountry(nation.Id).Where(SocietyLabor.IsResident).ToArray();
+        return new
+        {
+            average_quality_of_life_at_least = SocietyWar.UnrestQol,
+            average_quality_of_life = residents.Length == 0 ? (double?)null : residents.Average(resident => resident.Wellbeing),
+            unrest_since_tick = nation.UnrestSinceTick >= 0 ? nation.UnrestSinceTick : (int?)null,
+            unrest_comes_to_a_head_tick = nation.UnrestSinceTick >= 0 ? nation.UnrestSinceTick + SocietyWar.UnrestDays : (int?)null
+        };
+    }
 
     // The engine uses the remaining schedule to measure work; payments are separate from progress.
     private static object ProjectState(World world, Project project)
@@ -429,6 +475,18 @@ public static class RunAudit
         if (action.ActionType == "visit_doctor" && world.Society is { } services
             && SocietyEconomy.OpenClinic(world, services.Nations[agent.CountryId]) is { } clinic)
             ids.Add(clinic.Id);
+        if (agent.Role is "government" or "planner" && world.Society is not null)
+        {
+            if (action.ActionType is "recruit_soldiers" or "discharge_soldiers")
+                foreach (var resident in world.InCountry(agent.CountryId).Where(SocietyLabor.IsResident))
+                    ids.Add(resident.Id);
+            if (action.ActionType == "declare_conflict")
+                foreach (var soldier in SocietyWar.Soldiers(world, world.Society.Nations[agent.CountryId]))
+                    ids.Add(soldier.Id);
+            if (action.Params["country_id"]?.GetValue<string>() is { } target
+                && world.Agents.ContainsKey(target + "_government"))
+                ids.Add(target + "_government");
+        }
         var before = Capture();
         return new Restore(() =>
         {
@@ -473,9 +531,12 @@ public static class RunAudit
                     states["r:" + edge] = Wire.Node(world.Routes[edge]);
                 if (action.Params["country_id"]?.GetValue<string>() is { } country)
                 {
-                    var relationship = SocietyDiplomacy.Relation(world, nation.Id, country);
-                    states["d:" + relationship.Id] = Wire.Node(relationship);
+                    if (society.Nations.TryGetValue(country, out var target))
+                        states["n:" + target.Id] = Wire.Node(NationState(world, target));
                 }
+                // Conflict declarations can change third-party scores too; retain only actual changed relations.
+                foreach (var relationship in society.Relations.Values)
+                    states["d:" + relationship.Id] = Wire.Node(relationship);
             }
             return states;
         }

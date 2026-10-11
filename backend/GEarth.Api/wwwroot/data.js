@@ -337,7 +337,8 @@
     { name:"Currency and trade balances", keys:["currency_trade"], terms:["currency","trade_net_week_minor","trade_gross_week_minor","trade_value_minor"] },
     { name:"Resources", keys:["resources"], terms:["inventory","stock","endowment","resource","resources"] },
     { name:"Infrastructure and maintenance", keys:["infrastructure"], terms:["infrastructure","construction","maintenance","borrowed_builders"] },
-    { name:"War", keys:["war","warfare"], terms:["war","warfare","military"] },
+    { name:"War and military", keys:["war_diplomacy","war","warfare"], terms:["war","wars","warfare","military","missile","missiles","soldier","soldiers","tribute"] },
+    { name:"Diplomacy, elections and unrest", keys:["war_diplomacy"], terms:["relation","relations","relationship","relationships","diplomacy","peace","unrest","election","leadership","government_id","mission"] },
     { name:"Central banks", keys:["central_banks","central_bank"], terms:["central_bank","central_banks"] }
   ];
   const matches = (text,terms) => terms.some(term => String(text).split(/[/.]/).some(part => part === term || part.startsWith(`${term}_`) || part.endsWith(`_${term}`) || part.includes(`_${term}_`)));

@@ -19,7 +19,8 @@ AGENT_FACTS = ("occupation", "specialty", "owner_id", "owned_business_id", "stud
                "deposit_interest_suspended", "part_time_student", "arrears_minor", "arrears_weeks",
                "unpaid_hungry_weeks", "insured_minor", "price_change_tick", "price_change_pct",
                "units_before_price_change", "profit_before_price_change_minor", "price_before_price_change_minor",
-               "estate_unreported_payout_minor", "week_disposable_income_minor", "week_work_days")
+               "estate_unreported_payout_minor", "week_disposable_income_minor", "week_work_days",
+               "war_weariness", "military_paid_tick", "military_pay_minor")
 COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_residents_last_week", "priced_out_last_week",
                  "output_lost_to_hunger_pct", "food_subsidy_pct", "food_subsidy_paid_minor", "startup_grants_paid_minor",
                  "capitation_paid_minor", "tuition_subsidy_pct", "student_stipend", "hiring_bonus_minor", "doctor_visits",
@@ -30,7 +31,9 @@ COUNTRY_FACTS = ("residents", "unemployed", "students", "graduates", "hungry_res
                  "employed_residents", "labor_force", "nonparticipants", "jobless_residents", "gini_disposable_income", "gini_net_wealth",
                  "essentials_basket_minor", "median_real_disposable_income_minor", "maintenance_funded", "currency_index",
                  "trade_net_week_minor", "trade_gross_week_minor", "bank_failures", "defaulted_loans",
-                 "deposit_insurance_paid_minor", "tax_changed_tick", "living_cost_at_review", "crisis_until_tick", "crisis_good")
+                 "deposit_insurance_paid_minor", "tax_changed_tick", "living_cost_at_review", "crisis_until_tick", "crisis_good",
+                 "missiles", "war_weeks", "no_fit_soldier_weeks", "war_weariness", "unrest_since_tick", "tax_mark_minor",
+                 "war_accounting_initialized", "government_id", "leadership_term", "next_election_tick", "wars")
 
 AGENT_TYPES = {key: "long" for key in AGENT_FACTS}
 AGENT_TYPES.update({key: "boolean" for key in ("graduated", "is_student", "seeking_better_job", "hungry", "hungry_this_week",
@@ -40,25 +43,39 @@ AGENT_TYPES.update({key: "string" for key in ("occupation", "specialty", "owner_
 AGENT_TYPES["needs_met"] = "double"
 AGENT_TYPES["last_week_work_days"] = "double"
 AGENT_TYPES["week_work_days"] = "double"
+AGENT_TYPES["war_weariness"] = "double"
 COUNTRY_TYPES = {key: "long" for key in COUNTRY_FACTS}
-COUNTRY_TYPES.update(student_stipend="boolean", last_policy_action="string", maintenance_funded="boolean", crisis_good="string")
+COUNTRY_TYPES.update(student_stipend="boolean", last_policy_action="string", maintenance_funded="boolean", crisis_good="string", war_accounting_initialized="boolean", government_id="string")
 COUNTRY_TYPES.update({key: "double" for key in ("approval", "gini", "output_lost_to_hunger_pct", "average_health", "average_wellbeing", "productivity")})
-COUNTRY_TYPES.update(gini_disposable_income="double", gini_net_wealth="double", currency_index="double", living_cost_at_review="double")
+COUNTRY_TYPES.update(gini_disposable_income="double", gini_net_wealth="double", currency_index="double", living_cost_at_review="double", war_weariness="double")
 
 
 AGENT_JSON_FACTS = ("inventory", "qol_parts_points")
 COUNTRY_JSON_FACTS = ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params",
     "infrastructure", "construction_materials_used", "borrowed_builders", "endowment", "resource_imports",
-    "powered_sessions_left", "production_input_credits")
+    "powered_sessions_left", "production_input_credits", "relationships", "military", "mission")
 LEGACY_AGENT_JSON_FACTS = ("qol_parts_points",)
 LEGACY_COUNTRY_JSON_FACTS = ("plan", "qol_parts", "needed_since", "planning_view", "last_policy_params")
-CAPTURE_VERSION = "gearth.economy_capture.v2"
+CAPTURE_VERSION_V2 = "gearth.economy_capture.v2"
+CAPTURE_VERSION = "gearth.economy_capture.v3"
 REQUIRED_AGENT_V2 = ("part_time_student", "arrears_minor", "arrears_weeks", "unpaid_hungry_weeks", "insured_minor",
     "price_change_tick", "price_change_pct", "units_before_price_change", "profit_before_price_change_minor",
     "price_before_price_change_minor", "inventory")
 REQUIRED_COUNTRY_V2 = ("infrastructure", "maintenance_funded", "construction_materials_used", "borrowed_builders",
     "currency_index", "trade_net_week_minor", "trade_gross_week_minor", "endowment", "resource_imports",
     "bank_failures", "defaulted_loans", "deposit_insurance_paid_minor")
+REQUIRED_AGENT_V3 = (*REQUIRED_AGENT_V2, "war_weariness", "military_paid_tick", "military_pay_minor")
+REQUIRED_COUNTRY_V3 = (*REQUIRED_COUNTRY_V2, "missiles", "war_weeks", "no_fit_soldier_weeks", "war_weariness",
+    "unrest_since_tick", "tax_mark_minor", "war_accounting_initialized", "government_id", "leadership_term",
+    "next_election_tick", "wars", "relationships", "military", "mission")
+RELATIONSHIP_TYPES = {"id": "string", "first": "string", "second": "string", "score": "long",
+    "trade_agreement": "boolean", "at_war": "boolean", "aggressor": "string", "proposed_by": "string",
+    "proposal_kind": "string", "proposal_terms": "string", "proposal_expires_tick": "long",
+    "diplomacy_failed_tick": "long", "delivered_units": "long", "delivered_value_minor": "long"}
+MILITARY_TYPES = {name: "long" for name in ("soldiers", "soldiers_fit", "soldiers_paid", "strength",
+    "soldiers_to_keep_order", "weekly_salary_minor", "missile_defense_pct")}
+MISSION_TYPES = {"average_quality_of_life_at_least": "long", "average_quality_of_life": "double",
+    "unrest_since_tick": "long", "unrest_comes_to_a_head_tick": "long"}
 PROJECT_TYPES = {"id": "string", "type": "string", "level": "long", "condition": "long",
     "cost_minor": "long", "paid_minor": "long", "started_tick": "long", "ready_tick": "long", "complete": "boolean",
     "progress_days": "long", "required_days": "long", "progress_fraction": "double", "progress_basis": "string",
@@ -74,28 +91,42 @@ def json_fact(payload, key):
     return canonical(payload[key]).decode() if key in payload else None
 
 
-def capture_requirements(kind):
-    return REQUIRED_AGENT_V2 if kind == "agent_day" else REQUIRED_COUNTRY_V2 if kind == "nation_day" else ()
+def capture_requirements(kind, capture_version=None):
+    agent, country = (REQUIRED_AGENT_V3, REQUIRED_COUNTRY_V3) if capture_version == CAPTURE_VERSION else (REQUIRED_AGENT_V2, REQUIRED_COUNTRY_V2)
+    return agent if kind == "agent_day" else country if kind == "nation_day" else ()
 
 
 def validate_capture(record, capture_version):
-    if capture_version == CAPTURE_VERSION:
-        missing = [key for key in capture_requirements(record["kind"]) if key not in record["payload"]]
+    if capture_version in (CAPTURE_VERSION_V2, CAPTURE_VERSION):
+        missing = [key for key in capture_requirements(record["kind"], capture_version) if key not in record["payload"]]
         if missing:
-            raise ValueError("v2 capture omitted fields: " + ", ".join(missing))
+            raise ValueError(capture_version + " capture omitted fields: " + ", ".join(missing))
         if record["kind"] == "nation_day":
             for project in record["payload"].get("infrastructure") or []:
                 if isinstance(project, dict) and any(key not in project for key in PROJECT_TYPES):
-                    raise ValueError("v2 capture omitted infrastructure project fields")
+                    raise ValueError(capture_version + " capture omitted infrastructure project fields")
 
 
 def structure_facts(payload):
     structures = {"inventory": dict, "qol_parts_points": dict, "infrastructure": list,
         "construction_materials_used": list, "borrowed_builders": dict, "endowment": dict, "resource_imports": dict,
-        "powered_sessions_left": dict, "production_input_credits": dict}
+        "powered_sessions_left": dict, "production_input_credits": dict, "relationships": list, "military": dict, "mission": dict}
     for key, kind in structures.items():
         if payload.get(key) is not None and not isinstance(payload[key], kind):
             raise ValueError("Invalid structured snapshot fact: " + key)
+    for key, types in (("military", MILITARY_TYPES), ("mission", MISSION_TYPES)):
+        if isinstance(payload.get(key), dict):
+            fact_types(payload[key], types)
+    if isinstance(payload.get("relationships"), list):
+        seen = set()
+        for relation in payload["relationships"]:
+            if not isinstance(relation, dict):
+                raise ValueError("Invalid relationship snapshot")
+            fact_types(relation, RELATIONSHIP_TYPES)
+            identity = relation.get("id")
+            if not isinstance(identity, str) or not identity or identity in seen:
+                raise ValueError("Missing or duplicate relationship ID")
+            seen.add(identity)
 
 
 def infrastructure_rows(record):

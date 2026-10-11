@@ -11,7 +11,7 @@ from analytics.conditions import comparison_conditions
 from analytics.export import export_run
 from analytics.report import build_report
 from analytics.transform import (AGENT_TYPES, COUNTRY_TYPES, PROJECT_TYPES, CAPTURE_VERSION,
-    REQUIRED_AGENT_V2, REQUIRED_COUNTRY_V2, TABLES, infrastructure_rows, typed_record, validate_capture)
+    REQUIRED_AGENT_V2, REQUIRED_COUNTRY_V2, REQUIRED_AGENT_V3, REQUIRED_COUNTRY_V3, CAPTURE_VERSION_V2, TABLES, infrastructure_rows, typed_record, validate_capture)
 from test_pipeline import fixture, fake_fetch
 from test_public_services import feature_metadata
 import test_browse
@@ -34,7 +34,7 @@ class EconomyProjectionTests(unittest.TestCase):
         payload = {"agent_id": "a", "cash_minor": 0, "part_time_student": False,
             "arrears_minor": 0, "arrears_weeks": 0, "unpaid_hungry_weeks": 0, "insured_minor": 0,
             "price_change_tick": -1, "price_change_pct": 0, "units_before_price_change": 0,
-            "profit_before_price_change_minor": 0, "price_before_price_change_minor": 0, "inventory": {"food": 0}}
+            "profit_before_price_change_minor": 0, "price_before_price_change_minor": 0, "inventory": {"food": 0}, "war_weariness": 0.0, "military_paid_tick": -1, "military_pay_minor": 0}
         row = typed_record(record("agent_day", payload))[1]
         for key in REQUIRED_AGENT_V2:
             column = key + "_json" if key == "inventory" else key
@@ -51,7 +51,10 @@ class EconomyProjectionTests(unittest.TestCase):
             "trade_net_week_minor": -123, "trade_gross_week_minor": 0, "bank_failures": 0,
             "defaulted_loans": 0, "deposit_insurance_paid_minor": 0, "infrastructure": [],
             "construction_materials_used": [], "borrowed_builders": {}, "endowment": {"ore": 0.25},
-            "resource_imports": {"fuel": {"7": 0}}}
+            "resource_imports": {"fuel": {"7": 0}}, "missiles": 0, "war_weeks": 0, "no_fit_soldier_weeks": 0,
+            "war_weariness": 0.0, "unrest_since_tick": -1, "tax_mark_minor": 0, "war_accounting_initialized": False,
+            "government_id": "market_democracy", "leadership_term": 0, "next_election_tick": 100, "wars": 0,
+            "relationships": [], "military": {}, "mission": {}}
         row = typed_record(record("nation_day", payload))[1]
         for key in REQUIRED_COUNTRY_V2:
             column = key if key in COUNTRY_TYPES else key + "_json"
@@ -91,9 +94,9 @@ class EconomyProjectionTests(unittest.TestCase):
         value = record("agent_day", {"agent_id": "a", "cash_minor": 0})
         validate_capture(value, None)
         validate_capture(value, "gearth.public_services.v1")
-        with self.assertRaisesRegex(ValueError, "v2 capture omitted fields"):
+        with self.assertRaisesRegex(ValueError, "capture omitted fields"):
             validate_capture(value, CAPTURE_VERSION)
-        value["payload"].update({key: None for key in REQUIRED_AGENT_V2})
+        value["payload"].update({key: None for key in REQUIRED_AGENT_V3})
         validate_capture(value, CAPTURE_VERSION)
 
     def test_new_capture_metadata_cannot_claim_known_missing_feature_configuration(self):
@@ -104,12 +107,12 @@ class EconomyProjectionTests(unittest.TestCase):
         self.assertIn("economy_v2_configuration_sections", unknown)
         self.assertIn("part_time_course_configuration", unknown)
         metadata["features"].update({name: "v1" for name in
-            ("infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade")})
+            ("infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy")})
         metadata["economy_configuration"].update(labor={"arrears_strike_weeks": 2},
-            infrastructure={"progress_basis": "engine_remaining_schedule_ticks"}, currency_trade={"currency_step": 0.01})
+            infrastructure={"progress_basis": "engine_remaining_schedule_ticks"}, currency_trade={"currency_step": 0.01}, war_diplomacy={"unrest_days": 28})
         metadata["economy_configuration"]["school"]["part_time_course_days"] = 56
         self.assertTrue(comparison_conditions(metadata)["known"])
-        nation = record("nation_day", {key: None for key in REQUIRED_COUNTRY_V2})
+        nation = record("nation_day", {key: None for key in REQUIRED_COUNTRY_V3})
         nation["payload"].update(id="n1", infrastructure=[project()])
         validate_capture(nation, CAPTURE_VERSION)
         del nation["payload"]["infrastructure"][0]["progress_basis"]

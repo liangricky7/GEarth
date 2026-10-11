@@ -288,9 +288,9 @@ not full rows. All existing report sections are inspectable; its agent list
 remains a capped preview.
 
 
-## Economy capture v2
+## Economy capture v2 and v3
 
-New runs using `gearth.economy_capture.v2` retain part-time schooling, wage arrears,
+Runs using `gearth.economy_capture.v2` retain part-time schooling, wage arrears,
 insured balances, price response, infrastructure/maintenance, currency/trade,
 resource endowment/imports, inventory, and bank failure/default/insurance totals.
 Agent and country tables add nullable scalar or `_json` columns. No historical
@@ -319,3 +319,16 @@ inventories/bank totals therefore become searchable columns without manufacturin
 any missing past fields. Qualification independently rebuilds all agent/country
 scalar and JSON projections from Bronze and requires null-safe equality in both
 directions, plus the fresh manifest hash on every Bronze/Silver dataset.
+
+
+New runs use `gearth.economy_capture.v3`, adding war weariness and military pay
+for agents; missiles, war duration/readiness, political leadership/elections and
+war accounting for countries. Country `relationships_json` preserves each
+relationship's score, war/trade state, proposals and delivery totals;
+`military_json` and `mission_json` preserve compact observed strength/pay/security
+and quality-of-life/unrest facts. These are bounded daily country payloads, not a
+new relationship table. Military projects use the same infrastructure dataset.
+The existing v2 contract and metadata signatures remain valid; report required
+field coverage follows each run's original contract. No v2 run is retroactively
+required to contain v3 war history. The capture version and war feature/config
+are explicit comparison conditions for new v3 runs.

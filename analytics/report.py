@@ -92,6 +92,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 evidence.append({"run_id": run["run_id"], "sequence": record["sequence"], "kind": kind})
             if kind == "run_metadata":
                 feature_metadata = {key: payload.get(key) for key in ("capture_contract_version", "features", "active_features", "banking_paused", "economy_configuration")}
+                capture_counts = {snapshot: {key: {"present_count": 0, "null_count": 0, "non_null_count": 0, "zero_or_false_count": 0}
+                    for key in capture_requirements(snapshot, payload.get("capture_contract_version"))}
+                    for snapshot in ("agent_day", "nation_day")}
             elif kind == "opening_balance":
                 account(row["account_id"])
                 existing = db.execute("SELECT opening FROM accounts WHERE id=?", (row["account_id"],)).fetchone()[0]

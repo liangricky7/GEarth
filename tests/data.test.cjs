@@ -94,6 +94,23 @@ test('expanded feature comparison separates typed null legacy data, retained JSO
   close(v);
 });
 
+test('war coverage shows military facts and retained diplomatic JSON without claiming central banks',async()=>{
+  const f=fixture();
+  f.manifest.capture_metadata={features:{war_diplomacy:'phase3_v1'},active_features:['war_diplomacy']};
+  f.records.records[0]={kind:'nation_day',sequence:9,tick:7,payload:{missiles:0,war_weariness:0,relationships:[{at_war:false,score:0}],next_election_tick:365}};
+  f.datasets.dataset_catalog.datasets.push({dataset_id:'silver.country_daily',availability:'available',row_count:15,
+    columns:[{name:'missiles',data_type:'bigint',nullable:true,non_null_count:15},{name:'war_weariness',data_type:'double',nullable:true,non_null_count:15},{name:'relationships_json',data_type:'string',nullable:true,non_null_count:15}],
+    payload_fields:[{path:'/relationships',present_count:15,null_count:0,non_null_count:15,zero_or_false_count:0}],field_coverage_scope:'all_run_rows_bounded_inventory'});
+  const v=view({A:f});await ready(v);
+  const rows=[...v.doc.querySelectorAll('#feature-coverage tr')];
+  const military=rows.find(row=>row.cells[0].textContent==='War and military').textContent;
+  assert.match(military,/war_diplomacy: "phase3_v1"/);assert.match(military,/missiles: typed column, 15 non-null/);
+  const diplomacy=rows.find(row=>row.cells[0].textContent==='Diplomacy, elections and unrest').textContent;
+  assert.match(diplomacy,/relationships_json: typed column/);assert.match(diplomacy,/\/relationships: payload retained/);
+  assert.match(rows.find(row=>row.cells[0].textContent==='Central banks').textContent,/No explicit capture contract \/ unknown/);
+  close(v);
+});
+
 test('catalog discovers new IDs while preserving selected older run and pages through old IDs',async()=>{
   let page=0;
   const v=view({A:fixture('A')},path=>{

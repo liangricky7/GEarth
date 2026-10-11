@@ -170,14 +170,107 @@ public sealed class EconomyCaptureTests
     }
 
     [Fact]
+    public void DailyWarStateRetainsMilitaryPayRelationshipsBothSidesAndPoliticalMission()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var soldier = SocietyWar.Soldiers(world, nation).First();
+        var relationship = SocietyDiplomacy.Relation(world, "aster", "cinder");
+        soldier.WarWeariness = 0.2;
+        soldier.MilitaryPaidTick = 11;
+        soldier.MilitaryPayMinor = 97;
+        nation.Missiles = 2;
+        nation.WarWeeks = 4;
+        nation.NoFitSoldierWeeks = 1;
+        nation.WarWeariness = 0.3;
+        nation.UnrestSinceTick = 3;
+        nation.TaxMarkMinor = 875;
+        nation.WarAccountingInitialized = true;
+        nation.LeadershipTerm = 7;
+        nation.NextElectionTick = 37;
+        relationship.Score = -87;
+        relationship.AtWar = true;
+        relationship.Aggressor = nation.Id;
+        relationship.ProposedBy = "cinder";
+        relationship.ProposalKind = "peace";
+        relationship.ProposalTerms = "cede_ore";
+        relationship.ProposalExpiresTick = 45;
+        RunAudit.Enable(world);
+        world.Tick = 14;
+        RunAudit.Day(world);
+        var person = Day(world, "agent_day", "agent_id", soldier.Id);
+        Assert.Equal(0.2, person["war_weariness"]!.GetValue<double>());
+        Assert.Equal(11, person["military_paid_tick"]!.GetValue<int>());
+        Assert.Equal(97, person["military_pay_minor"]!.GetValue<long>());
+        var country = Day(world, "nation_day", "nation_id", nation.Id);
+        Assert.Equal(2, country["missiles"]!.GetValue<int>());
+        Assert.Equal(4, country["war_weeks"]!.GetValue<int>());
+        Assert.Equal(1, country["no_fit_soldier_weeks"]!.GetValue<int>());
+        Assert.Equal(0.3, country["war_weariness"]!.GetValue<double>());
+        Assert.Equal(3, country["unrest_since_tick"]!.GetValue<int>());
+        Assert.Equal(875, country["tax_mark_minor"]!.GetValue<long>());
+        Assert.True(country["war_accounting_initialized"]!.GetValue<bool>());
+        Assert.Equal(nation.GovernmentId, country["government_id"]!.GetValue<string>());
+        Assert.Equal(7, country["leadership_term"]!.GetValue<int>());
+        Assert.Equal(37, country["next_election_tick"]!.GetValue<int>());
+        var original = Assert.Single(country["relationships"]!.AsArray(), node => node!["id"]!.GetValue<string>() == relationship.Id)!;
+        Assert.True(JsonNode.DeepEquals(Wire.Node(relationship), original));
+        Assert.Equal("cinder", original["proposed_by"]!.GetValue<string>());
+        Assert.Equal("cede_ore", original["proposal_terms"]!.GetValue<string>());
+        Assert.Equal(SocietyWar.Strength(world, nation), country["military"]!["strength"]!.GetValue<int>());
+        Assert.Equal(SocietyWar.Soldiers(world, nation).Count(person => SocietyWar.Paid(world, person)), country["military"]!["soldiers_paid"]!.GetValue<int>());
+        Assert.Equal(SocietyWar.UnrestQol, country["mission"]!["average_quality_of_life_at_least"]!.GetValue<int>());
+        Assert.Equal(3 + SocietyWar.UnrestDays, country["mission"]!["unrest_comes_to_a_head_tick"]!.GetValue<int>());
+        relationship.Score = -22;
+        Assert.Equal(-87, original["score"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void MissileEffectsCaptureTargetDamageAndRecruitmentCapturesChangedResidents()
+    {
+        var world = NewWorld();
+        var nation = world.Society!.Nations["aster"];
+        var target = world.Society.Nations["cinder"];
+        var relationship = SocietyDiplomacy.Relation(world, nation.Id, target.Id);
+        relationship.AtWar = true;
+        nation.Missiles = 1;
+        target.Infrastructure.Add(new Project { Id = "target_road", Type = "roads", Complete = true,
+            CostMinor = 31000, PaidMinor = 31000, Condition = 100 });
+        var government = world.Agents["aster_government"];
+        world.Tick = 4;
+        RunAudit.Enable(world);
+        var launch = new ActionProposal("launch_missile", new() { ["country_id"] = target.Id }, "fixture", []);
+        using (RunAudit.Effects(world, government, launch, "launch", "launch_event"))
+            Assert.True(SocietyWar.Enact(world, nation, new()
+                { Id = "missile_fixture", ActionType = launch.ActionType, Params = launch.Params, CauseId = "launch_event" }));
+        var effects = world.PendingAudit.Where(row => row.Kind == "action_effect" && row.Payload["decision_id"]?.GetValue<string>() == "launch").ToArray();
+        var damage = effects.Single(row => row.Payload["entity_type"]!.GetValue<string>() == "nation"
+            && row.Payload["entity_id"]!.GetValue<string>() == target.Id).Payload;
+        Assert.Equal(100, damage["before"]!["infrastructure"]![0]!["condition"]!.GetValue<int>());
+        Assert.Equal(50, damage["after"]!["infrastructure"]![0]!["condition"]!.GetValue<int>());
+        var attacker = effects.Single(row => row.Payload["entity_type"]!.GetValue<string>() == "nation"
+            && row.Payload["entity_id"]!.GetValue<string>() == nation.Id).Payload;
+        Assert.Equal(1, attacker["before"]!["missiles"]!.GetValue<int>());
+        Assert.Equal(0, attacker["after"]!["missiles"]!.GetValue<int>());
+        var recruit = new ActionProposal("recruit_soldiers", new(), "fixture", []);
+        using (RunAudit.Effects(world, government, recruit, "recruit", "recruit_event"))
+            Assert.True(SocietyWar.Enact(world, nation, new() { ActionType = recruit.ActionType, Params = recruit.Params, CauseId = "recruit_event" }));
+        var residents = world.PendingAudit.Where(row => row.Kind == "action_effect"
+            && row.Payload["decision_id"]?.GetValue<string>() == "recruit" && row.Payload["entity_type"]!.GetValue<string>() == "agent"
+            && row.Payload["after"]!["occupation"]?.GetValue<string>() == "soldier").ToArray();
+        Assert.Equal(SocietyWar.SoldierStep, residents.Length);
+        Assert.All(residents, row => Assert.NotEqual("soldier", row.Payload["before"]!["occupation"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public void MetadataVersionsCaptureWithoutChangingAuditEnvelopeAndLegacyPayloadAbsence()
     {
         var world = NewWorld();
         RunAudit.Enable(world);
         var metadata = world.PendingAudit[0].Payload;
         Assert.Equal(1, world.AuditSchemaVersion);
-        Assert.Equal("gearth.economy_capture.v2", metadata["capture_contract_version"]!.GetValue<string>());
-        foreach (var feature in new[] { "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade" })
+        Assert.Equal("gearth.economy_capture.v3", metadata["capture_contract_version"]!.GetValue<string>());
+        foreach (var feature in new[] { "infrastructure", "part_time_school", "wage_arrears", "price_response", "currency_trade", "war_diplomacy" })
         {
             Assert.NotNull(metadata["features"]![feature]);
             Assert.Contains(metadata["active_features"]!.AsArray(), node => node!.GetValue<string>() == feature);
@@ -186,6 +279,9 @@ public sealed class EconomyCaptureTests
         Assert.Equal(SocietyLabor.ArrearsStrikeWeeks, metadata["economy_configuration"]!["labor"]!["arrears_strike_weeks"]!.GetValue<int>());
         Assert.Equal(SocietyTrade.CurrencyStep, metadata["economy_configuration"]!["currency_trade"]!["currency_step"]!.GetValue<double>());
         Assert.NotEmpty(metadata["economy_configuration"]!["infrastructure"]!["catalog"]!.AsArray());
+        Assert.Equal(SocietyWar.WarBelow, metadata["economy_configuration"]!["war_diplomacy"]!["war_below"]!.GetValue<int>());
+        Assert.Contains(metadata["economy_configuration"]!["infrastructure"]!["catalog"]!.AsArray(),
+            node => node!["type"]!.GetValue<string>() == PhaseContracts.Missile);
         var serialized = """{"run_id":"legacy","sequence":1,"tick":7,"revision":2,"kind":"agent_day","payload":{"agent_id":"p","frame_kind":"day","cash_minor":0}}""";
         var legacy = JsonSerializer.Deserialize<AuditRecord>(serialized, Wire.Json)!;
         Assert.False(legacy.Payload.ContainsKey("part_time_student"));

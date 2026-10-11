@@ -1,4 +1,5 @@
 import asyncio
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -61,6 +62,50 @@ def test_round_robin_and_independent_capacity():
     pool.release(pool.providers[0], 1)
     assert pool.acquire(1).name == "spark"
     assert pool.active == {"spark": 2, "amd": 1}
+
+
+def deployed_topology():
+    return [
+        ModelProvider("spark_a", "8B", "https://a/v1", 16, "key", "institution"),
+        ModelProvider("spark_b", "8B", "https://b/v1", 16, "key", "institution"),
+        ModelProvider("spark_a_citizen", "4B", "https://ac/v1", 32, "key", "citizen"),
+        ModelProvider("spark_b_citizen", "4B", "https://bc/v1", 32, "key", "citizen"),
+        ModelProvider("amd", "4B", "https://amd/v1", 1, "key", "citizen"),
+    ]
+
+
+@pytest.mark.parametrize("groups", [("institution", "citizen"), ("citizen", "institution")])
+def test_interleaved_roles_do_not_starve_other_compute_sources(groups):
+    pool = ProviderPool(deployed_topology())
+    assigned = Counter()
+    for now in range(90):
+        for group in groups:
+            selected = pool.acquire(now, group)
+            assert selected.serves(group)
+            assigned[selected.name] += 1
+            pool.release(selected, now)
+    assert assigned == {"spark_a": 45, "spark_b": 45,
+                        "spark_a_citizen": 30, "spark_b_citizen": 30, "amd": 30}
+
+
+def test_full_load_balances_configured_capacity_and_reuses_freed_slots():
+    pool = ProviderPool(deployed_topology())
+    for _ in range(32):
+        assert pool.acquire(0, "institution") is not None
+    for _ in range(65):
+        assert pool.acquire(0, "citizen") is not None
+    assert pool.active == {p.name: p.capacity for p in pool.providers}
+    assert pool.active["spark_a"] + pool.active["spark_a_citizen"] == 48
+    assert pool.active["spark_b"] + pool.active["spark_b_citizen"] == 48
+    assert pool.active["amd"] == 1
+    assert pool.acquire(0, "institution") is None
+    assert pool.acquire(0, "citizen") is None
+    # Faster providers may finish more work; their idle slots must immediately
+    # be usable without exceeding a slower provider's limit or switching models.
+    for selected in pool.providers:
+        pool.release(selected, 1)
+        assert pool.acquire(1, selected.decision_group) == selected
+    assert pool.active == {p.name: p.capacity for p in pool.providers}
 
 
 def test_role_routing_does_not_spill_across_models_or_cooldowns():

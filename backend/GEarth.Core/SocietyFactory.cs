@@ -10,7 +10,7 @@ public static class SocietyFactory
     [
         ("aster", "Jaypan", 40, -105), ("beryl", "Beryl", -18, -58),
         ("cinder", "Papa New Kenny", 50, 15), ("dune", "Capybarlos", 25, 42),
-        ("ember", "Lebanonia", -27, 135), ("fjord", "Fjord", 64, -22),
+        ("ember", "Lebanonia", -27, 135), ("fjord", "Rickstanbul", 64, -22),
         ("grove", "Dyland", 3, 23), ("haven", "Haven", 25, 110),
         ("ionia", "Ionia", 8, 80), ("jade", "Jade", 35, 140)
     ];

@@ -54,7 +54,7 @@
       },
       {
         "id": "fjord",
-        "name": "Fjord",
+        "name": "Rickstanbul",
         "lat": 64,
         "lon": -22,
         "government_id": "market_democracy"
@@ -738,7 +738,7 @@
       },
       {
         "id": "fjord",
-        "name": "Fjord",
+        "name": "Rickstanbul",
         "government_id": "market_democracy",
         "tax_basis_points": 3000,
         "welfare_minor": 0,

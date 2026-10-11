@@ -95,7 +95,7 @@ Prepare a captured run, because live decisions differ between runs. Recorded run
 
 ### 3.1 Geography
 
-There are ten fictional countries: Aster, Beryl, Cinder, Dune, Ember, Fjord, Grove, Haven, Ionia and Jade.
+There are ten fictional countries: Aster, Beryl, Cinder, Dune, Ember, Rickstanbul, Grove, Haven, Ionia and Jade.
 - **Locations and routes:** each country has locations on a directed route graph. Each route has travel time, cost, risk, an open/closed state and a controlling country.
 - **Resources:** food and energy multipliers differ by country.
 - **Repeated geography:** geography and resources repeat across two sets of five countries, so each government profile appears twice on different land.
@@ -106,7 +106,7 @@ Political structure and economic policy are modeled as explicit rules, not perso
 
 | Profile | Countries (rotation 0) | Authority rule | Policy delay | Wage tax | Weekly welfare | Weekly unemployment benefit | Ownership |
 |---|---|---|---|---|---|---|---|
-| Market democracy | Aster, Fjord | Elected; acts while approval ≥ 45% | 3 days | 15% | 0 | 300 | Private, entrepreneur-owned |
+| Market democracy | Aster, Rickstanbul | Elected; acts while approval ≥ 45% | 3 days | 15% | 0 | 300 | Private, entrepreneur-owned |
 | Social democracy | Beryl, Grove | Elected; acts while approval ≥ 45% | 2 days | 30% | 100 | 400 | Private, entrepreneur-owned |
 | Single-party planned economy | Cinder, Haven | Central executive | 1 day | 25% | 150 | 0 | State owns every firm |
 | Personal dictatorship | Dune, Ionia | Acts while bank cash ≥ 100 × population (elite-support proxy) | 0 days | 10% | 0 | 0 | Private, entrepreneur-owned |
@@ -801,7 +801,7 @@ The full bank is merged. It was paused (`SocietyBank.Paused`) for the no-bank ru
 - dictatorship: none
 
 **Results (rule mode):** health at the end of the year improved:
-- Fjord 63 → 81
+- Rickstanbul 63 → 81
 - Dune 0 → 39
 - Ionia 0 → 39
 

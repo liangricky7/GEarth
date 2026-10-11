@@ -71,7 +71,7 @@ ProceduralWorld generate_world(uint32_t width,uint32_t height) {
     if (width<8 || height<4) throw std::runtime_error("World texture is too small");
     ProceduralWorld world; world.width=width; world.height=height;
     const char* ids[]={"aster","beryl","cinder","dune","ember","fjord","grove","haven","ionia","jade"};
-    const char* names[]={"Aster","Beryl","Cinder","Dune","Ember","Fjord","Grove","Haven","Ionia","Jade"};
+    const char* names[]={"Aster","Beryl","Cinder","Dune","Ember","Rickstanbul","Grove","Haven","Ionia","Jade"};
     const glm::vec3 palette[]={{.35f,.75f,.65f},{.65f,.55f,.85f},{.86f,.55f,.45f},{.83f,.75f,.45f},{.78f,.44f,.63f},
         {.42f,.65f,.83f},{.56f,.76f,.4f},{.83f,.66f,.48f},{.75f,.8f,.83f},{.32f,.48f,.83f}};
     for (int i=0;i<FictionalCountryCount;++i) {

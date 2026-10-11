@@ -88,6 +88,22 @@ public static class RunAudit
             Wire.Node(payload).AsObject()));
     }
 
+    // Called immediately after insertion, before the new account receives its startup funding.
+    // Kept separate from initial accounts so the initial-population denominator remains unchanged.
+    public static void Created(World world, Agent agent, string source)
+    {
+        if (!world.AnalyticsEnabled)
+            return;
+        var context = world.CurrentAuditContext;
+        Append(world, "opening_balance", new
+        {
+            account_id = agent.Id, account_type = "created_agent", balance_minor = agent.CashMinor,
+            agent = AgentState(world, agent), creation_tick = world.Tick,
+            creation_basis = "engine_agent_added_before_funding", creation_source = source,
+            decision_id = context?.DecisionId, event_id = context?.EventId, routine_id = context?.RoutineId
+        });
+    }
+
     private static object EconomyConfiguration() => new
     {
         school = new { SocietyLabor.CourseDays, SocietyLabor.GraduateOutputBoost,

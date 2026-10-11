@@ -22,6 +22,81 @@ public sealed class PublicServicesAuditTests
     }
 
     [Fact]
+    public void StateFirmGrantsCaptureEveryNewAccountBeforeFundingWithoutChangingTheSimulation()
+    {
+        var world = NewWorld();
+        world.Tick = 14;
+        var plain = Wire.Copy(world);
+        var initialPopulation = world.Agents.Count;
+        RunAudit.Enable(world);
+        foreach (var country in new[] { "cinder", "haven" })
+        foreach (var sector in new[] { "clinic", "energy", "medicine" })
+        {
+            var firm = SocietyLabor.Grant(world, world.Society!.Nations[country], sector, "")!;
+            var control = SocietyLabor.Grant(plain, plain.Society!.Nations[country], sector, "")!;
+            Assert.Equal(control.Id, firm.Id);
+            var opening = Assert.Single(world.PendingAudit, row => row.Kind == "opening_balance"
+                && row.Payload["account_id"]!.GetValue<string>() == firm.Id);
+            Assert.Equal("created_agent", opening.Payload["account_type"]!.GetValue<string>());
+            Assert.Equal(0, opening.Payload["balance_minor"]!.GetValue<long>());
+            Assert.Equal(0, opening.Payload["agent"]!["cash_minor"]!.GetValue<long>());
+            Assert.Equal(14, opening.Payload["creation_tick"]!.GetValue<int>());
+            Assert.Equal("state_firm", opening.Payload["creation_source"]!.GetValue<string>());
+            Assert.Null(opening.Payload["agent"]!["owner_id"]);
+            var grant = Assert.Single(world.PendingAudit, row => row.Kind == "transaction"
+                && row.Payload["recipient_account_id"]!.GetValue<string>() == firm.Id);
+            Assert.True(opening.Sequence < grant.Sequence);
+            Assert.Equal("startup_grant", grant.Payload["kind"]!.GetValue<string>());
+            Assert.Equal(firm.CashMinor, grant.Payload["amount_minor"]!.GetValue<long>());
+        }
+        RunAudit.Day(world);
+        Assert.Equal(initialPopulation, world.PendingAudit.Count(row => row.Kind == "opening_balance"
+            && row.Payload["account_type"]!.GetValue<string>() == "agent"));
+        Assert.Equal(6, world.PendingAudit.Count(row => row.Kind == "opening_balance"
+            && row.Payload["account_type"]!.GetValue<string>() == "created_agent"));
+        Assert.Equal(world.InitialCashMinor, world.PendingAudit.Where(row => row.Kind == "opening_balance")
+            .Sum(row => row.Payload["balance_minor"]!.GetValue<long>()));
+        Assert.True(JsonNode.DeepEquals(Wire.Node(plain.Agents), Wire.Node(world.Agents)));
+        Assert.True(JsonNode.DeepEquals(Wire.Node(plain.Society!), Wire.Node(world.Society!)));
+        Assert.True(JsonNode.DeepEquals(Wire.Node(plain.Events), Wire.Node(world.Events)));
+        Assert.Empty(plain.PendingAudit);
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
+    public void PrivateFirmCreationHasOneOpeningBeforeFundingAndRetainsItsExistingEvent()
+    {
+        var world = NewWorld();
+        var founder = Employee(world);
+        var cost = SocietyLabor.StartupCost("food");
+        SocietyEconomy.Transfer(world, world.Agents["aster_government"], founder, cost);
+        world.Tick = 2;
+        var plain = Wire.Copy(world);
+        RunAudit.Enable(world);
+        Agent firm;
+        using (RunAudit.Context(world, new(DecisionId: "chosen_startup", EventId: "accepted_startup")))
+            firm = SocietyLabor.Start(world, founder, "food", 30, "accepted_startup");
+        SocietyLabor.Start(plain, plain.Agents[founder.Id], "food", 30, "accepted_startup");
+        RunAudit.Day(world);
+        var opening = Assert.Single(world.PendingAudit, row => row.Kind == "opening_balance"
+            && row.Payload["account_id"]!.GetValue<string>() == firm.Id);
+        Assert.Equal("created_agent", opening.Payload["account_type"]!.GetValue<string>());
+        Assert.Equal("private_firm", opening.Payload["creation_source"]!.GetValue<string>());
+        Assert.Equal(0, opening.Payload["balance_minor"]!.GetValue<long>());
+        Assert.Equal("chosen_startup", opening.Payload["decision_id"]!.GetValue<string>());
+        var funding = Assert.Single(world.PendingAudit, row => row.Kind == "transaction"
+            && row.Payload["recipient_account_id"]!.GetValue<string>() == firm.Id);
+        Assert.True(opening.Sequence < funding.Sequence);
+        Assert.Equal(cost, funding.Payload["amount_minor"]!.GetValue<long>());
+        var started = Assert.Single(world.Events, item => item.EventType == "business_started");
+        Assert.Equal(firm.Id, started.Payload["account_id"]!.GetValue<string>());
+        Assert.Equal(0, started.Payload["opening_cash_minor"]!.GetValue<long>());
+        Assert.True(JsonNode.DeepEquals(Wire.Node(plain.Agents), Wire.Node(world.Agents)));
+        Assert.True(JsonNode.DeepEquals(Wire.Node(plain.Events), Wire.Node(world.Events)));
+        SocietyEconomy.AssertConservation(world);
+    }
+
+    [Fact]
     public void DailySnapshotsCapturePublicServicesAndSeparateDepositClaimsFromMoney()
     {
         var world = NewWorld();

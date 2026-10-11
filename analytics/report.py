@@ -91,8 +91,8 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 db.execute("UPDATE accounts SET opening=?,account_type=? WHERE id=?", (row["balance_minor"], row["account_type"], row["account_id"]))
                 agent = payload.get("agent")
                 if isinstance(agent, dict):
-                    # Opening balances supply the exact tick-zero latest state for a zero-day run.
-                    db.execute("INSERT OR IGNORE INTO agents VALUES (?,?,?,?,?,?,?,?,?,?)", (row["account_id"], record["sequence"], 0,
+                    # Initial/created openings preserve the actual recorded boundary.
+                    db.execute("INSERT OR IGNORE INTO agents VALUES (?,?,?,?,?,?,?,?,?,?)", (row["account_id"], record["sequence"], record["tick"],
                                agent.get("role"), agent.get("country_id", agent.get("countryId")), row["balance_minor"],
                                agent.get("health"), agent.get("wellbeing"), agent.get("decision_maker", agent.get("decisionMaker")), canonical(agent_facts(agent)).decode()))
                     db.execute("UPDATE accounts SET latest=?,sequence=? WHERE id=?", (row["balance_minor"], record["sequence"], row["account_id"]))

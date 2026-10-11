@@ -150,7 +150,13 @@ Bronze `workspace.faultline_bronze.audit` uses `(run_id,sequence)`. Silver in
 `decision_options`, `decision_results`, `event_edges`, and `action_effects`. Keys are run-scoped IDs; event keys use
 their independent event sequence; state keys include tick and `frame_kind`.
 `day` and same-tick `end` states are retained separately. Opening state is
-separate from tick-1 daily state. Gold contains import receipts, daily agent/country
+separate from tick-1 daily state. Initial openings use `account_type=agent`;
+new state/private firms use `created_agent`, an explicit zero cash balance and
+`creation_tick` captured before funding. Initial population counts exclude created
+firms. Daily coverage starts at the authoritative creation boundary; matching
+legacy `business_started` facts remain compatible. Unknown identities, missing
+daily/end rows and created openings after funding are rejected.
+Gold contains import receipts, daily agent/country
 views, latest agent state, an agent timeline view, `public_service_days` and
 `public_service_transfers`. Options retain the full raw request alongside typed
 fields. `offered_params_json` preserves fixed values and bounded integer descriptors

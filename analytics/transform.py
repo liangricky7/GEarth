@@ -72,7 +72,7 @@ def typed_record(record):
                       conditions_unknown_json=canonical(conditions["unknown"]).decode())
     elif kind == "opening_balance":
         common.update(account_id=payload["account_id"], account_type=payload.get("account_type", "unknown"),
-                      balance_minor=integer(payload["balance_minor"], "balance_minor"))
+                      balance_minor=integer(payload["balance_minor"], "balance_minor"), creation_tick=payload.get("creation_tick"))
     elif kind == "transaction":
         amount = integer(payload["amount_minor"], "amount_minor", 1)
         common.update(transaction_id=payload["transaction_id"], sender_account_id=payload["sender_account_id"],

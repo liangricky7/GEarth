@@ -175,6 +175,57 @@ class PublicServicesReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "integer minor"):
             self.report()
 
+    def add_created_firm(self, private=False):
+        def row(kind, payload):
+            return {"run_id": self.metadata["run_id"], "sequence": 0, "tick": 1, "revision": 2, "kind": kind, "payload": payload}
+        opening = row("opening_balance", {"account_id": "school", "account_type": "created_agent", "balance_minor": 0,
+            "creation_tick": 1, "creation_source": "private_firm" if private else "state_firm",
+            "agent": {"agent_id": "school", "role": "business", "country_id": "n1", "cash_minor": 0}})
+        new = [opening, row("transaction", {"transaction_id": "school-funding", "sender_account_id": "a",
+            "recipient_account_id": "school", "amount_minor": 10, "kind": "founding_capital"})]
+        if private:
+            new.append(row("event", {"event_id": "e2", "seq": 2, "event_type": "business_started", "payload": {
+                "account_id": "school", "opening_cash_minor": 0}}))
+            self.metadata["through_event_sequence"] = 2
+        new.append(row("agent_day", {"agent_id": "school", "role": "business", "country_id": "n1", "cash_minor": 10, "frame_kind": "day"}))
+        self.records[7]["payload"]["cash_minor"] -= 10
+        self.records[10]["payload"]["cash_minor"] -= 10
+        self.records[7:7] = new
+        self.records.insert(len(self.records) - 2, row("agent_day", {"agent_id": "school", "role": "business", "country_id": "n1", "cash_minor": 10, "frame_kind": "end"}))
+        for index, record in enumerate(self.records):
+            record["sequence"] = index + 1
+        self.metadata.update(through_sequence=len(self.records), population=3)
+
+    def test_created_state_firm_is_known_with_daily_and_final_reconciliation(self):
+        self.add_created_firm()
+        report = self.report()
+        checks = {check["name"]: check["status"] for check in report["checks"]}
+        self.assertEqual(checks["daily_account_reconciliation"], "pass")
+        self.assertEqual(checks["ledger_account_reconciliation"], "pass")
+        self.assertEqual(checks["cash_plus_escrow_conservation"], "pass")
+        self.assertEqual(report["summary"]["agent_count"], 3)
+
+    def test_created_private_firm_and_legacy_event_share_creation_fact(self):
+        self.add_created_firm(private=True)
+        self.assertEqual(next(check["status"] for check in self.report()["checks"] if check["name"] == "ledger_account_reconciliation"), "pass")
+
+    def test_created_firm_missing_daily_snapshot_is_not_certified(self):
+        self.add_created_firm()
+        self.records = [record for record in self.records if not (record["kind"] == "agent_day" and record["payload"]["agent_id"] == "school" and record["payload"]["frame_kind"] == "day")]
+        for index, record in enumerate(self.records):
+            record["sequence"] = index + 1
+        self.metadata["through_sequence"] = len(self.records)
+        with self.assertRaisesRegex(ValueError, "missing daily agent snapshot"):
+            self.report()
+
+    def test_created_firm_opening_after_funding_is_rejected(self):
+        self.add_created_firm()
+        self.records[7], self.records[8] = self.records[8], self.records[7]
+        for index, record in enumerate(self.records):
+            record["sequence"] = index + 1
+        with self.assertRaisesRegex(ValueError, "must precede transfers"):
+            self.report()
+
 
 if __name__ == "__main__":
     unittest.main()

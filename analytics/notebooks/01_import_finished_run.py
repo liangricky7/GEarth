@@ -85,6 +85,7 @@ projections = {
     "event": ("events", ["run_id", "event_sequence"], {"event_id": F.coalesce(p("event_id"), p("id")), "event_sequence": p("seq", "long"), "event_type": p("event_type"), "source": p("source"), "cause_ids_json": p("cause_ids"), "entity_ids_json": p("entity_ids")}),
     "run_metadata": ("runs", ["run_id"], {"seed": p("seed", "long"), "mode": p("mode"), "government_rotation": p("government_rotation", "long"), "tick_limit": p("tick_limit", "long"), "population": F.coalesce(p("initial_population", "long"), p("population", "long")), "engine_commit": p("engine_commit"), "configuration_json": p("configuration")}),
 }
+projections["opening_balance"][2]["creation_tick"] = p("creation_tick", "long")
 
 # Public-services v1 adds nullable fields without reinterpreting old run facts.
 for field, datatype in AGENT_TYPES.items():

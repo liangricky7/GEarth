@@ -89,6 +89,14 @@ public static class RunAnalysis
         var responses = events.Where(item => item.EventType == "diplomatic_response").ToArray();
         var conflicts = events.Where(item => item.EventType == "conflict_started").ToArray();
         observations.Add(new("diplomacy", $"{offers} diplomatic offers, {responses.Length} responses and {conflicts.Length} conflict declarations were recorded. An offered agreement is not a completed agreement.", Evidence(responses.Concat(conflicts))));
+        foreach (var (type, description) in new[]
+        {
+            ("war_week", "Weekly military contests occurred"), ("war_ended", "Wars ended by peace or surrender"),
+            ("missile_strike", "Missiles were launched"), ("gift_sent", "Diplomatic gifts were delivered"),
+            ("unrest_started", "Low quality of life triggered unrest"), ("early_election_called", "Unrest triggered early elections"),
+            ("revolution", "Ownership-compatible revolutions changed government"),
+            ("revolution_deferred", "Revolutions were deferred because ownership transitions are unsupported")
+        }) AddEventCount(observations, events, "war_and_unrest", type, description);
         var requested = events.Count(item => item.EventType == "loan_requested");
         var funded = events.Where(item => item.EventType == "loan_funded").ToArray();
         var settled = events.Where(item => item.EventType == "loan_settled").ToArray();

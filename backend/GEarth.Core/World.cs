@@ -34,6 +34,9 @@ public sealed class Agent
     public int TargetStock { get; set; } = 8;
     public int Wellbeing { get; set; } = 100;
     public int Health { get; set; } = 100;
+    public double WarWeariness { get; set; }
+    public int MilitaryPaidTick { get; set; } = -1;
+    public long MilitaryPayMinor { get; set; }
     public int HealthThreshold { get; set; } = 70;
     // Labor market: residents hold a salary with an employer (null employer = unemployed).
     public long SalaryMinor { get; set; }

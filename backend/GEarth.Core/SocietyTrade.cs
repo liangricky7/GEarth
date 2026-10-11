@@ -311,7 +311,7 @@ public static class SocietyTrade
         var relation = SocietyDiplomacy.Relation(world, buyer.CountryId, seller.CountryId);
         relation.DeliveredUnits += cargo.Quantity;
         relation.DeliveredValueMinor += cargo.EscrowMinor;
-        relation.Tension = Math.Max(0, relation.Tension - 1);
+        relation.Score = Math.Min(100, relation.Score + 1);
         world.Society!.Nations[buyer.CountryId].TradeValueMinor += cargo.EscrowMinor;
         world.Society.Nations[seller.CountryId].TradeValueMinor += cargo.EscrowMinor;
         cargo.EscrowMinor = 0;

@@ -580,3 +580,44 @@ def test_model_failure_metadata_preserves_origin_and_status(monkeypatch, fault, 
                 assert worker.active_requests == 0
 
     asyncio.run(run())
+
+
+def test_government_context_error_does_not_quarantine_healthy_provider(monkeypatch):
+    monkeypatch.setattr(worker, "TOKEN", "test-token")
+    job = make_job()
+    def respond(request):
+        return httpx.Response(400, json={"error": {"param": "input_tokens", "message": "This model's maximum context length is 8192 tokens. private URL"}})
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as model:
+            monkeypatch.setattr(worker.app.state, "model_client", model, raising=False)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=worker.app), base_url="http://test") as client:
+                response = await client.post("/decide", json=job.model_dump(mode="json"), headers={"Authorization": "Bearer test-token"})
+                result = response.json()
+                assert result["error_category"] == "model_context_exceeded"
+                assert result["error_http_status"] == 400
+                assert "private" not in json.dumps(result)
+                assert worker.provider_pool.unavailable_until["spark_a"] == 0
+                assert worker.provider_pool.failures["spark_a"] == 1
+    asyncio.run(run())
+
+
+def test_government_tables_preserve_all_fields_and_menu():
+    rows = [{"seller_id": f"seller_{n}", "full_gap_funding_minor": 100, "quote_quantity": 1, "affordable": n} for n in range(10)]
+    job = make_job()
+    job.observation = {"world_stage": 2, "self": {"role": "government"}, "country": {"quotes": rows},
+        "note": "Worker detail. Household prices include sales tax. Government rules. War rules."}
+    prompt = worker.build_prompt(job)
+    table = json.loads(prompt["messages"][1]["content"])["observation"]["country"]["quotes"]
+    restored = [{**table["common"], **dict(zip(table["columns"], row))} for row in table["rows"]]
+    assert restored == rows
+    assert "Worker detail" not in prompt["messages"][0]["content"]
+    assert "Government rules. War rules." in prompt["messages"][0]["content"]
+    assert json.loads(prompt["messages"][1]["content"])["available_actions"] == ["0: hold"]
+    assert job.observation["country"]["quotes"] == rows
+    job.candidates.append({"action_type": "set_plan", "params": {"food": {"min": 0, "max": 100, "default": 10}}})
+    values = worker.build_values_prompt(job, 1, "Meet needs")
+    assert json.loads(values["messages"][1]["content"])["observation"]["country"]["quotes"] == table
+    assert worker.validate_action({"choice": 1, "reason": "Meet needs", "values": {"food": 11}}, job)["params"] == {"food": 11}
+    job.observation["self"]["role"] = "citizen"
+    assert "Worker detail" in worker.build_prompt(job)["messages"][0]["content"]
+    assert json.loads(worker.build_prompt(job)["messages"][1]["content"])["observation"]["country"]["quotes"] == rows

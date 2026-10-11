@@ -208,6 +208,44 @@ def render_action(index: int, candidate: dict) -> str:
     return f"{index}: {candidate['action_type']} {params}".rstrip()
 
 
+GOVERNMENT_TABLE_INSTRUCTIONS = " Observation tables have columns naming each row's values in order; common fields apply to every row."
+
+
+def compact_records(value):
+    """Losslessly factor repeated field names and values in government observations."""
+    if isinstance(value, dict):
+        return {key: compact_records(item) for key, item in value.items()}
+    if not isinstance(value, list):
+        return value
+    rows = [compact_records(item) for item in value]
+    if len(rows) >= 3 and all(isinstance(row, dict) for row in rows):
+        keys = list(rows[0])
+        if keys and all(set(row) == set(keys) for row in rows):
+            common = {key: rows[0][key] for key in keys if all(
+                json.dumps(row[key], sort_keys=True) == json.dumps(rows[0][key], sort_keys=True) for row in rows)}
+            columns = [key for key in keys if key not in common]
+            table = {"common": common, "columns": columns, "rows": [[row[key] for key in columns] for row in rows]}
+            if len(json.dumps(table, separators=(",", ":"))) < len(json.dumps(rows, separators=(",", ":"))):
+                return table
+    return rows
+
+
+def government_rules(rules):
+    # Preserve the engine's exact government, infrastructure, planning, trade and war rules.
+    # Individual worker-choice mechanics do not belong in the government's decision prompt.
+    marker = "Household prices include sales tax"
+    if not isinstance(rules, str) or marker not in rules:
+        return rules
+    overview = (
+        "One tick is one day. Residents automatically buy food and energy daily and household goods and entertainment weekly. "
+        "Health, hunger, employment, savings and free time affect quality of life and output. Firms hire, pay wages, buy inputs and adjust prices automatically. "
+        "Banks require reserves of 10% of deposits and capital of 10% of loans; three missed installments close a borrowing firm. "
+        "State continuation guarantees existing domestic deposits without adding reserves; nonpositive bank capital prevents lending. "
+        "Use observed country problems, labor distribution, clinic funding and budget outcomes to judge policies. "
+    )
+    return overview + rules[rules.index(marker):]
+
+
 def build_prompt(job: DecisionJob, model=MODEL) -> dict:
     if job.observation.get("world_stage") == 2:
         # The world rules are identical for every agent, so they lead the system prompt where the
@@ -216,6 +254,10 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
             key: value for key, value in job.observation.items() if key != "note"
         }
         rules = job.observation.get("note")
+        government = job.observation.get("self", {}).get("role") == "government"
+        if government:
+            observation = compact_records(observation)
+            rules = government_rules(rules)
         has_ranges = any(is_range(value) for candidate in job.candidates for value in candidate["params"].values())
         output_instructions = RANGED_CHOICE_INSTRUCTIONS if has_ranges else FIXED_CHOICE_INSTRUCTIONS
         citizen = decision_group(job) == "citizen"
@@ -236,6 +278,7 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
                 {
                     "role": "system",
                     "content": WORLD_INSTRUCTIONS + output_instructions + government_guidance
+                    + (GOVERNMENT_TABLE_INSTRUCTIONS if government else "")
                     + (f"\n\nWorld rules: {rules}" if rules else ""),
                 },
                 {
@@ -296,15 +339,20 @@ def build_values_prompt(job, choice, reason, model=MODEL, correction=None):
     schema = {"type": "object", "properties": {"values": {
         "type": "object", "properties": properties, "required": list(fields), "additionalProperties": False,
     }}, "required": ["values"], "additionalProperties": False}
+    observation = {key: value for key, value in job.observation.items() if key != "note"}
+    government = job.observation.get("self", {}).get("role") == "government"
+    if government:
+        observation = compact_records(observation)
     return {
         "model": model,
         "messages": [
             {"role": "system", "content": WORLD_INSTRUCTIONS +
              'The action is already selected. Return only {"values":{...}} with exactly the requested fields. '
              "Each value must be an integer within its bounds. Choose levels using the observation, current levels and selected reason. "
-             "Do not return choice, reason, fixed parameters or range objects."},
+             "Do not return choice, reason, fixed parameters or range objects."
+             + (GOVERNMENT_TABLE_INSTRUCTIONS if government else "")},
             {"role": "user", "content": json.dumps({
-                "observation": {key: value for key, value in job.observation.items() if key != "note"},
+                "observation": observation,
                 "selected_action": candidate["action_type"], "selected_reason": reason,
                 "fields": fields, "correction": correction,
             }, separators=(",", ":"))},
@@ -442,7 +490,7 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         jsonschema.ValidationError,
     ) as error:
         failed = True
-        unavailable = isinstance(error, (httpx.HTTPError, TimeoutError))
+        unavailable = isinstance(error, (httpx.HTTPError, TimeoutError)) and not is_context_error(error)
         action = {
             "action_type": "hold",
             "params": {},
@@ -460,6 +508,23 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         )
 
 
+def is_context_error(error):
+    """Recognize request-size failures without exposing private server response bodies."""
+    if not isinstance(error, httpx.HTTPStatusError) or error.response.status_code not in (400, 422):
+        return False
+    try:
+        detail = error.response.json().get("error", {})
+    except (ValueError, AttributeError):
+        return False
+    if not isinstance(detail, dict):
+        return False
+    message = str(detail.get("message", "")).lower()
+    return detail.get("code") == "context_length_exceeded" or (
+        "maximum context length" in message and
+        (detail.get("param") == "input_tokens" or "tokens" in message)
+    )
+
+
 def decision_result(
     job: DecisionJob,
     action: dict,
@@ -475,7 +540,7 @@ def decision_result(
         if isinstance(error, (TimeoutError, httpx.TimeoutException)):
             category = "model_timeout"
         elif isinstance(error, httpx.HTTPStatusError):
-            category = "model_http_error"
+            category = "model_context_exceeded" if is_context_error(error) else "model_http_error"
             status = error.response.status_code
         elif isinstance(error, httpx.HTTPError):
             category = "model_transport_error"

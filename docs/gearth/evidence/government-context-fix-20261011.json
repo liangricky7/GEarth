@@ -1,0 +1,182 @@
+[
+  {
+    "agent": "aster_government",
+    "tick": 0,
+    "choice_input_tokens": 5940,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 5.2
+  },
+  {
+    "agent": "beryl_government",
+    "tick": 0,
+    "choice_input_tokens": 5991,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 5.3
+  },
+  {
+    "agent": "cinder_government",
+    "tick": 0,
+    "choice_input_tokens": 5521,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.53
+  },
+  {
+    "agent": "dune_government",
+    "tick": 0,
+    "choice_input_tokens": 5868,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.77
+  },
+  {
+    "agent": "ember_government",
+    "tick": 0,
+    "choice_input_tokens": 5885,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.55
+  },
+  {
+    "agent": "fjord_government",
+    "tick": 0,
+    "choice_input_tokens": 5894,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.73
+  },
+  {
+    "agent": "grove_government",
+    "tick": 0,
+    "choice_input_tokens": 5967,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.59
+  },
+  {
+    "agent": "haven_government",
+    "tick": 0,
+    "choice_input_tokens": 5649,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.29
+  },
+  {
+    "agent": "ionia_government",
+    "tick": 0,
+    "choice_input_tokens": 5873,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 5.79
+  },
+  {
+    "agent": "jade_government",
+    "tick": 0,
+    "choice_input_tokens": 5934,
+    "success": true,
+    "action": "build_infrastructure",
+    "retries": 0,
+    "seconds": 6.68
+  },
+  {
+    "agent": "aster_government",
+    "tick": 48,
+    "choice_input_tokens": 6330,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 12.39
+  },
+  {
+    "agent": "beryl_government",
+    "tick": 48,
+    "choice_input_tokens": 6432,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 11.77
+  },
+  {
+    "agent": "dune_government",
+    "tick": 48,
+    "choice_input_tokens": 6285,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 8.86
+  },
+  {
+    "agent": "cinder_government",
+    "tick": 48,
+    "choice_input_tokens": 6301,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 9.48
+  },
+  {
+    "agent": "fjord_government",
+    "tick": 48,
+    "choice_input_tokens": 6256,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 4.55
+  },
+  {
+    "agent": "ember_government",
+    "tick": 48,
+    "choice_input_tokens": 6296,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 5.09
+  },
+  {
+    "agent": "grove_government",
+    "tick": 48,
+    "choice_input_tokens": 6403,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 9.22
+  },
+  {
+    "agent": "haven_government",
+    "tick": 48,
+    "choice_input_tokens": 6495,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 10.87
+  },
+  {
+    "agent": "ionia_government",
+    "tick": 48,
+    "choice_input_tokens": 6242,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 4.1
+  },
+  {
+    "agent": "jade_government",
+    "tick": 48,
+    "choice_input_tokens": 6318,
+    "success": true,
+    "action": "fund_services",
+    "retries": 0,
+    "seconds": 3.04
+  }
+]

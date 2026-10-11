@@ -1,6 +1,6 @@
 # Dia Rockets — Trello and GitHub workflow
 
-[Trello task board](https://trello.com/b/b0cLTB64/diarockets-kanban) · [GitHub repository](https://github.com/liangricky7/dia-rockets)
+[Trello task board](https://trello.com/b/b0cLTB64/diarockets-kanban) · [GitHub repository](https://github.com/liangricky7/GEarth)
 
 Trello holds task owners, stages, progress, blockers and completion criteria. GitHub holds the source, branches, commits, reviews and pull requests. Owners remain on Trello; GitHub issue assignment is not needed.
 
@@ -65,7 +65,7 @@ For a completed task, record: Trello URL, branch, PR (if applicable), exact revi
 
 ## Historical GitHub publishing status
 
-GitHub MCP access was verified on October 10, 2026. The connector lists `liangricky7`'s installation with `dia-rockets`; branch and draft PR creation succeeded. The workflow setup is on `docs/team-workflow`. Existing expanded-world work is in [draft PR #1](https://github.com/liangricky7/dia-rockets/pull/1). No application code was changed or merged by this setup.
+GitHub MCP access was verified on October 10, 2026. The connector lists `liangricky7`'s installation with `dia-rockets`; branch and draft PR creation succeeded. The workflow setup is on `docs/team-workflow`. Existing expanded-world work is in [draft PR #1](https://github.com/liangricky7/GEarth/pull/1). No application code was changed or merged by this setup.
 
 Ahmad's authorized worker failure checks are implemented on `test/worker-failure-checks`: 21 Python tests and 44 C# tests passed, with no runtime changes needed. Review and integration remain pending.
 

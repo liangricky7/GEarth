@@ -25,16 +25,16 @@ The AMD instance and its tunnel must remain running. Restarting the tunnel can c
 For a new checkout:
 
 ```bash
-git clone --branch amd-compute-source https://github.com/liangricky7/dia-rockets.git dia-rockets-amd
-cd dia-rockets-amd
+git clone --branch amd-compute-source https://github.com/liangricky7/GEarth.git gearth-amd
+cd gearth-amd
 ```
 
 If you already have a checkout with ongoing work, create an isolated checkout from inside that repository:
 
 ```bash
 git fetch origin
-git worktree add --detach ../dia-rockets-amd-test origin/amd-compute-source
-cd ../dia-rockets-amd-test
+git worktree add --detach ../gearth-amd-test origin/amd-compute-source
+cd ../gearth-amd-test
 ```
 
 This integration is currently on `amd-compute-source`; checking out `main` alone does not guarantee the AMD launcher and provider files are present. The isolated checkout is for connection testing. Keep implementation work on your team's normal feature branch and integrate the AMD branch separately when needed, preserving your existing changes.

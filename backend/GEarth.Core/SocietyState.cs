@@ -23,7 +23,7 @@ public static class Governments
     public static GovernmentProfile Get(string id) => Profiles.Single(profile => profile.Id == id);
 }
 
-public sealed class Nation
+public sealed partial class Nation
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
@@ -91,6 +91,15 @@ public sealed class Nation
     public long DividendsPaidMinor { get; set; }
     public long UnemploymentPaidMinor { get; set; }
     public int Unemployed { get; set; }
+    public int EmployedResidents { get; set; }
+    public int LaborForce { get; set; }
+    public int Nonparticipants { get; set; }
+    public int JoblessResidents { get; set; }
+    public int Students { get; set; }
+    public double? GiniNetWealth { get; set; }
+    public double GiniDisposableIncome { get; set; }
+    public long EssentialsBasketMinor { get; set; }
+    public long MedianRealDisposableIncomeMinor { get; set; }
     public int BusinessesStarted { get; set; }
     public int BusinessesClosed { get; set; }
     public Dictionary<string, long> WeekStartTotals { get; set; } = new();
@@ -172,6 +181,7 @@ public sealed class Credit
     public int RequestedTick { get; set; }
     public string RequestEventId { get; set; } = "";
     public string Status { get; set; } = "requested";
+    public bool DepositCreated { get; set; }
 }
 
 public sealed record ComputeProvider(string Name, string Model, int Capacity, string DecisionGroup = "all");
@@ -183,6 +193,8 @@ public sealed class SocietyState
     public List<PolicyProposal> Policies { get; set; } = [];
     public List<Cargo> Cargo { get; set; } = [];
     public List<Credit> Credit { get; set; } = [];
+    public long CreditCreatedMinor { get; set; }
+    public long CreditRetiredMinor { get; set; }
     public Dictionary<string, long> InitialGoods { get; set; } = new();
     public Dictionary<string, long> ProducedGoods { get; set; } = new();
     public Dictionary<string, long> ConsumedGoods { get; set; } = new();
@@ -210,6 +222,7 @@ public sealed class SocietyState
     public Dictionary<string, long> PeriodUnitsSold { get; set; } = new();
     public Dictionary<string, int> VisitsServedToday { get; set; } = new();
     public Dictionary<string, int> TurnedAwayThisWeek { get; set; } = new();
+    public Dictionary<string, int> IncomeConstrainedThisWeek { get; set; } = new();
     public int MaxPendingObserved { get; set; }
     public DateTimeOffset? CoverageCompletedAt { get; set; }
 }

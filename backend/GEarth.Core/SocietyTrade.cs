@@ -11,12 +11,13 @@ public static class SocietyTrade
     public static bool CanImport(World world, Agent buyer, Agent seller, string good, int quantity, string objective)
     {
         if (buyer.Role != "business" || seller.Role != "business" || buyer.CountryId == seller.CountryId
-            || seller.Specialty != good || quantity < 1 || seller.Inventory[good] < quantity
+            || SocietyLabor.SectorOf(seller.Specialty!).Good != good || quantity < 1 || seller.Inventory[good] < quantity
             || SocietyDiplomacy.Relation(world, buyer.CountryId, seller.CountryId).AtWar)
             return false;
         var path = Path(world, seller.LocationId, buyer.LocationId, objective);
         var value = (long)quantity * seller.PriceMinor;
-        return path is not null && buyer.CashMinor >= value + path.CostMinor + Tariff(world, buyer, seller, value)
+        return path is not null && SocietyBank.CashAvailable(world, buyer) >= value
+            && SocietyBank.Liquid(world, buyer) >= value + SocietyResources.ShippingCost(world, buyer, path, quantity) + Tariff(world, buyer, seller, value)
             && world.Society!.Cargo.Count(cargo => cargo.BuyerId == buyer.Id && cargo.Good == good && cargo.Status == "in_transit") < 2;
     }
 
@@ -26,7 +27,7 @@ public static class SocietyTrade
     {
         if (world.Society!.Cargo.Any(cargo => cargo.BuyerId == buyer.Id && cargo.Good == good && cargo.Status == "in_transit"))
             return;
-        foreach (var seller in ForeignSellers(world, buyer, good))
+        foreach (var seller in ForeignSellers(world, buyer, good, wanted))
         {
             var quantity = Affordable(world, buyer, seller, good, Math.Min(wanted, seller.Inventory[good]));
             if (quantity > 0)
@@ -42,19 +43,19 @@ public static class SocietyTrade
     public static void ImportFood(World world, Nation nation, int residents)
     {
         var farms = SocietyLabor.Firms(world, nation.Id, "food").OrderBy(farm => farm.Id).ToArray();
-        if (farms.Length == 0 || farms.Sum(farm => farm.Inventory["food"]) >= residents * 3)
+        if (farms.Length == 0 || SocietyEconomy.Offers(world, nation, "food").Sum(offer => offer.Seller.Inventory["food"]) >= residents * 3)
             return;
         foreach (var farm in farms)
         {
             if (world.Society!.Cargo.Any(cargo => cargo.BuyerId == farm.Id && cargo.Good == "food" && cargo.Status == "in_transit"))
                 continue;
-            foreach (var seller in ForeignSellers(world, farm, "food"))
+            foreach (var seller in ForeignSellers(world, farm, "food", residents * SocietyLabor.DaysPerWeek / farms.Length))
             {
                 var quantity = Affordable(world, farm, seller, "food", Math.Min(residents * SocietyLabor.DaysPerWeek / farms.Length, seller.Inventory["food"]));
                 if (quantity <= 0)
                     continue;
                 var path = Path(world, seller.LocationId, farm.LocationId, "cheapest")!;
-                var landed = seller.PriceMinor + (path.CostMinor + Tariff(world, farm, seller, (long)quantity * seller.PriceMinor)) / (double)quantity;
+                var landed = SocietyResources.LandedUnitCost(world, farm, seller, path, quantity);
                 if (farm.OwnerId is null && SocietyLabor.IsPlanned(nation) || landed < farm.PriceMinor)
                     Dispatch(world, farm, seller, "food", quantity, "cheapest", null);
                 break;
@@ -63,19 +64,28 @@ public static class SocietyTrade
     }
 
     // Foreign firms selling the good, reachable and not at war with the buyer, cheapest first.
-    private static IEnumerable<Agent> ForeignSellers(World world, Agent buyer, string good) =>
-        world.Agents.Values.Where(seller => seller.Role == "business" && seller.Specialty == good && seller.CountryId != buyer.CountryId
+    private static IEnumerable<Agent> ForeignSellers(World world, Agent buyer, string good, int wanted) =>
+        world.Agents.Values.Where(seller => seller.Role == "business" && SocietyLabor.SectorOf(seller.Specialty!).Good == good && seller.CountryId != buyer.CountryId
                 && seller.Inventory[good] > 0 && !SocietyDiplomacy.Relation(world, buyer.CountryId, seller.CountryId).AtWar
                 && Path(world, seller.LocationId, buyer.LocationId, "cheapest") is not null)
-            .OrderBy(seller => seller.PriceMinor).ThenBy(seller => seller.Id).Take(3);
+            .OrderBy(seller => SocietyResources.LandedUnitCost(world, buyer, seller,
+                Path(world, seller.LocationId, buyer.LocationId, "cheapest")!, Math.Max(1, Math.Min(wanted, seller.Inventory[good]))))
+            .ThenBy(seller => seller.Id).Take(3);
 
     // The largest quantity (up to the wanted amount) the buyer can pay for, shipping and tariff included.
     private static int Affordable(World world, Agent buyer, Agent seller, string good, int wanted)
     {
-        for (var quantity = wanted; quantity > 0; quantity = quantity * 3 / 4)
+        var low = 0;
+        var high = Math.Min(wanted, seller.Inventory[good]);
+        while (low < high)
+        {
+            var quantity = low + (high - low + 1) / 2;
             if (CanImport(world, buyer, seller, good, quantity, "cheapest"))
-                return quantity;
-        return 0;
+                low = quantity;
+            else
+                high = quantity - 1;
+        }
+        return low;
     }
 
     public static void Dispatch(World world, Agent buyer, Agent seller, string good, int quantity, string objective, string? cause)
@@ -87,11 +97,13 @@ public static class SocietyTrade
         using var auditGroup = RunAudit.Group(world, good, quantity, seller.PriceMinor, cargoId);
         var path = Path(world, seller.LocationId, buyer.LocationId, objective)!;
         var value = (long)quantity * seller.PriceMinor;
+        SocietyBank.Draw(world, buyer, value);
         buyer.CashMinor -= value;
         // A domestic freight firm (dockworkers) carries the goods; without one the port authority collects the fee.
         var carrier = SocietyLabor.Firms(world, buyer.CountryId, "freight").OrderBy(agent => agent.Id).FirstOrDefault()
             ?? world.Agents[buyer.CountryId + "_government"];
-        SocietyEconomy.Sell(world, buyer, carrier, path.CostMinor, false, 1, "shipping");
+        var shipping = SocietyResources.ShippingCost(world, buyer, path, quantity);
+        SocietyEconomy.Sell(world, buyer, carrier, shipping, false, 1, "shipping");
         var tariff = Tariff(world, buyer, seller, value);
         SocietyEconomy.Transfer(world, buyer, world.Agents[buyer.CountryId + "_government"], tariff, "tariff");
         var costs = world.Society!.PeriodCostMinor;
@@ -108,7 +120,7 @@ public static class SocietyTrade
         SocietyEconomy.RecordFlow(world, buyer.Id, cargo.Id, value, "import_escrow");
         world.Emit("shipment_dispatched", "rule", [cargo.Id, buyer.Id, seller.Id], new
         {
-            good, quantity, escrow_minor = value, shipping_minor = path.CostMinor,
+            good, quantity, escrow_minor = value, shipping_minor = shipping,
             tariff_minor = tariff, carrier_id = carrier.Id, plan = path, settlement = "internal_escrow",
             ordered_by = cause is null ? "rule: no domestic supply" : "agent decision"
         }, cause is null ? [] : [cause]);
@@ -165,6 +177,9 @@ public static class SocietyTrade
                 cargo.EdgeIndex++;
             }
         }
+        // Reserves or asset-sale proceeds can become available after closure, including after resume.
+        foreach (var estate in world.Agents.Values.Where(agent => agent.Role == "defunct"))
+            SocietyEstates.Settle(world, estate);
     }
 
     private static void Deliver(World world, Cargo cargo)
@@ -189,11 +204,15 @@ public static class SocietyTrade
         cargo.EscrowMinor = 0;
         cargo.Status = "delivered";
         world.Society.DeliveredShipments++;
+        SocietyResources.RecordImport(world, cargo);
         world.Emit("shipment_delivered", "rule", [cargo.Id, buyer.Id, seller.Id], new
         {
             cargo.Good, cargo.Quantity, travel_ticks = world.Tick - cargo.CreatedTick,
             settlement = "internal_escrow_released"
         }, Causes(cargo));
+        // Keep settlement under the shipment's cause/group, including creditor recoveries.
+        SocietyEstates.Settle(world, buyer);
+        SocietyEstates.Settle(world, seller);
     }
 
     private static void Fail(World world, Cargo cargo)
@@ -213,5 +232,7 @@ public static class SocietyTrade
             reason = "DELIVERY_DEADLINE", cargo.Good, cargo.Quantity,
             refund = "goods escrow refunded; transport fees sunk; abandoned cargo counted as lost"
         }, Causes(cargo));
+        SocietyEstates.Settle(world, world.Agents[cargo.BuyerId]);
+        SocietyEstates.Settle(world, world.Agents[cargo.SellerId]);
     }
 }

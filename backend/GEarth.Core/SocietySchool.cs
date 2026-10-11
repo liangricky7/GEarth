@@ -31,7 +31,7 @@ public static class SocietySchool
             return null;
         var nation = world.Society!.Nations[person.CountryId];
         var own = OwnShare(nation, school);
-        if (world.Agents[nation.Id + "_government"].CashMinor < school.PriceMinor - own)
+        if (SocietyBank.Liquid(world, world.Agents[nation.Id + "_government"]) < school.PriceMinor - own)
             return null;
         var loan = SocietyBank.Liquid(world, person) >= own ? 0
             : SocietyBank.LoanOf(world, person.Id) is null && SocietyBank.CanLend(world, SocietyBank.BankOf(world, person.CountryId), own) ? own : -1;
@@ -60,7 +60,6 @@ public static class SocietySchool
         var government = world.Agents[nation.Id + "_government"];
         var own = OwnShare(nation, school);
         var loan = SocietyBank.Liquid(world, person) >= own ? null : SocietyBank.StudentLoan(world, person, own);
-        SocietyBank.Draw(world, person, own);
         SocietyEconomy.Sell(world, person, school, own, false, 1, "tuition");
         SocietyEconomy.Sell(world, government, school, school.PriceMinor - own, kind: "tuition_subsidy");
         var quit = partTime ? null : person.EmployerId;

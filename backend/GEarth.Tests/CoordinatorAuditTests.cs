@@ -18,7 +18,7 @@ public sealed class CoordinatorAuditTests
         var settings = new Dictionary<string, string?>
         {
             ["GEARTH_ANALYTICS"] = "true", ["GEARTH_WORLD"] = "true", ["GEARTH_LIVE"] = "false",
-            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "170", ["GEARTH_INTERVAL_MS"] = "0",
+            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "200", ["GEARTH_INTERVAL_MS"] = "0",
             ["GEARTH_VERBOSE"] = "false", ["GEARTH_SAVED_RUN_ID"] = null,
             ["GEARTH_COMPUTE_PROVIDERS"] = null, ["GEARTH_RESUME_RUN_ID"] = null
         };
@@ -45,8 +45,18 @@ public sealed class CoordinatorAuditTests
             Assert.Equal(interruptedTick, final.AuditDailyThroughTick);
             var persisted = (await backing.Load(runId, CancellationToken.None))!;
             Assert.Equal(final.AuditSequence, persisted.AuditSequence);
-            var records = await backing.ReadAudit(runId, 0, 10000, CancellationToken.None);
-            Assert.Equal(final.AuditSequence, records.Length);
+            // Pages are bounded by bytes as well as rows; richer agent facts can reach the byte cap.
+            var records = new List<AuditRecord>();
+            long after = 0;
+            while (after < final.AuditSequence)
+            {
+                var page = await backing.ReadAudit(runId, after, 10000, CancellationToken.None);
+                Assert.NotEmpty(page);
+                Assert.Equal(after + 1, page[0].Sequence);
+                records.AddRange(page);
+                after = page[^1].Sequence;
+            }
+            Assert.Equal(final.AuditSequence, records.Count);
             var daily = records.Where(row => row.Kind == "agent_day" && row.Payload["frame_kind"]!.GetValue<string>() == "day");
             var terminal = records.Where(row => row.Kind == "agent_day" && row.Payload["frame_kind"]!.GetValue<string>() == "end");
             Assert.Equal(final.Agents.Count * interruptedTick, daily.Count());
@@ -77,7 +87,7 @@ public sealed class CoordinatorAuditTests
         var settings = new Dictionary<string, string?>
         {
             ["GEARTH_ANALYTICS"] = "false", ["GEARTH_WORLD"] = "true", ["GEARTH_LIVE"] = "false",
-            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "170", ["GEARTH_INTERVAL_MS"] = "0",
+            ["GEARTH_TICKS"] = "8", ["GEARTH_POPULATION"] = "200", ["GEARTH_INTERVAL_MS"] = "0",
             ["GEARTH_VERBOSE"] = "false", ["GEARTH_SAVED_RUN_ID"] = null,
             ["GEARTH_COMPUTE_PROVIDERS"] = null, ["GEARTH_RESUME_RUN_ID"] = runId,
             ["GEARTH_TIMELINE"] = "ordinary_fork", ["GEARTH_FORK_GOVERNMENT"] = null
@@ -89,7 +99,7 @@ public sealed class CoordinatorAuditTests
                 Environment.SetEnvironmentVariable(key, value);
             var parentStore = new LocalStore(parentDirectory);
             await parentStore.Initialize(CancellationToken.None);
-            var parent = SocietyFactory.Create(runId, false, 170);
+            var parent = SocietyFactory.Create(runId, false, 200);
             RunAudit.Enable(parent);
             for (var day = 1; day <= 6; day++)
             {

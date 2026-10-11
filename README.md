@@ -12,7 +12,7 @@ Group members can open the website and unlock controls using the shared team pas
 
 See the [design](gearth-design.md) for the full specification, current limitations, decisions and their reasons. Existing deployments require the [GEarth cutover](docs/gearth/24-gearth-rename.md) to preserve saved data.
 
-The full-year calibration test passes in the current rename verification. No sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Full banking remains deferred on `labor-market-potential-bank`; Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
+The full-year calibration test covers the economic loop; no sustained live capacity maximum is established. Old cadence-based population estimates do not describe the weekly scheduler. Banks create deposits when lending, subject to simplified capital and reserve constraints. Ore, fuel, industrial inputs and freight costs constrain production in both market and planned economies. See the [post-bank follow-up](docs/gearth/post-bank-followup.md) for the model protocol, economic fixes and validation limits. Solana settlement remains unimplemented. Finished-run Databricks analytics are opt-in; see the [analytics runbook](docs/gearth/20-analytics-pipeline.md) for capture, import and cached reports. The 50,000-agent annual workload remains unqualified.
 
 ## Run locally
 
@@ -35,7 +35,7 @@ For live inference, configure authenticated endpoints and Spark SSH access, then
 
 Use `--compute spark` or `--compute amd` for a single source, and `--storage local` to omit Neon. See [Qwen setup](docs/gearth/18-all-node-qwen-setup.md), [AMD setup](docs/gearth/12-amd-compute.md) and [the world runbook](docs/gearth/08-world-runbook.md). Real credentials, logs, environments and runtime state are ignored by Git.
 
-World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--seed`, `--government-rotation` and `--verbose` (writes the day-by-day history file for the renderer, served at `/api/runs/{id}/history`). Defaults: 1,100 agents, 360 daily ticks and two-second intervals. Live admission derives from enabled provider capacities; an explicit `--capacity` lowers the total cap. Use `--ticks 365` for a simulated year. The software population range is 170–100,000 and is not a validated capacity range. Wall-clock institution/resident cadence flags were removed.
+World options include `--population`, `--capacity`, `--ticks`, `--interval`, `--seed`, `--government-rotation` and `--verbose` (writes the day-by-day history file for the renderer, served at `/api/runs/{id}/history`). Defaults: 1,100 agents, 360 daily ticks and two-second intervals. Live admission derives from enabled provider capacities; an explicit `--capacity` lowers the total cap. Use `--ticks 365` for a simulated year. The software population range is 200–100,000 and is not a validated capacity range. Wall-clock institution/resident cadence flags were removed.
 
 Ctrl+C or SIGTERM stops the launcher and its child services. The observer stays available after completion unless `--exit-on-complete` is supplied. To inspect a saved checkpoint without inference:
 

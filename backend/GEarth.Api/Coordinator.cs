@@ -131,7 +131,7 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         var tickLimit = ReadNumber("GEARTH_TICKS", 360, 1, 10000);
         var interval = ReadNumber("GEARTH_INTERVAL_MS", 2000, 0, 30000);
         var capacity = ReadNumber("GEARTH_CAPACITY", 64, 1, 384);
-        var population = ReadNumber("GEARTH_POPULATION", 1100, 170, 100000);
+        var population = ReadNumber("GEARTH_POPULATION", 1100, 200, 100000);
         worker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
             Environment.GetEnvironmentVariable("WORKER_TOKEN") ?? "");
         var resumeId = Environment.GetEnvironmentVariable("GEARTH_RESUME_RUN_ID");
@@ -206,9 +206,33 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
         {
             foreach (var request in pending.TakeCompleted())
             {
-                SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), DateTimeOffset.UtcNow);
+                var now = DateTimeOffset.UtcNow;
+                var record = SocietyEngine.Apply(world, request.Job, request.Task.GetAwaiter().GetResult(), now);
                 dispatched.Remove(request.Job.RequestId);
+                if (live && !pause.Requested && SocietyEngine.Refresh(world, record, now) is { } refreshed)
+                    Start(refreshed, now);
             }
+        }
+
+        bool Start(DecisionJob job, DateTimeOffset now)
+        {
+            if (!pending.TryStart(job, (request, token) =>
+            {
+                var task = Decide(request, live, token);
+                dispatched.Add(request.RequestId, new PendingDecision(request, task));
+                return task;
+            }))
+                return false;
+            RunAudit.Request(world, job, now);
+            world.Emit("decision_requested", "rule", [job.AgentId], new
+            {
+                decision_id = job.RequestId, requested_at = now, role_at_decision = world.Agents[job.AgentId].Role,
+                observation_tick = job.ObservationTick, job.Deadline, mode = world.Mode, job.RefreshAttempt
+            });
+            var agent = world.Agents[job.AgentId];
+            agent.LastAttemptAt = now;
+            agent.LastAttemptTick = world.Tick;
+            return true;
         }
 
         void Dispatch()
@@ -223,23 +247,8 @@ public sealed class Coordinator(IWorldStore store, RunNotesService notes, ILogge
             {
                 var now = DateTimeOffset.UtcNow;
                 var job = SocietyEngine.Observe(world, agent.Id, now);
-                if (pending.TryStart(job, (request, token) =>
-                {
-                    var task = Decide(request, live, token);
-                    dispatched.Add(request.RequestId, new PendingDecision(request, task));
-                    return task;
-                }))
-                {
-                    RunAudit.Request(world, job, now);
-                    world.Emit("decision_requested", "rule", [agent.Id], new
-                    {
-                        decision_id = job.RequestId, requested_at = now,
-                        observation_tick = job.ObservationTick, job.Deadline, mode = world.Mode
-                    });
-                    agent.LastAttemptAt = now;
-                    agent.LastAttemptTick = world.Tick;
+                if (Start(job, now))
                     started.Add(agent.Id);
-                }
             }
             queue = new Queue<string>(queue.Where(id => !started.Contains(id)));
             SocietyScheduler.UpdateMetrics(world, pending.AgentIds, queue, DateTimeOffset.UtcNow);

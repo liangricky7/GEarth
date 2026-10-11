@@ -61,6 +61,13 @@ def is_range(value) -> bool:
     return isinstance(value, dict) and "min" in value and "max" in value
 
 
+class ActionValidationError(ValueError):
+    def __init__(self, detail, field=None):
+        super().__init__("INVALID_VALUES")
+        self.detail = detail
+        self.field = field
+
+
 def fill_values(candidate: dict, values) -> dict:
     # Free numeric fields ({"min","max"}) take the model's integers; every other parameter is fixed.
     ranges = {key for key, value in candidate["params"].items() if is_range(value)}
@@ -78,27 +85,35 @@ def fill_values(candidate: dict, values) -> dict:
         ):
             raise ValueError("INVALID_SCHEMA")
         return candidate["params"]
-    if not isinstance(values, dict) or set(values) != ranges:
-        raise ValueError("INVALID_VALUES")
+    if not isinstance(values, dict):
+        raise ActionValidationError("missing_values" if values is None else "values_not_object")
+    if set(values) != ranges:
+        raise ActionValidationError("missing_fields" if ranges - set(values) else "extra_fields")
     params = dict(candidate["params"])
     for key in ranges:
         value, bounds = values[key], candidate["params"][key]
-        if type(value) is not int or not bounds["min"] <= value <= bounds["max"]:
-            raise ValueError("INVALID_VALUES")
+        if type(value) is not int:
+            raise ActionValidationError("not_integer", key)
+        if not bounds["min"] <= value <= bounds["max"]:
+            raise ActionValidationError("outside_range", key)
         params[key] = value
     return params
 
 
+def validate_choice(action: dict, job: DecisionJob):
+    if not isinstance(action, dict) or set(action) not in ({"choice", "reason"}, {"choice", "reason", "values"}):
+        raise ValueError("INVALID_SCHEMA")
+    choice, reason = action["choice"], action["reason"]
+    if type(choice) is not int or not 0 <= choice < len(job.candidates):
+        raise ValueError("UNAVAILABLE_ACTION")
+    if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 240:
+        raise ValueError("INVALID_REASON")
+    return choice, reason.strip()
+
+
 def validate_action(action: dict, job: DecisionJob) -> dict:
     if job.observation.get("world_stage") == 2:
-        if set(action) not in ({"choice", "reason"}, {"choice", "reason", "values"}):
-            raise ValueError("INVALID_SCHEMA")
-        choice = action["choice"]
-        reason = action["reason"]
-        if type(choice) is not int or not 0 <= choice < len(job.candidates):
-            raise ValueError("UNAVAILABLE_ACTION")
-        if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 240:
-            raise ValueError("INVALID_REASON")
+        choice, reason = validate_choice(action, job)
         candidate = job.candidates[choice]
         return {
             "action_type": candidate["action_type"],
@@ -167,16 +182,12 @@ FIXED_CHOICE_INSTRUCTIONS = (
 )
 
 RANGED_CHOICE_INSTRUCTIONS = (
-    'Return only JSON: {"choice":0,"reason":"short explanation"}. '
+    'Return only JSON with exactly "choice" and "reason": {"choice":0,"reason":"short explanation"}. '
     "choice is the number of one available action. reason is at most 100 characters. "
-    'If the chosen action has fields shown as <integer MIN-MAX, now N>, also return "values" '
-    'with an integer for each. For example, selecting "3: some_action some_amount=<integer 0-10, now 4>" '
-    'returns {"choice":3,"reason":"Why this option fits","values":{"some_amount":5}}. '
-    'Include "values" ONLY for fields displayed with <integer MIN-MAX, now N>. '
-    "Ordinary numbers are fixed parameters: do not repeat or override them. "
-    'When the chosen action has no <integer ...> fields, omit "values" entirely. '
-    'For example, selecting "3: some_action amount=5" returns '
-    '{"choice":3,"reason":"Why this option fits"} without values.'
+    "Select the action first. If it has <integer MIN-MAX, now N> fields, a separate request will ask for those numbers. "
+    "Do not supply action parameters in this response. "
+    'For example, selecting "3: some_action some_amount=<integer 0-10, now 4>" '
+    'returns {"choice":3,"reason":"Why this option fits"}.'
 )
 
 
@@ -263,6 +274,87 @@ def build_prompt(job: DecisionJob, model=MODEL) -> dict:
     }
 
 
+def build_values_prompt(job, choice, reason, model=MODEL, correction=None):
+    candidate = job.candidates[choice]
+    fields = {key: value for key, value in candidate["params"].items() if is_range(value)}
+    properties = {key: {"type": "integer", "minimum": bounds["min"], "maximum": bounds["max"]}
+                  for key, bounds in fields.items()}
+    schema = {"type": "object", "properties": {"values": {
+        "type": "object", "properties": properties, "required": list(fields), "additionalProperties": False,
+    }}, "required": ["values"], "additionalProperties": False}
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": WORLD_INSTRUCTIONS +
+             'The action is already selected. Return only {"values":{...}} with exactly the requested fields. '
+             "Each value must be an integer within its bounds. Choose levels using the observation, current levels and selected reason. "
+             "Do not return choice, reason, fixed parameters or range objects."},
+            {"role": "user", "content": json.dumps({
+                "observation": {key: value for key, value in job.observation.items() if key != "note"},
+                "selected_action": candidate["action_type"], "selected_reason": reason,
+                "fields": fields, "correction": correction,
+            }, separators=(",", ":"))},
+        ],
+        "temperature": 0, "max_tokens": 512, **model_request_settings(model),
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": "action_values", "strict": True, "schema": schema,
+        }},
+    }
+
+
+async def model_json(provider, headers, prompt):
+    # A relay can drop a reused connection; keep this retry inside the job's original deadline.
+    for attempt in range(2):
+        try:
+            response = await app.state.model_client.post(
+                f"{provider.base_url}/chat/completions", headers=headers, json=prompt)
+            break
+        except httpx.RemoteProtocolError:
+            if attempt == 1:
+                raise
+    # Older OpenAI-compatible servers support JSON objects but not constrained schemas.
+    # Validation and the bounded repair still apply; no parameter is defaulted or clamped.
+    if response.status_code in (400, 422) and prompt["response_format"]["type"] == "json_schema":
+        prompt = {**prompt, "response_format": {"type": "json_object"}}
+        response = await app.state.model_client.post(
+            f"{provider.base_url}/chat/completions", headers=headers, json=prompt)
+    response.raise_for_status()
+    return json.loads(response.json()["choices"][0]["message"]["content"])
+
+
+async def resolve_model_action(job, provider, headers):
+    selected = await model_json(provider, headers, build_prompt(job, provider.model))
+    if job.observation.get("world_stage") != 2:
+        return validate_action(selected, job), 0
+    choice, reason = validate_choice(selected, job)
+    candidate = job.candidates[choice]
+    if not any(is_range(value) for value in candidate["params"].values()):
+        return validate_action(selected, job), 0
+    # Accept a fully valid response from older prompts; otherwise ask only for the selected action's fields.
+    if "values" in selected:
+        try:
+            return validate_action(selected, job), 0
+        except ActionValidationError:
+            pass
+    correction = None
+    for attempt in range(2):
+        try:
+            reply = await model_json(provider, headers,
+                                     build_values_prompt(job, choice, reason, provider.model, correction))
+            if not isinstance(reply, dict) or set(reply) != {"values"}:
+                raise ActionValidationError("values_envelope")
+            action = validate_action({"choice": choice, "reason": reason, "values": reply["values"]}, job)
+            return action, attempt
+        except (ActionValidationError, json.JSONDecodeError) as error:
+            if attempt == 1:
+                raise
+            correction = {"detail": getattr(error, "detail", "invalid_json"), "field": getattr(error, "field", None)}
+            logging.getLogger(__name__).warning("decision_validation_retry %s", json.dumps({
+                "request_id": job.request_id, "agent_id": job.agent_id, "backend": provider.name,
+                "action": candidate["action_type"], **correction,
+            }, separators=(",", ":")))
+
+
 @app.get("/health")
 def health():
     return {
@@ -311,25 +403,9 @@ async def decide(job: DecisionJob, authorization: str = Header(default="")):
         headers = {"Authorization": f"Bearer {provider.api_key}"}
 
         async with asyncio.timeout(min(TIMEOUT_SECONDS, remaining_seconds)):
-            # SSH relays can close a reused connection between requests. Retry once
-            # inside the original deadline; a transient disconnect must not put a
-            # healthy model into cooldown and reject the remaining weekly cohort.
-            for attempt in range(2):
-                try:
-                    response = await app.state.model_client.post(
-                        f"{provider.base_url}/chat/completions",
-                        headers=headers,
-                        json=build_prompt(job, provider.model),
-                    )
-                    break
-                except httpx.RemoteProtocolError:
-                    if attempt == 1:
-                        raise
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-            action = validate_action(json.loads(content), job)
+            action, retries = await resolve_model_action(job, provider, headers)
 
-        return decision_result(job, action, "model", started_at, provider=provider)
+        return decision_result(job, action, "model", started_at, provider=provider, validation_retries=retries)
 
     except asyncio.CancelledError:
         cancelled = True
@@ -370,6 +446,7 @@ def decision_result(
     started_at: float,
     error=None,
     provider=None,
+    validation_retries=0,
 ):
     category = None
     status = None
@@ -386,13 +463,15 @@ def decision_result(
         # Record bounded diagnostic codes, never model bodies or transport messages
         # (which can contain private URLs or credentials).
         validation_codes = {"INVALID_SCHEMA", "INVALID_VALUES", "UNAVAILABLE_ACTION", "INVALID_REASON", "UNKNOWN_EVIDENCE"}
-        code = str(error) if type(error) is ValueError and str(error) in validation_codes else type(error).__name__
+        code = str(error) if isinstance(error, ValueError) and str(error) in validation_codes else type(error).__name__
         logging.getLogger(__name__).warning("decision_failure %s", json.dumps({
             "request_id": job.request_id,
             "agent_id": job.agent_id,
             "backend": provider.name if provider else "spark_a",
             "category": category,
             "code": code,
+            "detail": getattr(error, "detail", None),
+            "field": getattr(error, "field", None),
             "http_status": status,
         }, separators=(",", ":")))
     return {
@@ -405,4 +484,8 @@ def decision_result(
         "error": type(error).__name__ if error is not None else None,
         "error_category": category,
         "error_http_status": status,
+        "error_code": code if error is not None else None,
+        "error_detail": getattr(error, "detail", None),
+        "error_field": getattr(error, "field", None),
+        "validation_retries": validation_retries,
     }

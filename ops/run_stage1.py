@@ -146,7 +146,7 @@ def main():
         or not 0 <= options.interval <= 30
     ):
         parser.error("Invalid tick count or interval; interval must be 0-30 seconds.")
-    minimum_population = 170 if options.world else 100
+    minimum_population = 200 if options.world else 100
     if not minimum_population <= options.population <= 100000 or (
         options.capacity is not None and not 1 <= options.capacity <= 384
     ):

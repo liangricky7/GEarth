@@ -36,6 +36,7 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
     bounded_choices = 0
     ambiguous_choices = 0
     transfer_kinds = {}
+    bank_movements = {}
     feature_metadata = {}
     services_snapshots = 0
     countries = {}
@@ -117,6 +118,20 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
                 bucket["amount_minor"] += row["amount_minor"]
                 if len(bucket["evidence_refs"]) < 2:
                     bucket["evidence_refs"].append({"run_id": run["run_id"], "sequence": row["sequence"], "kind": "transaction"})
+            elif kind == "bank_ledger":
+                transfer_kind = row["transfer_kind"]
+                bucket = bank_movements.setdefault(transfer_kind, {"kind": transfer_kind, "count": 0, "amount_minor": 0})
+                bucket["count"] += 1
+                bucket["amount_minor"] += row["amount_minor"]
+                # Deposit payments are economic transfers, but must never enter cash reconciliation.
+                if transfer_kind not in ("loan_deposit_created", "loan_principal_retired",
+                                         "cash_deposit_claim_created", "cash_withdrawal_claim_reduced",
+                                         "insurance_claim_assigned"):
+                    bucket = transfer_kinds.setdefault(transfer_kind, {"kind": transfer_kind, "count": 0, "amount_minor": 0, "evidence_refs": []})
+                    bucket["count"] += 1
+                    bucket["amount_minor"] += row["amount_minor"]
+                    if len(bucket["evidence_refs"]) < 2:
+                        bucket["evidence_refs"].append({"run_id": run["run_id"], "sequence": row["sequence"], "kind": kind})
             elif kind == "agent_day":
                 account(row["agent_id"])
                 daily_check(row["agent_id"], row["cash_minor"], record, "agent")
@@ -251,6 +266,9 @@ def build_report(manifest_path, *, max_agents=100, work_directory=None):
             "summary": {"record_count": manifest["record_count"], "counts_by_kind": dict(counts), "transaction_count": transaction_count,
                         "transfer_minor": total_transfer, "agent_count": agent_count, "decision_result_count": counts["decision_result"],
                         "fallback_count": fallback_count, "agent_preview_limit": max_agents},
+            "banking": {"ledger_record_count": counts["bank_ledger"],
+                "movements_by_kind": [bank_movements[key] for key in sorted(bank_movements)],
+                "accounting": "transactions and summary.transfer_minor track base cash; bank_ledger tracks deposit claims; economic transfers_by_kind includes deposit payments"},
             "checks": checks, "agents": agents, "countries": [countries[key] for key in sorted(countries)],
             "government_comparison": {"status": "insufficient_evidence", "reason": "A single run cannot establish matched-seed government comparisons.", "sample_count": 1},
             "public_services": {"metadata": feature_metadata, "snapshot_summary": services_summary,

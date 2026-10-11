@@ -24,9 +24,10 @@ public static class SocietyDiplomacy
         if (profile.Elected && nation.Approval * 100 < profile.MinimumApprovalPercent)
             return false;
         if (profile.Id == "dictatorship")
+            // Deliberate reserve-sensitive proxy for elite support, independent of nominal claims.
             return world.Agents[nation.Id + "_bank"].CashMinor >= nation.Population * 100;
         if (profile.Id == "monarchy")
-            return world.InCountry(nation.Id).Count(agent => agent.Role == "business" && agent.CashMinor > 1000) >= 2;
+            return world.InCountry(nation.Id).Count(agent => agent.Role == "business" && SocietyBank.Liquid(world, agent) > 1000) >= 2;
         return true;
     }
 
@@ -115,7 +116,7 @@ public static class SocietyDiplomacy
                 return SocietyPayments.Pay(world, government, parameters, policy.CauseId);
             case "invest":
                 var amount = parameters["amount_minor"]!.GetValue<int>();
-                if (government.CashMinor < amount)
+                if (SocietyBank.Liquid(world, government) < amount)
                     return false;
                 var workshop = SocietyLabor.Firms(world, nation.Id, "tools").OrderBy(firm => firm.Id).FirstOrDefault();
                 if (workshop is null)
@@ -176,7 +177,7 @@ public static class SocietyDiplomacy
                 return true;
             case "declare_conflict":
                 var opponent = Relation(world, nation.Id, parameters["country_id"]!.GetValue<string>());
-                if (government.CashMinor < 5000 || opponent.Tension < 60 || opponent.AtWar || opponent.DiplomacyFailedTick < 0)
+                if (SocietyBank.Liquid(world, government) < 5000 || opponent.Tension < 60 || opponent.AtWar || opponent.DiplomacyFailedTick < 0)
                     return false;
                 SocietyEconomy.PaySoldiers(world, nation, government, 5000);
                 opponent.AtWar = true;

@@ -24,7 +24,7 @@ public static class SocietyActions
                     options.Add(Make("health_policy", new { visit_doctor_below_health = threshold }));
                 // Seeing a doctor now, when unwell and a clinic can take the visit.
                 if (agent.Health < 70 && SocietyEconomy.OpenClinic(world, world.Society!.Nations[agent.CountryId]) is { } clinic
-                    && agent.CashMinor >= clinic.PriceMinor)
+                    && SocietyBank.Liquid(world, agent) >= clinic.PriceMinor)
                     options.Add(Make("visit_doctor", new { }));
                 if (agent.DepositMinor > 0 || !agent.KeepsSavingsInBank)
                     options.Add(Make("bank_savings", agent.KeepsSavingsInBank
@@ -53,9 +53,9 @@ public static class SocietyActions
                     else if (SocietyBank.LoanOf(world, agent.Id) is null && SocietyLabor.CanStart(world, agent, sector, loan))
                         options.Add(Make("start_business", new { sector, startup_cost_minor = cost, launch_price_minor = launch, loan_minor = loan }));
                 }
-                if (agent.CashMinor >= 100)
+                if (SocietyBank.Liquid(world, agent) >= 100)
                     foreach (var nation in world.Society!.Nations.Values.Where(nation => nation.Id != agent.CountryId)
-                        .Where(nation => !SocietyDiplomacy.Relation(world, agent.CountryId, nation.Id).AtWar)
+                        .Where(nation => SocietyEngine.CanMigrate(world, agent, nation.Id))
                         .OrderByDescending(nation => nation.Approval).Take(2))
                         options.Add(Make("migrate", new { country_id = nation.Id, cost_minor = 100 }));
                 break;
@@ -171,21 +171,20 @@ public static class SocietyActions
         }
     }
 
-    // Imports of the firm's own good (or a clinic's medicine supplies) and energy, in three sizes.
+    // Imports of the firm's output and production/service inputs, in three sizes.
     private static void ImportOptions(World world, Agent buyer, List<Candidate> options)
     {
         var nation = world.Society!.Nations[buyer.CountryId];
         var own = buyer.Specialty == "clinic" ? "medicine" : SocietyLabor.SectorOf(buyer.Specialty!).Good;
-        if (own is null) // freight and entertainment use no imported inputs
-            return;
-        foreach (var good in new[] { own, "energy" }.OfType<string>().Distinct())
+        foreach (var good in new[] { own }.OfType<string>()
+                     .Concat(SocietyResources.Inputs(buyer.Specialty!).Select(input => input.Good)).Distinct())
         {
             if (buyer.Inventory[good] > nation.Population * 3)
                 continue;
             foreach (var quantity in new[] { nation.Population / 2, nation.Population, nation.Population * 2 }
                          .Select(size => Math.Clamp(size, 10, 600)).Distinct())
             {
-                var sellers = world.Agents.Values.Where(seller => seller.Role == "business" && seller.Specialty == good
+                var sellers = world.Agents.Values.Where(seller => seller.Role == "business" && SocietyLabor.SectorOf(seller.Specialty!).Good == good
                         && seller.CountryId != buyer.CountryId && seller.Inventory[good] >= quantity)
                     .OrderBy(seller => seller.PriceMinor).ThenBy(seller => seller.Id).Take(2);
                 foreach (var seller in sellers)
@@ -227,12 +226,12 @@ public static class SocietyActions
         options.Add(new("set_welfare", new JsonObject { ["amount_minor"] = Range(0, 200, nation.WelfareMinor) }));
         options.Add(new("set_sales_tax", new JsonObject { ["sales_tax_basis_points"] = Range(0, 1000, nation.SalesTaxBasisPoints) }));
         options.Add(new("fund_services", new JsonObject { ["amount_minor"] = Range(0, 150, nation.ServiceBudgetPerResidentMinor) }));
-        if (agent.CashMinor >= 1500 && nation.Productivity < 2)
+        if (SocietyBank.Liquid(world, agent) >= 1500 && nation.Productivity < 2 && SocietyLabor.Firms(world, nation.Id, "tools").Any())
             options.Add(Make("invest", new { amount_minor = 1500 }));
         // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
         // a food subsidy when residents went hungry with food on the shelves, and schooling when people are
         // out of work (each also shows while in force, so it can be changed or ended).
-        foreach (var sector in nation.NeededSince.Keys.Order().Where(sector => agent.CashMinor >= SocietyLabor.StartupCost(sector)))
+        foreach (var sector in nation.NeededSince.Keys.Order().Where(sector => SocietyBank.Liquid(world, agent) >= SocietyLabor.StartupCost(sector)))
             options.Add(Make("subsidize_startup", new { sector, grant_minor = SocietyLabor.StartupCost(sector) }));
         var residents = world.InCountry(nation.Id).Count(SocietyLabor.IsResident);
         if (nation.PricedOutLastWeek * 10 >= residents || nation.FoodSubsidyPct > 0)
@@ -265,7 +264,7 @@ public static class SocietyActions
                     options.Add(Make("propose_agreement", new { country_id = countryId }));
             }
             // Conflict comes only after diplomacy between the two has failed, and the option says what it does.
-            if (!relation.AtWar && relation.Tension >= 60 && relation.DiplomacyFailedTick >= 0 && agent.CashMinor >= 5000)
+            if (!relation.AtWar && relation.Tension >= 60 && relation.DiplomacyFailedTick >= 0 && SocietyBank.Liquid(world, agent) >= 5000)
                 options.Add(Make("declare_conflict", new
                 {
                     country_id = countryId,

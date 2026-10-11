@@ -44,6 +44,8 @@ public sealed class Agent
     // Businesses: owner (null = state-owned), wage offer, headcount target and distress tracking.
     public string? OwnerId { get; set; }
     public long WageOfferMinor { get; set; }
+    // Price reference retained until this employer can afford its partial pay catch-up.
+    public double WageIndexReference { get; set; }
     public int TargetHeadcount { get; set; }
     public long InvestedMinor { get; set; }
     public int FoundedTick { get; set; }
@@ -52,6 +54,15 @@ public sealed class Agent
     public bool OvertimeOffered { get; set; }
     public int LastWeekUnitsSold { get; set; }
     public int LastWeekTurnedAway { get; set; }
+    public int LastWeekIncomeConstrained { get; set; }
+    // Legacy checkpoint field name: operating cash surplus after tax, not accrual profit.
+    public long LastWeekOperatingProfitMinor { get; set; }
+    // Completed operating cash-flow weeks (including deposit settlement), before tax/distributions.
+    public List<long> OperatingSurplusWeeksMinor { get; set; } = [];
+    // Defunct firms retain their original account, stock and shipment claims as liquidation estates.
+    public string? EstateBeneficiaryId { get; set; }
+    public List<string> EstateCreditIds { get; set; } = [];
+    public bool EstateFinalized { get; set; }
     public int OvertimeDays { get; set; }
     // Quality of life inputs: discretionary goods and services bought last week, and last week's score.
     public int GoodsBoughtLastWeek { get; set; }
@@ -80,6 +91,8 @@ public sealed class Agent
     public int PriceChangeTick { get; set; } = -1;
     public int PriceChangePct { get; set; }
     public int UnitsBeforePriceChange { get; set; }
+    public long ProfitBeforePriceChangeMinor { get; set; }
+    public int PriceBeforePriceChangeMinor { get; set; }
     // Deposit insurance already paid to this depositor (the limit is per depositor).
     public long InsuredMinor { get; set; }
     // Looking for a better job: until this tick any higher offer pulls the worker, not only 10% more.
@@ -93,11 +106,20 @@ public sealed class Agent
     public int LoanRatePct { get; set; }
     public string? LendingStandard { get; set; }
     public long UnmetWithdrawalsMinor { get; set; }
+    public bool DepositInterestSuspended { get; set; }
     // Money in and out this week and last week, for budgets shown to decision makers.
     public long WeekInMinor { get; set; }
     public long WeekOutMinor { get; set; }
     public long LastWeekInMinor { get; set; }
     public long LastWeekOutMinor { get; set; }
+    // Realized wages, owner distributions, benefits and deposit interest, less income tax; excludes loans,
+    // transfers and withdrawals. Kept by agent id so analytics can follow the same residents through time.
+    public long WeekDisposableIncomeMinor { get; set; }
+    public long LastWeekDisposableIncomeMinor { get; set; }
+    public long LastWeekRealIncomeMinor { get; set; }
+    public double WeekWorkDays { get; set; }
+    public double LastWeekWorkDays { get; set; }
+    public int LastWeekIncomeTick { get; set; }
     public bool SupportsLeadership { get; set; } = true;
     public int LastAttemptTick { get; set; } = -1;
     public int LastDecisionTick { get; set; } = -1;
@@ -136,10 +158,12 @@ public record ActionProposal(string ActionType, JsonObject Params, string Reason
 public record Candidate(string ActionType, JsonObject Params);
 public record DecisionJob(string RequestId, string RunId, string AgentId, int ObservationTick,
     DateTimeOffset Deadline, Dictionary<string, int> Dependencies, string[] EvidenceIds,
-    JsonNode Observation, Candidate[] Candidates);
+    JsonNode Observation, Candidate[] Candidates,
+    [property: System.Text.Json.Serialization.JsonIgnore] int RefreshAttempt = 0);
 public record DecisionResult(string RequestId, ActionProposal Action, string Source, string Model,
     double LatencyMs, string? Error = null, string? Backend = null,
-    double? CoordinatorLatencyMs = null, string? ErrorCategory = null, int? ErrorHttpStatus = null);
+    double? CoordinatorLatencyMs = null, string? ErrorCategory = null, int? ErrorHttpStatus = null,
+    string? ErrorCode = null, string? ErrorDetail = null, string? ErrorField = null, int ValidationRetries = 0);
 public record DecisionRecord(DecisionJob Job, DecisionResult Result, bool Accepted, string Code);
 public record WorldEvent(int SchemaVersion, string EventId, string RunId, int Tick, long Seq,
     string EventType, string Source, string[] EntityIds, string[] CauseIds, JsonNode Payload);

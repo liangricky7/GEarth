@@ -221,14 +221,11 @@ public static class SocietyActions
                 ["income_tax_percent"] = Range(Math.Max(0, now - MaxTaxStepPoints), Math.Min(MaxTaxBasisPoints / 100, now + MaxTaxStepPoints), now)
             }));
         }
-        foreach (var benefit in new[] { 0, 300, 600 }.Where(benefit => benefit != nation.UnemploymentBenefitMinor))
-            options.Add(Make("set_unemployment_benefit", new { amount_minor = benefit }));
-        foreach (var welfare in new[] { 0, 100, 200 }.Where(welfare => welfare != nation.WelfareMinor))
-            options.Add(Make("set_welfare", new { amount_minor = welfare }));
-        foreach (var salesTax in new[] { 0, 500, 1000 }.Where(salesTax => salesTax != nation.SalesTaxBasisPoints))
-            options.Add(Make("set_sales_tax", new { sales_tax_basis_points = salesTax }));
-        foreach (var services in new[] { 0, 50, 150 }.Where(services => services != nation.ServiceBudgetPerResidentMinor))
-            options.Add(Make("fund_services", new { amount_minor = services }));
+        // Budget levers are ranges showing the current level, so a raise and a cut are told apart.
+        options.Add(new("set_unemployment_benefit", new JsonObject { ["amount_minor"] = Range(0, 900, nation.UnemploymentBenefitMinor) }));
+        options.Add(new("set_welfare", new JsonObject { ["amount_minor"] = Range(0, 200, nation.WelfareMinor) }));
+        options.Add(new("set_sales_tax", new JsonObject { ["sales_tax_basis_points"] = Range(0, 1000, nation.SalesTaxBasisPoints) }));
+        options.Add(new("fund_services", new JsonObject { ["amount_minor"] = Range(0, 150, nation.ServiceBudgetPerResidentMinor) }));
         if (agent.CashMinor >= 1500 && nation.Productivity < 2)
             options.Add(Make("invest", new { amount_minor = 1500 }));
         // Levers that appear only when they apply: a startup grant for an essential sector nobody works in,
@@ -266,8 +263,13 @@ public static class SocietyActions
                 else if (!relation.TradeAgreement)
                     options.Add(Make("propose_agreement", new { country_id = countryId }));
             }
-            if (!relation.AtWar && relation.Tension >= 60 && agent.CashMinor >= 5000)
-                options.Add(Make("declare_conflict", new { country_id = countryId }));
+            // Conflict comes only after diplomacy between the two has failed, and the option says what it does.
+            if (!relation.AtWar && relation.Tension >= 60 && relation.DiplomacyFailedTick >= 0 && agent.CashMinor >= 5000)
+                options.Add(Make("declare_conflict", new
+                {
+                    country_id = countryId,
+                    effect = "start an economic conflict: trade with them stops, both sides lose stock every week, costs 5000 now and 1000 a week; it raises tension to 100"
+                }));
         }
         foreach (var route in world.Routes.Values.Where(route => route.ControllerCountryId == nation.Id)
             .OrderBy(route => route.Open).ThenBy(route => route.Id).Take(2))

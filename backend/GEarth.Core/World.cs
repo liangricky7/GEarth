@@ -74,6 +74,8 @@ public sealed class Agent
     // Public and state-firm wages the employer could not pay, owed to the worker; two weeks unpaid is a strike.
     public long ArrearsMinor { get; set; }
     public int ArrearsWeeks { get; set; }
+    // Owners: weeks in a row they went hungry while their firm paid them nothing (two and they close it).
+    public int UnpaidHungryWeeks { get; set; }
     // Owners: the last price change and the units sold the week before it, so its effect shows.
     public int PriceChangeTick { get; set; } = -1;
     public int PriceChangePct { get; set; }

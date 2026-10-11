@@ -11,6 +11,7 @@ public static class SocietyBank
     public const string Sector = "bank";
     public const bool Paused = false; // recorded in run metadata (banking_paused) so analytics can tell runs apart
     public const int ReserveRatioPct = 10;
+    public const int OwnerStakePct = 15; // of the bank's opening cash; the rest is the owner's deposit
     public const int CashBufferWeeks = 2; // residents keep two weeks of their pay as cash, firms two weeks of payroll
     public const int LoanWeeks = 26;
     public const int LoansPerBanker = 10; // loans one banker (or the owner) can service

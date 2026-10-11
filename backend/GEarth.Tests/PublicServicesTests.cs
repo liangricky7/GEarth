@@ -295,21 +295,26 @@ public sealed class PublicServicesTests
 
     // A founder sees a gap only where residents feel the shortfall and the market shows it.
     [Fact]
-    public void FoundersNeedAFeltGapAndPayBySector()
+    public void FoundersEnterOnAMarginUnmetDemandAndIdleWorkers()
     {
         var world = NewWorld();
         var nation = world.Society!.Nations["aster"];
         var founder = Employee(world, "aster", "tools");
         SocietyEconomy.Transfer(world, world.Agents["aster_bank"], founder, SocietyLabor.StartupCost("food"));
-        foreach (var farm in SocietyLabor.Firms(world, "aster", "food"))
-            farm.PriceMinor = 60; // the market shows a gap
+        var farms = SocietyLabor.Firms(world, "aster", "food").ToArray();
         bool Offered() => SocietyActions.Available(world, founder).Any(candidate => candidate.ActionType == "start_business"
             && candidate.Params["sector"]!.GetValue<string>() == "food");
 
-        nation.QolParts["needs"] = 0.9;
-        Assert.False(Offered()); // residents are fed: no felt gap
-        nation.QolParts["needs"] = 0.5;
-        Assert.True(Offered()); // a factory worker may start a farm
+        foreach (var farm in farms)
+            farm.PriceMinor = 60; // well above what a unit costs to make
+        Assert.False(Offered()); // a fat margin alone is no gap: nobody goes without
+        nation.PricedOutLastWeek = 3;
+        Assert.False(Offered()); // residents go hungry, but nobody out of work could farm yet
+        world.Tick = SocietyLabor.RelatedJobAfterDays;
+        Assert.True(Offered()); // now the unemployed can take farm work
+        foreach (var farm in farms)
+            farm.PriceMinor = (int)SocietyLabor.UnitCost(world, nation, farm) + 1;
+        Assert.False(Offered()); // priced near cost: no margin for a newcomer
         Assert.Equal(8 * SocietyLabor.TableWage["farmer"], SocietyLabor.StartupCost("food"));
     }
 

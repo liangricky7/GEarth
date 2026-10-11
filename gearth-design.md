@@ -445,10 +445,13 @@ The signed-off follow-up from the first banks-on run is recorded in [post-bank p
 
 **Diplomacy and conflict**
 - **Diplomacy:** governments propose and answer trade agreements and peace, and close borders.
-- **Conflict:**
-  - It is abstract: borders close, inventory is lost, and upkeep is paid. There is no territorial conquest.
-  - Declaring conflict requires a refused or expired offer between the pair, tension at least 60 and funding, checked again at enactment. The menu explains that trade stops, both sides lose stock weekly and tension rises to 100. It costs 5,000 up front plus 1,000 a week, paid to domestic soldiers.
-  - War features are a stretch goal.
+- **Relations:** scores run from -100 to 100. Trade and gifts raise them; peaceful scores drift toward zero weekly. Scores at or below -60 close the direct border route; trade may route around through open third countries. War forbids bilateral imports and deliveries even with an alternate route. Old checkpoint tension maps to `40 - tension`; new saves emit scores.
+- **Conflict:** a refused or expired offer, score at or below -20 and 5,000 liquid minor units are required again at enactment. Rule governments also need inaccessible raw inputs, superior strength and a readiness draw. LIVE choices retain the diplomacy/funding prerequisites. Declaration sets relations to -100, cancels pending offers and trade agreements, and brings third-country condemnation. Upfront 5,000 and weekly 1,000 per war are paid to soldiers as funding and recipients permit; no recipient means no transfer.
+- **Weekly contests:** strength is fit, non-striking soldiers plus three per missile. Win probability is own strength divided by combined strength. The winner takes 10% of the loser's preceding tax-window income (limited by treasury cash) and 10% of current private ore/fuel stocks, rounded per holder. Transfers conserve goods; there is no arbitrary stock destruction. Losing fit soldiers suffer 25% wounds, rounded up; normal treatment controls recovery. Two weekly checks without fit soldiers force surrender even with missiles. Other active wars retain the nation's exhaustion. War weariness reduces security and can withdraw support.
+- **Peace:** all active wars remain in the menu. Terms demand no transfer, 25% of the responder's current treasury, or 25% of one productive raw-material endowment. Surrender cedes the loser's richest raw-material endowment. No annexation or new endowment floor applies. Settlement clears offers and cannot run twice; new delayed responses recheck the offer terms they observed. Peace adds no mandatory truce or automatic embargo lifting.
+- **Military and gifts:** two soldiers are recruited/discharged at table salary. Missiles and turrets use the state contractor, half-cost advance, reserved commitments, builders and materials. Launching consumes a missile; a hit removes 50 condition from a cost-weighted completed project. A full-condition turret intercepts 30%; ordinary funded upkeep restores damage. Gifts transfer treasury-owned or fully purchased goods, compensate suppliers, and report actual quantity/value; relations gain can round to zero.
+- **Government observations:** show salaries, war upkeep, construction commitments, tribute exposure and each staffed raw-input consumer's forecast gap, inventory, incoming cargo, domestic offers, and foreign stock/access/funding constraints. One affordable unit does not hide a larger shortage. Foreign quotes are independent alternatives, not additive promises of weekly supply.
+- **Unrest:** weekly checks of average quality of life below 40 for 28 days call early elections in democracies, with ordinary approval deciding replacement. Autocracies require at least 5% recently paid, non-striking soldiers to suppress unrest. Revolutions preserve existing firm ownership compatibility; planned-to-market conversion is explicitly deferred. Successful revolution cancels old-leadership policies. These thresholds remain calibration defaults. See the [Phase 3 implementation report](docs/gearth/phase-3-war.md).
 - **Migration:** costs 100, paid to the destination government. Migrants arrive unemployed.
 - **Elections:** follow the profile's authority rules.
 
@@ -889,7 +892,7 @@ Neon is the operational source of truth; Databricks answers what tends to happen
 
 - **Product quality:** premium vs. cheap goods.
 - **A second bank per country:** if more agents become affordable.
-- **War features:** a stretch goal.
+- **War calibration:** contests, military construction, peace, unrest and scored relations are implemented locally; sustained model-driven calibration and ownership-changing revolutions remain unqualified. See the [Phase 3 report](docs/gearth/phase-3-war.md).
 - **Messaging and social relationships:** trust and generosity are currently inert traits.
 - **Out of scope for a one-year run:** births, deaths and education progression.
 - **Stage 1 removal:** about 700 lines; kept because it costs no runtime.

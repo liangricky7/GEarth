@@ -214,47 +214,49 @@ D2 cost: the entry test checks demand and an idle worker before the margin, and 
 a citizen menu got slightly faster (1.4 to 1.2 ms) and a day costs about 2 ms more (15.9 to 18.0 ms, best of 4), from
 each goods firm's weekly price review pricing one import.
 
-## Phase 3: War, unrest, relations (in discussion; stretch goal)
+## Phase 3: War, unrest, relations
 
-Existing: `declare_conflict` (tension >= 60, costs 5000 + 1000 a week, closes borders), `Tension`,
-`TradeAgreement`, peace and trade offers.
+The narrowed E1–E13 review consensus is implemented on the integrated economy. Continuation starts from
+`main` at `7d28121` on `feat/phase-3-completion`, as requested October 11. The historical pipeline and
+review evidence remain above and in [phase-3-review.md](phase-3-review.md). Current checks and limitations
+are in [phase-3-war.md](phase-3-war.md). Local implementation does not establish live calibration.
 
-- Missiles: hit any country, destroying one infrastructure (random, weighted by its cost). Soldiers and
-  anti-missile turrets (an infrastructure) reduce the chance of damage.
-- Civil unrest for n ticks when average QoL < x; afterwards, if soldiers + m x missiles < y, revolution:
-  the country dissolves and its resources, people, infrastructure and land go to its neighbors.
-- Country's main mission: keep average QoL >= x. It trades for what it needs and goes to war as it
-  nears the threshold.
-- Relations: rise with trade routes; fall toward an aggressor much bigger than its victim; low relations
-  mean more refused trades and more war (by each country's aptitude for war); gifts improve relations.
-- Open: what does a country gain by conquering one with no military? Claude to propose.
-- Sizing: revolution and dissolution is the largest single piece; probably the first thing to cut.
+Retained decisions: route-based embargoes with third-country routing, weekly unrest, ordinary wound
+treatment and funded infrastructure upkeep, uncapped approved tribute/cession shares, and existing
+recruitment/arrears rules. No dissolution, annexation, forced election defeat, truce or new repair system.
 
 | # | Decision | Status |
 |---|---|---|
-| W1 | Missiles damage infrastructure (lower its condition, weighted by build cost); only anti-missile turrets reduce the hit chance. Soldiers do not stop missiles | default (not yet confirmed) |
+| W1 | Missile hits remove 50 condition from one cost-weighted completed project; only turrets reduce the hit chance. Ordinary funded upkeep can restore the damage | implemented; retained E5 model choice |
 | W2 | Soldiers decide ground war (strength = soldiers + m x missiles) and keep internal order; missiles do not count toward suppressing unrest | agreed |
-| W3 | Unrest after n ticks below QoL x: democracies hold an early election (leader falls); autocracies face revolution if soldiers (paid ones only) < y; revolution changes the government type (ChangeGovernment exists). Dissolution into neighbors only for a country conquered in war, and cut first | agreed (H10 paid soldiers only, H11 election or government change) |
+| W3 | Weekly checks after 28 days below QoL 40: democracies call an early election decided by ordinary approval; autocracies need recently paid, non-striking soldiers covering 5% of residents. Revolutions change only ownership-compatible profiles and cancel pending leadership policies; planned conversion emits explicit deferral | implemented; narrowed E3/E11 |
 | W4 | QoL >= x is the government's mission and shown in its view; war is a choice, incentivized indirectly: the view shows raw materials it needs but cannot buy (refused, embargoed, unaffordable) and who holds them. Rule default: trade first, war only when trade is blocked and it is stronger | agreed |
-| W5 | War gains: each week the stronger side wins it takes tribute (cash and raw materials) from the weaker; peace offers carry terms (reparations or ceding part of a raw-material endowment). No annexation | agreed |
-| W6 | Relations -100..100 (reuse Tension): + from trade volume and gifts; - for every third country toward an aggressor, scaled by size ratio; drift toward 0. Low relations: refused trades, tariffs or embargo | default (not yet confirmed) |
-| W7 | Aptitude for war by government type (dictatorship highest, democracies lowest), shown in the government's view and used by the rule default | default (not yet confirmed) |
+| W5 | Each probabilistic weekly winner takes cash/raw tribute; all wars expose peace with no terms, 25% treasury reparations or 25% raw endowment cession. Clear pending offers at war start/end, reject stale responses, and never settle twice | implemented; E4/E6/E9/E12 |
+| W6 | Scores -100..100 with legacy tension loading; deliveries/gifts raise scores, third countries condemn aggressors, peaceful scores drift toward zero. Score <= -60 closes direct routes; third-country routing remains possible, but war blocks bilateral trade | implemented; narrowed E7/E13 |
+| W7 | Readiness: dictatorship .8, monarchy .6, planned .5, market democracy .2, social democracy .15; elected-versus-elected multiplier .25. Rules require inaccessible inputs and superior strength; LIVE bypasses this heuristic only | implemented default; calibration pending |
 | W9 | Winning: each war week is a contest, P(win week) = own strength / (own + enemy) (standard contest function). Week's winner takes tribute; loser's soldiers are wounded (health drop, too sick to fight until they recover; no agents removed). A side with no fit soldiers for 2 weeks surrenders and the winner's peace terms are imposed. Otherwise wars end by accepted peace. War weariness lowers both sides' security QoL and approval | agreed |
 | W8 | Defenseless countries are protected by relations, not by rules: third countries with high relations can join a war or embargo the aggressor | agreed |
 
-## Gaps found after the phase walkthrough (proposed defaults, need sign-off)
+## Phase walkthrough defaults retained after review
 
 | # | Gap | Proposed default | Status |
 |---|---|---|---|
 | G1 | Who builds missiles and at what cost | Government orders from the construction firm: 2 builders, 7 ticks, ore + tools + energy, about 10k each; kept in a stockpile; launching uses one | agreed |
 | G2 | Turret effect | Infrastructure type with one level: cuts missile hit chance by 30% (missiles must still land) | agreed |
 | G3 | Changing soldier numbers | Government recruit/discharge in steps of 2 at the table wage (1,400); recruits come from the unemployed first | agreed |
-| G4 | Gifts | Cash or raw materials; relations gain scales with gift value vs the recipient's weekly spending, capped at +15 per gift | agreed |
+| G4 | Gifts | Cash or exact treasury-owned/purchased raw materials; compensate private suppliers, prequote full funding, report actual amount/value; relations gain capped at +15 and may round to zero | implemented; E10 |
 | G5 | Tribute and cession size | Weekly tribute: 10% of the loser's weekly tax income and 10% of its raw-material stock. Cession: winner takes 25% of the loser's concentration in one raw material | agreed |
 | G6 | Planned economies | Planner quotas cover ore, fuel and construction; the state imports raw materials | agreed |
-| G7 | Branch base | One branch per major change, chained (see Pipeline) | agreed: see Pipeline |
+| G7 | Branch base | Continue current integrated main on a new focused branch, commit incrementally | current user request; supersedes historical chained base |
 | G8 | Knock-on work | Population minimum rises again (new extraction and construction firms per country); RulesNote, worker prompt, observer and analytics need the new events; design doc update; one rule-mode year per phase before Spark | noted |
-| N1 | Numbers x (unrest QoL), n (unrest ticks), y (soldiers to stop revolution), m (soldiers per missile) | Set after Phase 1 and 2 runs | later |
+| N1 | Numbers x, n, y, m | 40 QoL, 28 days checked weekly, 5% recently paid soldiers, 3 strength per missile | implemented defaults; not live-calibrated |
+
+E8 completion: preserve every positive staffed consumer forecast gap after own inventory and incoming cargo.
+Show domestic seller stock/prices and affordable quantity with a shared domestic budget; show each foreign
+seller's exportable stock, one-unit access blocker, affordable quantity and full-gap escrow/funding quote.
+Foreign offers are independent alternatives using the same funds, not quantities to add. A partial shortage
+with any buying access remains visible but does not by itself satisfy the rule-war blocked-access test.
+Government observations also expose military salary, upkeep, construction commitments and multiwar tribute.
 
 ## Run speed: lock and scheduler review (Oct 11, branch `gearth/post-resource-patch-1`)
 
@@ -277,5 +279,4 @@ Run `world_20261011_101952_a24105` exposed a timeout/admission cascade: at day 4
 
 ## Deferred
 
-- 6c aspiration (a desire for more beyond QoL), revolution (until Phase 3), resource depletion.
-- Soldiers left alone until Phase 3.
+- 6c aspiration (a desire for more beyond QoL), ownership-changing revolution, resource depletion.

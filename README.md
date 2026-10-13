@@ -1,6 +1,74 @@
 # GEarth
 
-An observable AI society for KnightHacks 2026: ten fictional countries, five institutional profiles and 1,100 individual agents by default. Residents work, shop and own competing firms; governments, banks and newsrooms make bounded decisions. The C# engine owns accounting and simulated time, and shared model services provide individual strategic turns.
+Trained on human society's flaws and virtues, how well can AI simulate the world that shaped it? We built our project, GEarth, to find out: recreating governance, trade, and conflict to watch it live.
+
+[Devpost submission](https://devpost.com/software/diarockets) · [Browser dashboard](https://8-34-212-187.sslip.io/) · [Run locally](#run-locally)
+
+## Inspiration
+
+As humans, we experience both the flaws and virtues of society: how we cooperate, compete, govern, and build our lives together. AI is trained on accounts of those same human experiences, the good and the bad. That made us wonder: how well could it simulate the world that shaped it?
+
+To find out, we built GEarth. With an abundance of computing power, our project sets out to recreate the core systems of society (citizens, governments, economies, trade, diplomacy, and conflict) and watch how AI agents navigate life together.
+
+## What it does
+
+GEarth is a generated/simulated Earth where AI agents represent countries, institutions, and citizens. Our default world contains 1,000+ agents across ten fictional countries.
+
+- Citizens work, buy necessities, seek healthcare, and start businesses.
+- Governments, banks, and businesses make policy decisions, provide loans, and produce and trade goods.
+- Countries navigate diplomacy, resource shortages, and conflict.
+
+These decisions interact: a shortage can affect production, production can affect employment, and unemployment can affect an entire country's economy.
+
+Through our browser dashboard, viewers can watch the simulation unfold, explore countries, and inspect individual agents' decisions and explanations. GEarth makes it possible to follow both a society's overall development and the choices of the individuals living within it.
+
+## How we built it
+
+- **Simulation Engine:** We built the simulation engine in C# and .NET, giving it responsibility for time, resources, transactions, and the consequences of every action. AI agents receive observations about their circumstances and choose from actions the engine allows.
+- **Distributed AI Inference:** Our Python inference workers connect those agents to Qwen3-8B and Qwen3-4B, running across two NVIDIA DGX Spark systems and an AMD GPU. We use the larger model for institutional and entrepreneur decisions and the smaller model for resident decisions. Scheduling and batching help coordinate requests across the hardware.
+- **Cloud, Data & Analytics:** We use Neon PostgreSQL to preserve simulation checkpoints and event history, and Google Cloud to keep the shared world running independently of our laptops. A browser dashboard makes the simulation observable, while our Databricks analytics pipeline processes completed runs to help us investigate their outcomes.
+
+## Challenges we ran into
+
+- **Balancing a Functioning Economy:** Making a society function was harder than giving agents personalities. Early simulations exposed businesses hoarding money, high unemployment, and declining citizen health. We had to revisit how wages, production, healthcare, public services, and spending connected to one another.
+- **Coordinating Distributed Inference:** Different machines had different capacities and response times, and model requests could time out or arrive after the world had changed. We worked on bounded scheduling, batching, validation, and fallback behavior to keep the simulation progressing.
+- **Enforcing Reliable Accounting:** Every decision had to respect available money, goods, and authority. Recording events and distinguishing model decisions from rule-based fallbacks helped us understand what actually happened.
+
+## Accomplishments that we're proud of
+
+- Building a connected AI society where individual choices have consequences beyond a single conversation, with citizens, businesses, banks, and governments participating in the same economic system.
+- Bringing NVIDIA and AMD inference into one shared simulation, preserving worlds for later inspection, and building a dashboard that makes complex interactions easier to explore.
+- Designing a full-year rule-based calibration test that checks economic consistency over time, giving us a repeatable foundation alongside our live AI experiments.
+
+## What we learned
+
+We learned that believable agent behavior depends on the world around it. A model needs meaningful choices, useful information, and consistent consequences.
+
+Building GEarth also taught us how interconnected society's systems are. Healthcare affects people's ability to work. Employment affects spending. Spending supports businesses, and businesses help fund governments. Small implementation choices can ripple through the entire simulation.
+
+We learned to inspect those connections carefully and separate problems in the economic rules from problems in model behavior or infrastructure.
+
+## What's next for GEarth
+
+We want to expand our what-if experiments so viewers can change a policy or a citizen's circumstances and compare how alternate timelines develop. Our initial experiment system uses rule-based decisions; extending it to live AI decisions is a next step.
+
+We also want richer visual replay, more scenarios, and longer experiments with matched starting conditions. As we scale the population, we'll measure sustained inference performance and decision coverage.
+
+Ultimately, we want GEarth to become a place where people can explore how individual decisions shape a society, and discover outcomes we didn't anticipate.
+
+## Built with
+
+C#, .NET, C++, Vulkan, Python, distributed computation, Qwen3-8B, Qwen3-4B, NVIDIA DGX Spark, AMD GPU, Neon PostgreSQL, Google Cloud, and Databricks.
+
+## Knight Hacks IX
+
+Created by Ricky Liang, Ahmad Hijazi, Jayden Hong, and Kennedy Nguyen. The [Devpost submission](https://devpost.com/software/diarockets) received:
+
+- **BNY:** Financial Services Challenge
+- **AMD:** Best Use of AMD Technologies
+- **Neon:** Best Use of Neon
+
+---
 
 ## Current state
 

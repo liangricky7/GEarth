@@ -748,6 +748,7 @@ function selectRun(runId, cancelRefresh = true) {
   viewGeneration += 1;
   selectedRun = runId;
   element("data-explorer-link").href = `/data.html?run_id=${encodeURIComponent(runId)}`;
+  element("rewind-lab-link").href = `/rewind.html?run_id=${encodeURIComponent(runId)}`;
   document.dispatchEvent(new CustomEvent("gearth-run-selected", {detail:{runId}}));
   selectedAgent = null;
   agentOffset = 0;
@@ -799,6 +800,7 @@ async function refresh() {
       generation = viewGeneration;
     }
     element("data-explorer-link").href = selectedRun ? `/data.html?run_id=${encodeURIComponent(selectedRun)}` : "/data.html";
+    element("rewind-lab-link").href = selectedRun ? `/rewind.html?run_id=${encodeURIComponent(selectedRun)}` : "/rewind.html";
     element("runs").replaceChildren();
     const selectableIds = selectedRun && !runs.run_ids.includes(selectedRun) ? [selectedRun, ...runs.run_ids] : runs.run_ids;
     for (const id of selectableIds) {
